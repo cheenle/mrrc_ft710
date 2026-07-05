@@ -35,6 +35,14 @@ function wsUrlWithAuth(path) {
     return proto + '//' + host + path + (token ? '?token=' + encodeURIComponent(token) : '');
 }
 
+// Same-auth URL for static files (uses http/https, not ws/wss)
+function staticUrlWithAuth(path) {
+    const token = getAuthToken();
+    const proto = window.location.protocol;
+    const host = window.location.host;
+    return proto + '//' + host + path + (token ? '?token=' + encodeURIComponent(token) : '');
+}
+
 function connectWebSocket() {
     if (wsRadio && wsRadio.readyState === WebSocket.OPEN) return;
 
@@ -452,7 +460,7 @@ function startAudioRXPlayback() {
 
         // Use AudioWorklet for low-latency playback
         audioRXContext.audioWorklet.addModule(
-            wsUrlWithAuth('/rx_worklet_processor.js?v=1')
+            staticUrlWithAuth('/rx_worklet_processor.js?v=1')
         ).then(function() {
             audioRXWorklet = new AudioWorkletNode(audioRXContext, 'rx-player');
             audioRXWorklet.connect(audioRXGain);
