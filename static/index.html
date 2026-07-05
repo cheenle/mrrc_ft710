@@ -165,8 +165,8 @@
                 </div>
             </section>
 
-            <!-- NR/NB/Comp Level Sliders -->
-            <section class="slider-section" id="dsp-sliders">
+            <!-- NR/NB/Comp Level Sliders (hidden - not enough space) -->
+            <section class="slider-section" id="dsp-sliders" style="display:none;">
                 <div class="slider-row">
                     <span class="slider-label">NR Level</span>
                     <input type="range" id="slider-nrlevel" min="1" max="15" value="8" class="ft-slider">
@@ -179,9 +179,9 @@
                 </div>
             </section>
 
-            <!-- RF Power / AF Gain Sliders -->
+            <!-- AF Gain / Mic Gain Sliders -->
             <section class="slider-section">
-                <div class="slider-row">
+                <div class="slider-row" id="slider-rfpower-row" style="display:none;">
                     <span class="slider-label">RF PWR</span>
                     <input type="range" id="slider-rfpower" min="5" max="100" value="100" class="ft-slider">
                     <span class="slider-val" id="val-rfpower">100</span>
