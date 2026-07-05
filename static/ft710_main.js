@@ -403,11 +403,8 @@ function decodeRxAudioFrame(data) {
 
 // ── Push RX frame to worklet (set during AudioRX_start) ───────────────
 window.__pushRxFrame = function(f32) {
-    // Default no-op — replaced when AudioWorklet or ScriptProcessor is ready
-    if (AudioRX_source_node && AudioRX_source_node.port) {
-        AudioRX_source_node.port.postMessage({type: 'push', payload: f32});
-    }
-};
+// No-op placeholder — replaced when AudioWorklet or ScriptProcessor is ready
+window.__pushRxFrame = function(f32) {};
 
 // ── WebSocket event handlers ──────────────────────────────────────────
 function wsAudioRXopen() {
@@ -444,6 +441,27 @@ function AudioRX_start() {
     wsAudioRX.onopen = wsAudioRXopen;
     wsAudioRX.onclose = wsAudioRXclose;
     wsAudioRX.onerror = wsAudioRXerror;
+
+    // ── Set onmessage EARLY so frames are buffered while worklet loads ──
+    // Frames decoded here and queued to window.__earlyAudioQueue.
+    // Once the worklet is ready, they're flushed to it.
+    window.__earlyAudioQueue = [];
+    wsAudioRX.onmessage = function(msg) {
+        if (!window.__rxBytes) window.__rxBytes = 0;
+        if (msg && msg.data && msg.data.byteLength) {
+            window.__rxBytes += msg.data.byteLength;
+            var f32 = decodeRxAudioFrame(msg.data);
+            if (f32) {
+                window.__earlyAudioQueue.push(f32);
+                // Keep queue bounded (~1 second max)
+                while (window.__earlyAudioQueue.length > 50) window.__earlyAudioQueue.shift();
+                // Also try to push to worklet if it's ready
+                if (window.__pushRxFrame !== window.__pushRxFrameNoop) {
+                    window.__pushRxFrame(f32);
+                }
+            }
+        }
+    };
 
     // ── AudioContext (48kHz, interactive latency) ──────────────────
     AudioRX_context = new (window.AudioContext || window.webkitAudioContext)({
@@ -493,17 +511,14 @@ function AudioRX_start() {
                 window.__pushRxFrame = function(f32) {
                     rxNode.port.postMessage({type: 'push', payload: f32});
                 };
-                // ── onmessage set AFTER worklet is ready (sunnrrrc pattern) ──
-                wsAudioRX.onmessage = function(msg) {
-                    if (!window.__rxBytes) window.__rxBytes = 0;
-                    if (msg && msg.data && msg.data.byteLength) {
-                        window.__rxBytes += msg.data.byteLength;
-                        var float32Data = decodeRxAudioFrame(msg.data);
-                        if (float32Data) {
-                            window.__pushRxFrame(float32Data);
-                        }
+                // Flush early-audio queue into worklet
+                if (window.__earlyAudioQueue && window.__earlyAudioQueue.length > 0) {
+                    console.log('Flushing ' + window.__earlyAudioQueue.length + ' early audio frames to worklet');
+                    for (var i = 0; i < window.__earlyAudioQueue.length; i++) {
+                        rxNode.port.postMessage({type: 'push', payload: window.__earlyAudioQueue[i]});
                     }
-                };
+                    window.__earlyAudioQueue = [];
+                }
                 rxNode.connect(AudioRX_gain_node);
                 AudioRX_gain_node.connect(AudioRX_context.destination);
                 console.log('Audio RX playback started (AudioWorklet)');

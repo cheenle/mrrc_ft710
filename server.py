@@ -389,12 +389,12 @@ async def _audio_rx_loop():
                             for ws in list(audio_rx_clients):
                                 try:
                                     for frame in frames:
-                                        await ws.send(frame)  # bytes → binary
+                                        await ws.send_bytes(frame)
                                 except Exception as _se:
-                                    logger.debug("Audio send error: %s", _se)
+                                    logger.warning("Audio send error (removing client): %s", _se)
                                     dead.add(ws)
                             if dead:
-                                logger.info("Removed %d dead audio clients", len(dead))
+                                logger.warning("Removed %d dead audio clients", len(dead))
                             audio_rx_clients -= dead
             # Periodic health log
             if _loop_count % 250 == 0:  # Every 5 seconds
