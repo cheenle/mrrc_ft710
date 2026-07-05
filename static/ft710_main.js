@@ -402,7 +402,6 @@ function decodeRxAudioFrame(data) {
 }
 
 // ── Push RX frame to worklet (set during AudioRX_start) ───────────────
-window.__pushRxFrame = function(f32) {
 // No-op placeholder — replaced when AudioWorklet or ScriptProcessor is ready
 window.__pushRxFrame = function(f32) {};
 
