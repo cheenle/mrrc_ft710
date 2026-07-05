@@ -373,6 +373,16 @@ function connectAudioRX() {
     };
 
     wsAudioRX.onmessage = function(event) {
+        // Raw receipt log (first 5 only)
+        if (!window.__rxMsgCount) window.__rxMsgCount = 0;
+        window.__rxMsgCount++;
+        if (window.__rxMsgCount <= 3) {
+            console.log('WS audio msg #' + window.__rxMsgCount +
+                ': type=' + typeof event.data +
+                ' isArrayBuffer=' + (event.data instanceof ArrayBuffer) +
+                ' isBlob=' + (event.data instanceof Blob) +
+                ' size=' + (event.data.byteLength || event.data.size || '?'));
+        }
         if (!window.__rxBytes) window.__rxBytes = 0;
         if (event.data instanceof ArrayBuffer) {
             window.__rxBytes += event.data.byteLength;
@@ -395,6 +405,10 @@ function connectAudioRX() {
                     } catch(e) { console.debug('push error:', e); }
                 }
             }
+        } else if (event.data instanceof Blob) {
+            console.warn('WS audio: got Blob, expected ArrayBuffer — check binaryType');
+        } else if (typeof event.data === 'string') {
+            console.warn('WS audio: got string: ' + event.data.substring(0, 50));
         }
     };
 

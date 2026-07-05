@@ -152,17 +152,29 @@ class AudioHandler:
 
     def read_rx_chunk(self) -> Optional[bytes]:
         """Read one chunk of int16 PCM audio from the RX stream.
-        Non-blocking — returns None if no data is available."""
+        Non-blocking — uses get_read_available() to check before read.
+        Returns None if not enough data is available."""
         if not self._rx_running or self._rx_stream is None:
             return None
         try:
+            # Use get_read_available to check, then read what's there
             count = self._rx_stream.get_read_available()
             if count >= RX_CHUNK_SIZE:
-                data = self._rx_stream.read(
-                    min(count, RX_CHUNK_SIZE * 4),
-                    exception_on_overflow=False,
-                )
-                return data
+                # Read one chunk's worth, or at most 4 chunks to prevent lag
+                to_read = min(count, RX_CHUNK_SIZE * 4)
+                data = self._rx_stream.read(to_read, exception_on_overflow=False)
+                if data and len(data) >= 2:
+                    return data
+        except OSError as e:
+            if "Stream not open" in str(e) or "No such device" in str(e):
+                logger.warning("RX stream lost — attempting restart")
+                self._rx_running = False
+                try: self.stop_rx()
+                except Exception: pass
+                time.sleep(0.5)
+                self.start_rx()
+            else:
+                logger.debug("RX read error: %s", e)
         except Exception as e:
             logger.debug("RX read error: %s", e)
         return None
