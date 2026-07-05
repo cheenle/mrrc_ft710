@@ -554,6 +554,8 @@ function handlePTTStart() {
     radioState.is_transmitting = true;
     renderPTTState();
     renderStatusBar();
+    // Start TX audio capture
+    if (typeof startTXAudio === 'function') startTXAudio();
 }
 
 function handlePTTEnd() {
@@ -562,6 +564,8 @@ function handlePTTEnd() {
     radioState.is_transmitting = false;
     renderPTTState();
     renderStatusBar();
+    // Stop TX audio capture
+    if (typeof stopTXAudio === 'function') stopTXAudio();
 }
 
 function handleTuneStart() {

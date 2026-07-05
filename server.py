@@ -34,6 +34,11 @@ from radio_state import RadioState
 from poll_scheduler import PollScheduler
 from scope_handler import ScopeHandler  # synthetic scope fallback
 from scope_frame import parse_pipe_payload, WF_SIZE
+from audio_handler import AudioHandler
+from opus_rx import (
+    RxOpusEncoder, TxOpusDecoder,
+    AUDIO_TAG_PCM, AUDIO_TAG_OPUS, DEFAULT_BITRATE,
+)
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.responses import (
@@ -54,13 +59,21 @@ radio = RadioState()
 cat: CatController | None = None
 scheduler: PollScheduler | None = None
 scope: ScopeHandler | None = None
+audio: AudioHandler | None = None
 
 # Connected clients
 ctrl_clients: set[WebSocket] = set()
 spectrum_clients: set[WebSocket] = set()
+audio_rx_clients: set[WebSocket] = set()
+audio_tx_clients: set[WebSocket] = set()
 _state_broadcast_task: asyncio.Task | None = None
 _scope_read_task: asyncio.Task | None = None
 _scope_broadcast_task: asyncio.Task | None = None
+_audio_rx_task: asyncio.Task | None = None
+_audio_tx_task: asyncio.Task | None = None
+
+# TX Opus decoder (browser mic → server)
+_opus_tx_decoder: TxOpusDecoder | None = None
 
 # Auth: valid session tokens (server-side, cleared on restart)
 _auth_tokens: set[str] = set()
@@ -328,6 +341,62 @@ async def _read_scope_pipe(proc):
             except Exception:
                 pass
 
+# ── Audio Broadcast ────────────────────────────────────────────────────
+
+async def _audio_rx_loop():
+    """Capture RX audio from the sound card and broadcast to clients.
+
+    Reads int16 PCM chunks from the audio handler, encodes via Opus (or
+    sends raw PCM), and broadcasts to all connected audio_rx_clients.
+
+    Runs continuously while the server is active. Each frame is prefixed
+    with a 1-byte codec tag so the client knows how to decode.
+    """
+    global audio, audio_rx_clients
+    interval = 0.020  # 20 ms chunk interval
+    _first = True
+    while True:
+        try:
+            if audio and audio._rx_running:
+                pcm = audio.read_rx_chunk()
+                if pcm:
+                    frames = audio.encode_rx_audio(pcm)
+                    if frames and audio_rx_clients:
+                        if _first:
+                            tag_name = "Opus" if audio.opus_enabled else "Int16 PCM"
+                            logger.info("RX audio broadcast active: %s, %d clients",
+                                       tag_name, len(audio_rx_clients))
+                            _first = False
+                        dead: set[WebSocket] = set()
+                        for ws in list(audio_rx_clients):
+                            try:
+                                for frame in frames:
+                                    await ws.send_bytes(frame)
+                            except Exception:
+                                dead.add(ws)
+                        audio_rx_clients -= dead
+        except asyncio.CancelledError:
+            return
+        except Exception as e:
+            logger.warning("Audio RX broadcast error: %s", e)
+        await asyncio.sleep(interval)
+
+
+async def _audio_tx_drain_loop():
+    """Periodically drain queued TX audio to the sound card output."""
+    global audio
+    interval = 0.010  # 10 ms drain interval
+    while True:
+        try:
+            if audio:
+                audio.write_tx_chunk()
+        except asyncio.CancelledError:
+            return
+        except Exception:
+            pass
+        await asyncio.sleep(interval)
+
+
 # ── Command Handler ─────────────────────────────────────────────────
 
 async def _handle_ws_message(ws: WebSocket, msg_str: str):
@@ -425,6 +494,9 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
             if tx:
                 await cat.set_ptt(True)
                 radio.update(tx_status=1)
+                # Start TX audio output (mic → radio)
+                if audio:
+                    audio.start_tx()
             else:
                 # Force TX release with retries for safety
                 await cat.set_ptt(False)
@@ -436,6 +508,9 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                         break
                     await cat.set_ptt(False)
                 radio.update(tx_status=0)
+                # Stop TX audio output
+                if audio:
+                    audio.stop_tx()
             scheduler and scheduler.skip_next_poll("tx_status", 1.0)
 
         elif field == "tune":
@@ -728,9 +803,10 @@ async def _initial_state_sync():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup: connect to FT-710, start polling and scope.
+    """Startup: connect to FT-710, start polling, scope, and audio.
        Shutdown: disconnect, force RX, cancel tasks."""
-    global cat, scheduler, scope, _scope_read_task, _scope_broadcast_task
+    global cat, scheduler, scope, audio, _scope_read_task, _scope_broadcast_task
+    global _audio_rx_task, _audio_tx_task, _opus_tx_decoder
 
     # ── Startup ──
     logger.info("FT-710 Web Control starting on port %d", WEB_PORT)
@@ -748,6 +824,21 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("Could not connect to radio. Server will serve UI only.")
         logger.warning("Check serial port: %s", SERIAL_PORT)
+
+    # ── Audio handler ──────────────────────────────────────────────
+    audio = AudioHandler()
+    audio.start_rx()
+
+    # TX Opus decoder (browser mic → server → radio)
+    try:
+        _opus_tx_decoder = TxOpusDecoder()
+    except Exception as e:
+        logger.warning("TX Opus decoder unavailable: %s", e)
+        _opus_tx_decoder = None
+
+    # Start audio tasks
+    _audio_rx_task = asyncio.create_task(_audio_rx_loop(), name="audio_rx")
+    _audio_tx_task = asyncio.create_task(_audio_tx_drain_loop(), name="audio_tx")
 
     # Start scope handler — broadcasts S-meter fallback until real data arrives
     scope = ScopeHandler()
@@ -796,6 +887,21 @@ async def lifespan(app: FastAPI):
             await asyncio.sleep(0.1)
         except Exception:
             pass
+
+    # Stop audio
+    if _audio_rx_task:
+        _audio_rx_task.cancel()
+    if _audio_tx_task:
+        _audio_tx_task.cancel()
+    if _opus_tx_decoder:
+        try:
+            _opus_tx_decoder.close()
+        except Exception:
+            pass
+        _opus_tx_decoder = None
+    if audio:
+        audio.close()
+        audio = None
 
     # Stop scope
     if _scope_read_task:
@@ -1006,6 +1112,8 @@ async def ws_radio(ws: WebSocket):
                 radio.update(tx_status=0)
             except Exception:
                 pass
+            if audio:
+                audio.stop_tx()
 
 
 # ── Spectrum WebSocket ───────────────────────────────────────────────
@@ -1036,6 +1144,105 @@ async def ws_spectrum(ws: WebSocket):
     finally:
         spectrum_clients.discard(ws)
         logger.info("Spectrum client disconnected (%d remain)", len(spectrum_clients))
+
+
+# ── Audio RX WebSocket ────────────────────────────────────────────────
+
+@app.websocket("/WSaudioRX")
+async def ws_audio_rx(ws: WebSocket):
+    """RX audio stream endpoint. Sends tagged binary frames:
+    1-byte codec tag (0x00=PCM, 0x01=Opus) + payload.
+
+    Data is produced by the _audio_rx_loop and broadcast to all
+    connected audio_rx_clients.
+    """
+    token = ws.query_params.get("token", "")
+    if not token or token not in _auth_tokens:
+        await ws.close(code=4001, reason="Unauthorized")
+        return
+
+    await ws.accept()
+    audio_rx_clients.add(ws)
+    logger.info("Audio RX client connected (%d total)", len(audio_rx_clients))
+    try:
+        while True:
+            await ws.receive()
+    except (WebSocketDisconnect, RuntimeError):
+        pass
+    finally:
+        audio_rx_clients.discard(ws)
+        logger.info("Audio RX client disconnected (%d remain)", len(audio_rx_clients))
+
+
+# ── Audio TX WebSocket ────────────────────────────────────────────────
+
+@app.websocket("/WSaudioTX")
+async def ws_audio_tx(ws: WebSocket):
+    """TX mic uplink endpoint. Receives binary frames:
+    1-byte codec tag (0x00=PCM, 0x01=Opus) + payload.
+    Text frames: 'm:rate,...' for settings, 's:' for stop.
+    """
+    global audio, _opus_tx_decoder
+
+    token = ws.query_params.get("token", "")
+    if not token or token not in _auth_tokens:
+        await ws.close(code=4001, reason="Unauthorized")
+        return
+
+    await ws.accept()
+    audio_tx_clients.add(ws)
+    logger.info("Audio TX client connected (%d total)", len(audio_tx_clients))
+
+    try:
+        while True:
+            msg = await ws.receive()
+            if msg.get("type") == "websocket.disconnect":
+                break
+
+            if "bytes" in msg and msg["bytes"] is not None:
+                data = msg["bytes"]
+                if len(data) < 2:
+                    continue
+
+                # Decode codec-tagged mic frame → PCM → audio output
+                tag = data[0]
+                frame = data[1:]
+
+                if tag == AUDIO_TAG_OPUS and _opus_tx_decoder:
+                    pcm = _opus_tx_decoder.decode(frame)
+                    if pcm and audio:
+                        audio.feed_tx_audio(pcm)
+                elif tag == AUDIO_TAG_PCM:
+                    if audio:
+                        audio.feed_tx_audio(frame)
+                else:
+                    # Legacy: untagged, assume PCM
+                    if audio:
+                        audio.feed_tx_audio(data)
+
+            elif "text" in msg and msg["text"]:
+                text = msg["text"]
+                if text.startswith("s:") or text == "stop":
+                    # Clear TX queue on stop
+                    if audio:
+                        audio._tx_queue.clear()
+                elif text.startswith("m:"):
+                    # Settings: rate, encode, etc.
+                    try:
+                        parts = text[2:].split(",")
+                        # tx_rate = int(float(parts[0])) if parts else 16000
+                    except Exception:
+                        pass
+
+    except (WebSocketDisconnect, RuntimeError):
+        pass
+    finally:
+        audio_tx_clients.discard(ws)
+        # Force RX on TX WS disconnect (safety)
+        if audio:
+            audio.stop_tx()
+            audio._tx_queue.clear()
+        logger.info("Audio TX client disconnected (%d remain)", len(audio_tx_clients))
 
 
 # ── Static File Serving ─────────────────────────────────────────────
