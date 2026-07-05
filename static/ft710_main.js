@@ -346,82 +346,21 @@ document.addEventListener('keydown', function(e) {
 window.addEventListener('load', bodyload);
 
 // ═══════════════════════════════════════════════════════════════════════
-// ── Audio RX ──────────────────────────────────────────────────────────
+// ── Audio RX (adapted from sunmrrc controls.js) ───────────────────────
 // ═══════════════════════════════════════════════════════════════════════
 
-let wsAudioRX = null;
-let audioRXContext = null;
-let audioRXWorklet = null;
-let audioRXGain = null;
-let audioRXStarted = false;
-
+const AudioRX_sampleRate = 48000;
 // Codec tags (must match server's opus_rx.py)
 const AUDIO_TAG_PCM = 0x00;
 const AUDIO_TAG_OPUS = 0x01;
 
-function connectAudioRX() {
-    if (wsAudioRX && wsAudioRX.readyState === WebSocket.OPEN) return;
+var wsAudioRX = null;
+var AudioRX_context = null;
+var AudioRX_source_node = null;
+var AudioRX_gain_node = null;
+var _rxOpusDecoder = null;
 
-    const url = wsUrlWithAuth('/WSaudioRX');
-    console.log('Connecting Audio RX to', url);
-    wsAudioRX = new WebSocket(url);
-    wsAudioRX.binaryType = 'arraybuffer';
-
-    wsAudioRX.onopen = function() {
-        console.log('Audio RX WebSocket connected');
-        startAudioRXPlayback();
-    };
-
-    wsAudioRX.onmessage = function(event) {
-        // Raw receipt log (first 5 only)
-        if (!window.__rxMsgCount) window.__rxMsgCount = 0;
-        window.__rxMsgCount++;
-        if (window.__rxMsgCount <= 3) {
-            console.log('WS audio msg #' + window.__rxMsgCount +
-                ': type=' + typeof event.data +
-                ' isArrayBuffer=' + (event.data instanceof ArrayBuffer) +
-                ' isBlob=' + (event.data instanceof Blob) +
-                ' size=' + (event.data.byteLength || event.data.size || '?'));
-        }
-        if (!window.__rxBytes) window.__rxBytes = 0;
-        if (event.data instanceof ArrayBuffer) {
-            window.__rxBytes += event.data.byteLength;
-            const f32 = decodeRxAudioFrame(event.data);
-            if (f32) {
-                window.__rxFrames = (window.__rxFrames || 0) + 1;
-                const pushed = (typeof audioRXWorklet !== 'undefined' && audioRXWorklet && audioRXWorklet.port);
-                if (window.__rxFrames === 1) {
-                    console.log('First audio frame: size=' + event.data.byteLength +
-                        ', decoded=' + f32.length + ' samples, worklet=' + (pushed ? 'ready' : 'missing'));
-                }
-                if (window.__rxFrames % 50 === 0) {
-                    console.log('Audio frames received: ' + window.__rxFrames +
-                        ' ctx=' + (audioRXContext ? audioRXContext.state : 'none') +
-                        ' pushed=' + (pushed ? 'yes' : 'no'));
-                }
-                if (pushed) {
-                    try {
-                        audioRXWorklet.port.postMessage({type: 'push', payload: f32});
-                    } catch(e) { console.debug('push error:', e); }
-                }
-            }
-        } else if (event.data instanceof Blob) {
-            console.warn('WS audio: got Blob, expected ArrayBuffer — check binaryType');
-        } else if (typeof event.data === 'string') {
-            console.warn('WS audio: got string: ' + event.data.substring(0, 50));
-        }
-    };
-
-    wsAudioRX.onclose = function() {
-        console.log('Audio RX WebSocket closed');
-        wsAudioRX = null;
-    };
-
-    wsAudioRX.onerror = function() {};
-}
-
-// Decode a tagged audio frame: 1-byte tag + payload
-let _rxOpusDecoder = null;
+// ── Opus decoder (cached) ────────────────────────────────────────────
 function getRxOpusDecoder() {
     if (_rxOpusDecoder) return _rxOpusDecoder;
     try {
@@ -435,176 +374,207 @@ function getRxOpusDecoder() {
     return _rxOpusDecoder;
 }
 
+// ── Decode tagged audio frame (1-byte tag + payload) ──────────────────
 function decodeRxAudioFrame(data) {
     if (!data || data.byteLength < 1) return null;
     const bytes = new Uint8Array(data);
     const tag = bytes[0];
-    const payload = data.slice(1);  // ArrayBuffer, offset by 1
+    const payload = data.slice(1);
 
     if (tag === AUDIO_TAG_OPUS) {
         const dec = getRxOpusDecoder();
         if (!dec) return null;
         try {
             const f32 = dec.decode_float(payload);
-            const copy = new Float32Array(f32);  // Copy out of WASM heap
-            // Debug: check first frame audio levels
-            if (!window.__audioDbg) {
-                window.__audioDbg = true;
-                var peak = 0, sum = 0;
-                for (var i = 0; i < copy.length; i++) {
-                    var abs = Math.abs(copy[i]);
-                    if (abs > peak) peak = abs;
-                    sum += abs;
-                }
-                console.log('First Opus frame: ' + copy.length + ' samples, peak=' +
-                    (peak * 100).toFixed(1) + '%, avg=' + (sum / copy.length * 100).toFixed(2) + '%');
-                if (peak < 0.0001) console.warn('⚠ Audio data is near-silent — check radio AF gain / USB audio');
-            }
-            return copy;
-        } catch(e) {
-            console.debug('Opus decode error:', e);
-            return null;
-        }
+            return new Float32Array(f32);  // Copy out of WASM heap
+        } catch(e) { return null; }
     }
 
-    // PCM: Int16 → Float32
+    // PCM (0x00 or legacy untagged): Int16 → Float32
     try {
         if (payload.byteLength < 2) return null;
         const i16 = new Int16Array(payload);
         const f32 = new Float32Array(i16.length);
         const scale = 1.0 / 32767.0;
-        for (let i = 0; i < i16.length; i++) {
-            f32[i] = i16[i] * scale;
-        }
+        for (let i = 0; i < i16.length; i++) f32[i] = i16[i] * scale;
         return f32;
-    } catch(e) {
-        return null;
-    }
+    } catch(e) { return null; }
 }
 
-function startAudioRXPlayback() {
-    if (audioRXStarted) return;
+// ── Push RX frame to worklet (set during AudioRX_start) ───────────────
+window.__pushRxFrame = function(f32) {
+    // Default no-op — replaced when AudioWorklet or ScriptProcessor is ready
+    if (AudioRX_source_node && AudioRX_source_node.port) {
+        AudioRX_source_node.port.postMessage({type: 'push', payload: f32});
+    }
+};
 
-    try {
-        audioRXContext = new (window.AudioContext || window.webkitAudioContext)({
-            latencyHint: 'interactive',
-            sampleRate: 48000,
-        });
+// ── WebSocket event handlers ──────────────────────────────────────────
+function wsAudioRXopen() {
+    console.log('Audio RX WebSocket connected');
+}
+function wsAudioRXclose(ev) {
+    console.log('Audio RX WebSocket closed');
+    if (ev && ev.code === 4001) { handleAuthExpired(); return; }
+    wsAudioRX = null;
+}
+function wsAudioRXerror(err) {
+    console.warn('Audio RX WebSocket error:', err);
+}
 
-        // Resume if suspended (Chrome autoplay policy / iOS)
-        if (audioRXContext.state === 'suspended') {
-            console.log('AudioContext suspended — tap anywhere to enable audio');
-            // Show visible hint
-            var hint = document.createElement('div');
-            hint.id = 'audio-resume-hint';
-            hint.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;' +
-                'background:#f59e0b;color:#000;text-align:center;padding:10px;' +
-                'font-weight:bold;font-size:14px;cursor:pointer;';
-            hint.textContent = '🔊 点击此处启用音频  Tap to enable audio';
-            hint.onclick = function() { hint.remove(); };
-            document.body.appendChild(hint);
-            // Resume on first user interaction
-            var resumeAudio = function() {
-                audioRXContext.resume().then(function() {
-                    console.log('AudioContext resumed — audio should play now');
-                    var h = document.getElementById('audio-resume-hint');
-                    if (h) h.remove();
-                }).catch(function(e) {
-                    console.warn('AudioContext resume failed:', e);
-                });
-            };
-            document.addEventListener('click', resumeAudio, {once: true});
-            document.addEventListener('touchstart', resumeAudio, {once: true});
-            document.addEventListener('keydown', resumeAudio, {once: true});
+// ── Start audio RX (adapted from sunmrrc AudioRX_start) ───────────────
+function AudioRX_start() {
+    // Clean up old context
+    if (AudioRX_context && AudioRX_context.state !== 'closed') {
+        try { AudioRX_context.close(); } catch(e) {}
+        AudioRX_context = null;
+        AudioRX_source_node = null;
+    }
+
+    // Avoid duplicate connections
+    if (wsAudioRX && (wsAudioRX.readyState === WebSocket.OPEN || wsAudioRX.readyState === WebSocket.CONNECTING)) {
+        console.log('AudioRX already connected, skipping');
+        return;
+    }
+
+    const url = wsUrlWithAuth('/WSaudioRX');
+    console.log('Connecting Audio RX to', url);
+    wsAudioRX = new WebSocket(url);
+    wsAudioRX.binaryType = 'arraybuffer';
+    wsAudioRX.onopen = wsAudioRXopen;
+    wsAudioRX.onclose = wsAudioRXclose;
+    wsAudioRX.onerror = wsAudioRXerror;
+
+    // ── AudioContext (48kHz, interactive latency) ──────────────────
+    AudioRX_context = new (window.AudioContext || window.webkitAudioContext)({
+        latencyHint: 'interactive',
+        sampleRate: AudioRX_sampleRate,
+    });
+    console.log('AudioContext created, state:', AudioRX_context.state, ', rate:', AudioRX_context.sampleRate);
+
+    if (AudioRX_context.state === 'suspended') {
+        console.log('AudioContext suspended — tap anywhere to enable audio');
+        var hint = document.createElement('div');
+        hint.id = 'audio-resume-hint';
+        hint.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;' +
+            'background:#f59e0b;color:#000;text-align:center;padding:10px;' +
+            'font-weight:bold;font-size:14px;cursor:pointer;';
+        hint.textContent = '🔊 点击此处启用音频  Tap to enable audio';
+        hint.onclick = function() { hint.remove(); };
+        document.body.appendChild(hint);
+        var resumeAudio = function() {
+            AudioRX_context.resume().then(function() {
+                console.log('AudioContext resumed');
+                var h = document.getElementById('audio-resume-hint');
+                if (h) h.remove();
+            }).catch(function(e) { console.warn('Resume failed:', e); });
+        };
+        document.addEventListener('click', resumeAudio, {once: true});
+        document.addEventListener('touchstart', resumeAudio, {once: true});
+        document.addEventListener('keydown', resumeAudio, {once: true});
+    }
+
+    AudioRX_gain_node = AudioRX_context.createGain();
+
+    // ── AudioWorklet (desktop) or ScriptProcessor (iOS) ────────────
+    var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    var useAudioWorklet = !isIOS;
+
+    (async () => {
+        if (useAudioWorklet) {
+            try {
+                await AudioRX_context.audioWorklet.addModule(
+                    staticUrlWithAuth('/rx_worklet_processor.js?v=1'));
+                const rxNode = new AudioWorkletNode(AudioRX_context, 'rx-player');
+                AudioRX_source_node = rxNode;
+                // Configure jitter buffer
+                try { rxNode.port.postMessage({type:'config', prebufferMs:220, recoveryMs:90, maxMs:800}); } catch(_){}
+                // Wire the push callback
+                window.__pushRxFrame = function(f32) {
+                    rxNode.port.postMessage({type: 'push', payload: f32});
+                };
+                // ── onmessage set AFTER worklet is ready (sunnrrrc pattern) ──
+                wsAudioRX.onmessage = function(msg) {
+                    if (!window.__rxBytes) window.__rxBytes = 0;
+                    if (msg && msg.data && msg.data.byteLength) {
+                        window.__rxBytes += msg.data.byteLength;
+                        var float32Data = decodeRxAudioFrame(msg.data);
+                        if (float32Data) {
+                            window.__pushRxFrame(float32Data);
+                        }
+                    }
+                };
+                rxNode.connect(AudioRX_gain_node);
+                AudioRX_gain_node.connect(AudioRX_context.destination);
+                console.log('Audio RX playback started (AudioWorklet)');
+            } catch(e) {
+                console.warn('AudioWorklet failed, fallback to ScriptProcessor:', e);
+                useAudioWorklet = false;
+            }
         }
 
-        audioRXGain = audioRXContext.createGain();
-        audioRXGain.gain.value = 1.0;
+        if (!useAudioWorklet) {
+            // ScriptProcessor fallback (iOS Safari)
+            const BUFF_SIZE = 2048;
+            AudioRX_source_node = AudioRX_context.createScriptProcessor(BUFF_SIZE, 1, 1);
+            var queue = [];
+            var queuedSamples = 0;
+            var prebufferSamples = Math.round(0.060 * AudioRX_sampleRate); // 60ms
+            var priming = true;
 
-        // Use AudioWorklet for low-latency playback
-        audioRXContext.audioWorklet.addModule(
-            staticUrlWithAuth('/rx_worklet_processor.js?v=1')
-        ).then(function() {
-            audioRXWorklet = new AudioWorkletNode(audioRXContext, 'rx-player');
-            audioRXWorklet.connect(audioRXGain);
-            audioRXGain.connect(audioRXContext.destination);
-            audioRXStarted = true;
-            console.log('Audio RX playback started (AudioWorklet)');
-        }).catch(function(e) {
-            console.warn('AudioWorklet failed, using ScriptProcessor fallback:', e);
-            setupScriptProcessorFallback();
-        });
-    } catch(e) {
-        console.error('Audio RX init failed:', e);
-    }
-}
+            AudioRX_source_node.onaudioprocess = function(event) {
+                var out = event.outputBuffer.getChannelData(0);
+                var needed = out.length;
+                var written = 0;
 
-function setupScriptProcessorFallback() {
-    try {
-        const bufSize = 2048;
-        const sp = audioRXContext.createScriptProcessor(bufSize, 1, 1);
-        let queue = [];
-        let queuedSamples = 0;
-        const prebufferSamples = 60 * 48; // 60ms @ 48kHz
-        let priming = true;
-
-        sp.onaudioprocess = function(event) {
-            const out = event.outputBuffer.getChannelData(0);
-            const needed = out.length;
-            let written = 0;
-
-            // Prime: wait for enough samples
-            if (priming) {
-                if (queuedSamples < prebufferSamples) {
-                    out.fill(0);
-                    return;
+                if (priming) {
+                    if (queuedSamples < prebufferSamples) { out.fill(0); return; }
+                    priming = false;
                 }
-                priming = false;
-            }
 
-            while (written < needed && queue.length > 0) {
-                const chunk = queue[0];
-                const n = Math.min(chunk.length, needed - written);
-                out.set(chunk.subarray(0, n), written);
-                written += n;
-                queuedSamples -= n;
-                if (n >= chunk.length) {
-                    queue.shift();
-                } else {
-                    queue[0] = chunk.subarray(n);
+                while (written < needed && queue.length > 0) {
+                    var chunk = queue[0];
+                    var n = Math.min(chunk.length, needed - written);
+                    out.set(chunk.subarray(0, n), written);
+                    written += n;
+                    queuedSamples -= n;
+                    if (n >= chunk.length) { queue.shift(); }
+                    else { queue[0] = chunk.subarray(n); }
                 }
-            }
 
-            if (written < needed) {
-                out.fill(0, written);
-                queuedSamples = 0;
-                queue = [];
-                priming = true;
-            }
-        };
+                if (written < needed) {
+                    out.fill(0, written);
+                    queuedSamples = 0; queue = []; priming = true;
+                }
+            };
 
-        sp.connect(audioRXGain);
-        audioRXGain.connect(audioRXContext.destination);
-        audioRXStarted = true;
+            // Wire push callback to queue
+            window.__pushRxFrame = function(f32) {
+                queue.push(f32);
+                queuedSamples += f32.length;
+            };
 
-        // Override the worklet push to use ScriptProcessor queue
-        window._spQueue = queue;
-        const origWorklet = audioRXWorklet;
-        audioRXWorklet = {
-            port: {
-                postMessage: function(msg) {
-                    if (msg.type === 'push' && msg.payload) {
-                        window._spQueue.push(msg.payload);
-                        window._spQueueTotal = (window._spQueueTotal || 0) + msg.payload.length;
+            // ── onmessage set AFTER processor is ready ──
+            wsAudioRX.onmessage = function(msg) {
+                if (!window.__rxBytes) window.__rxBytes = 0;
+                if (msg && msg.data && msg.data.byteLength) {
+                    window.__rxBytes += msg.data.byteLength;
+                    var float32Data = decodeRxAudioFrame(msg.data);
+                    if (float32Data) {
+                        window.__pushRxFrame(float32Data);
                     }
                 }
-            }
-        };
-        console.log('Audio RX playback started (ScriptProcessor fallback)');
-    } catch(e) {
-        console.error('ScriptProcessor fallback failed:', e);
-    }
+            };
+
+            AudioRX_source_node.connect(AudioRX_gain_node);
+            AudioRX_gain_node.connect(AudioRX_context.destination);
+            console.log('Audio RX playback started (ScriptProcessor fallback)');
+        }
+    })();
 }
+
+// Legacy alias for backwards compat
+function connectAudioRX() { AudioRX_start(); }
 
 // ═══════════════════════════════════════════════════════════════════════
 // ── Audio TX ──────────────────────────────────────────────────────────
@@ -668,7 +638,7 @@ function startTXAudio() {
     }).then(function(stream) {
         txAudioStream = stream;
 
-        // Create AudioContext for capture
+        // Create AudioContext for capture (16kHz for TX)
         const ctx = new (window.AudioContext || window.webkitAudioContext)({
             sampleRate: 16000,
         });
@@ -678,7 +648,8 @@ function startTXAudio() {
         }
 
         const source = ctx.createMediaStreamSource(stream);
-        const sp = ctx.createScriptProcessor(320, 1, 1); // 20ms @ 16kHz
+        // Chrome requires buffer size to be a power of two (256|512|1024|...)
+        const sp = ctx.createScriptProcessor(512, 1, 1); // ~32ms @ 16kHz
 
         sp.onaudioprocess = function(event) {
             if (!txAudioRunning) return;
@@ -727,7 +698,7 @@ function startTXAudioFallback() {
         if (ctx.state === 'suspended') ctx.resume().catch(function(){});
 
         const source = ctx.createMediaStreamSource(stream);
-        const sp = ctx.createScriptProcessor(320, 1, 1);
+        const sp = ctx.createScriptProcessor(512, 1, 1); // power-of-2 required by Chrome
 
         sp.onaudioprocess = function(event) {
             if (!txAudioRunning) return;
