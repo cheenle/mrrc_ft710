@@ -450,9 +450,20 @@ function startAudioRXPlayback() {
             sampleRate: 48000,
         });
 
-        // Resume if suspended (iOS)
+        // Resume if suspended (Chrome autoplay policy / iOS)
         if (audioRXContext.state === 'suspended') {
-            audioRXContext.resume().catch(function(){});
+            console.log('AudioContext suspended — waiting for user gesture');
+            // Resume on first user interaction
+            var resumeAudio = function() {
+                audioRXContext.resume().then(function() {
+                    console.log('AudioContext resumed after user gesture');
+                }).catch(function(e) {
+                    console.warn('AudioContext resume failed:', e);
+                });
+            };
+            document.addEventListener('click', resumeAudio, {once: true});
+            document.addEventListener('touchstart', resumeAudio, {once: true});
+            document.addEventListener('keydown', resumeAudio, {once: true});
         }
 
         audioRXGain = audioRXContext.createGain();
