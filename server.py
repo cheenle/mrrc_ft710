@@ -371,14 +371,18 @@ async def _audio_rx_loop():
                         if audio_rx_clients:
                             if _first:
                                 tag_name = "Opus" if audio.opus_enabled else "Int16 PCM"
-                                import struct as _struct
-                                _samples = _struct.unpack(f"<{len(pcm)//2}h", pcm[:200])
-                                _peak = max(abs(s) for s in _samples) / 32767 * 100
-                                logger.info("RX audio broadcast active: %s, %d clients, peak=%.1f%%",
-                                           tag_name, len(audio_rx_clients), _peak)
-                                if _peak < 1.0:
-                                    logger.warning("RX audio is near-silent (peak=%.1f%%) — "
-                                                 "check radio AF gain / USB audio connection", _peak)
+                                # Check audio level (safely)
+                                _slice = pcm[:200]
+                                _sample_count = len(_slice) // 2
+                                if _sample_count > 0:
+                                    import struct as _struct
+                                    _samples = _struct.unpack(f"<{_sample_count}h", _slice[:_sample_count*2])
+                                    _peak = max(abs(s) for s in _samples) / 32767 * 100
+                                    logger.info("RX audio broadcast active: %s, %d clients, peak=%.1f%%",
+                                               tag_name, len(audio_rx_clients), _peak)
+                                    if _peak < 0.5:
+                                        logger.warning("RX audio is near-silent (peak=%.1f%%) — "
+                                                     "check radio AF gain / USB audio connection", _peak)
                                 _first = False
                             # Send to all clients
                             dead: set[WebSocket] = set()
