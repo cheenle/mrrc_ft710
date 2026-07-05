@@ -1,0 +1,319 @@
+#!/usr/bin/env python3
+"""
+FT-710 Scope Data Pipe
+======================
+Standalone process that reads scope data from FT4222 SPI and writes
+binary frames to stdout.  Run as a subprocess from server.py.
+
+Binary frame format (written to stdout):
+  4-byte BE uint32 frame_len
+  frame_len bytes of spectrum data (version + wf1 + wf2 + metadata)
+
+This avoids ctypes+asyncio threading issues in the main server.
+
+Protocol:
+  - Every frame: <4-byte BE length><payload>
+  - Heartbeat every 1s when idle (len=0): <0x00 0x00 0x00 0x00>
+  - Status lines on stderr prefixed with "STATUS:" for machine parsing
+"""
+import ctypes
+import signal
+import struct
+import sys
+import time
+from ctypes import (
+    c_void_p, c_uint32, c_uint16, c_uint8, c_bool,
+    POINTER, byref, CDLL, create_string_buffer,
+)
+
+from scope_frame import (
+    SCOPE_FRAME_SIZE,
+    SYNC_FULL,
+    encode_pipe_payload,
+    parse_scope_frame,
+)
+from scope_libraries import require_ftdi_libraries
+from scope_libraries import get_ft4222_clock_divider
+
+FT_OK = 0
+FT4222_OK = 0
+FT4222_TRANSFER_IN_PROGRESS = 10
+FT_OPEN_BY_DESCRIPTION = 2
+SPI_IO_SINGLE = 1
+CLK_IDLE_HIGH = 1
+CLK_LEADING = 0
+SYS_CLK_24 = 1
+
+MAX_SYNC_ATTEMPTS = 3
+MAX_CONSECUTIVE_ERRORS = 50
+
+running = True
+
+
+def stop_running(_signum, _frame):
+    global running
+    running = False
+
+
+def emit_status(msg: str):
+    """Write a machine-parseable status line to stderr."""
+    sys.stderr.write(f"STATUS:{msg}\n")
+    sys.stderr.flush()
+
+
+def sync_stream(f4, ft_handle) -> bool:
+    """Read one byte at a time until the 16-byte sync pattern is found.
+
+    Returns True if sync was found, False if exhausted.
+    Matches wfview ft4222Handler::sync().
+    """
+    one = (c_uint8 * 1)()
+    sz = c_uint16()
+    window = bytearray()
+    for _ in range(SCOPE_FRAME_SIZE * 2):
+        status = f4.FT4222_SPIMaster_SingleRead(ft_handle, one, 1, byref(sz), False)
+        if status == FT4222_TRANSFER_IN_PROGRESS:
+            time.sleep(0.001)
+            continue
+        if status != FT4222_OK or sz.value != 1:
+            time.sleep(0.001)
+            continue
+        window.append(one[0])
+        if len(window) > len(SYNC_FULL):
+            del window[0]
+        if bytes(window) == SYNC_FULL:
+            return True
+    return False
+
+
+def open_device(d2xx, f4, clock_divider: int):
+    """Open and initialize the FT4222 SPI device.
+
+    Returns (ft_handle, d2xx, f4) on success, or (None, None, None) on failure.
+    The caller owns the ctypes library handles — they are NOT unloaded here.
+    """
+    for attempt in range(5):
+        ft_handle = c_void_p()
+        desc = create_string_buffer(b"FT4222 A")
+        s = d2xx.FT_OpenEx(desc, FT_OPEN_BY_DESCRIPTION, byref(ft_handle))
+        if s != FT_OK:
+            emit_status(f"open_failed:attempt_{attempt+1}:error_{s}")
+            time.sleep(0.3)
+            continue
+
+        d2xx.FT_SetTimeouts(ft_handle, 100, 100)
+        d2xx.FT_SetLatencyTimer(ft_handle, 2)
+
+        s = f4.FT4222_SPIMaster_Init(
+            ft_handle, SPI_IO_SINGLE, clock_divider, CLK_IDLE_HIGH, CLK_LEADING, 0x01,
+        )
+        if s == FT4222_OK:
+            if f4.FT4222_SetClock(ft_handle, SYS_CLK_24) == FT4222_OK:
+                emit_status(f"spi_ready:attempt_{attempt+1}:clk_div_{clock_divider}")
+                return ft_handle
+            else:
+                emit_status(f"set_clock_failed:attempt_{attempt+1}")
+
+        # Cleanup failed attempt
+        try:
+            f4.FT4222_UnInitialize(ft_handle)
+        except Exception:
+            pass
+        try:
+            d2xx.FT_Close(ft_handle)
+        except Exception:
+            pass
+        emit_status(f"spi_init_retry:attempt_{attempt+1}:error_{s}")
+        time.sleep(0.3)
+
+    emit_status("spi_init_failed:all_attempts")
+    return None
+
+
+def close_device(d2xx, f4, ft_handle):
+    """Safely close and uninitialize the FT4222 device."""
+    if ft_handle is None:
+        return
+    try:
+        f4.FT4222_UnInitialize(ft_handle)
+    except Exception:
+        pass
+    try:
+        d2xx.FT_Close(ft_handle)
+    except Exception:
+        pass
+
+
+def main():
+    global running
+    signal.signal(signal.SIGINT, stop_running)
+    signal.signal(signal.SIGTERM, stop_running)
+
+    # ── Load libraries ──────────────────────────────────────────────
+    ft4222_path, ftd2xx_path = require_ftdi_libraries()
+    emit_status(f"libs_loaded:ft4222={ft4222_path.name}:ftd2xx={ftd2xx_path.name}")
+
+    d2xx = CDLL(str(ftd2xx_path))
+    f4 = CDLL(str(ft4222_path))
+
+    # Setup D2XX function signatures
+    d2xx.FT_OpenEx.argtypes = [c_void_p, c_uint32, POINTER(c_void_p)]
+    d2xx.FT_OpenEx.restype = c_uint32
+    d2xx.FT_Close.argtypes = [c_void_p]
+    d2xx.FT_Close.restype = c_uint32
+    d2xx.FT_SetTimeouts.argtypes = [c_void_p, c_uint32, c_uint32]
+    d2xx.FT_SetTimeouts.restype = c_uint32
+    d2xx.FT_SetLatencyTimer.argtypes = [c_void_p, c_uint8]
+    d2xx.FT_SetLatencyTimer.restype = c_uint32
+
+    # Setup FT4222 function signatures
+    f4.FT4222_UnInitialize.argtypes = [c_void_p]
+    f4.FT4222_UnInitialize.restype = c_uint32
+    f4.FT4222_SPIMaster_Init.argtypes = [
+        c_void_p, c_uint32, c_uint32, c_uint32, c_uint32, c_uint8,
+    ]
+    f4.FT4222_SPIMaster_Init.restype = c_uint32
+    f4.FT4222_SPIMaster_SingleRead.argtypes = [
+        c_void_p, POINTER(c_uint8), c_uint16, POINTER(c_uint16), c_bool,
+    ]
+    f4.FT4222_SPIMaster_SingleRead.restype = c_uint32
+    f4.FT4222_SetClock.argtypes = [c_void_p, c_uint32]
+    f4.FT4222_SetClock.restype = c_uint32
+
+    # ── Open device ─────────────────────────────────────────────────
+    clock_divider = get_ft4222_clock_divider()
+    ft_handle = open_device(d2xx, f4, clock_divider)
+    if ft_handle is None:
+        emit_status("fatal:cannot_open_device")
+        sys.exit(1)
+
+    # ── Read loop ───────────────────────────────────────────────────
+    buf = (c_uint8 * SCOPE_FRAME_SIZE)()
+    sz = c_uint16()
+    frame_count = 0
+    last_emit = time.time()
+    last_heartbeat = time.time()
+    consecutive_errors = 0
+    consecutive_bad_frames = 0
+    sync_attempts_this_device = 0
+
+    emit_status("pipe_running")
+
+    try:
+        while running:
+            # Periodic heartbeat (so server knows pipe is alive even with no frames)
+            now = time.time()
+            if now - last_heartbeat >= 2.0:
+                emit_status(f"heartbeat:frames={frame_count}:errors={consecutive_errors}")
+                last_heartbeat = now
+
+            status = f4.FT4222_SPIMaster_SingleRead(
+                ft_handle, buf, SCOPE_FRAME_SIZE, byref(sz), False,
+            )
+
+            if status == FT4222_TRANSFER_IN_PROGRESS:
+                consecutive_errors += 1
+                # If stuck in TRANSFER_IN_PROGRESS for too long,
+                # the SPI bus is hung — re-initialize the device.
+                if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
+                    emit_status(f"spi_stalled:reinit_after_{consecutive_errors}_in_progress")
+                    close_device(d2xx, f4, ft_handle)
+                    ft_handle = open_device(d2xx, f4, clock_divider)
+                    if ft_handle is None:
+                        emit_status("fatal:reinit_failed_after_stall")
+                        break
+                    consecutive_errors = 0
+                    consecutive_bad_frames = 0
+                    sync_attempts_this_device = 0
+                else:
+                    time.sleep(0.001)
+                continue
+
+            if status != FT4222_OK:
+                consecutive_errors += 1
+                if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
+                    emit_status(f"too_many_errors:{consecutive_errors}:reinit")
+                    close_device(d2xx, f4, ft_handle)
+                    ft_handle = open_device(d2xx, f4, clock_divider)
+                    if ft_handle is None:
+                        emit_status("fatal:reinit_failed")
+                        break
+                    consecutive_errors = 0
+                    consecutive_bad_frames = 0
+                    sync_attempts_this_device = 0
+                else:
+                    time.sleep(0.005)
+                continue
+
+            consecutive_errors = 0  # reset on successful read
+
+            if sz.value != SCOPE_FRAME_SIZE:
+                # Partial read — skip and retry
+                emit_status(f"short_read:{sz.value}")
+                time.sleep(0.001)
+                continue
+
+            frame = bytes(buf[:SCOPE_FRAME_SIZE])
+
+            # Parse frame
+            try:
+                parsed = parse_scope_frame(frame)
+                consecutive_bad_frames = 0
+                sync_attempts_this_device = 0
+            except ValueError:
+                consecutive_bad_frames += 1
+                emit_status(f"sync_lost:bad_frame_{consecutive_bad_frames}")
+
+                # Try byte-by-byte re-sync first
+                if sync_stream(f4, ft_handle):
+                    emit_status("sync_recovered")
+                    consecutive_bad_frames = 0
+                    sync_attempts_this_device = 0
+                else:
+                    sync_attempts_this_device += 1
+                    emit_status(f"sync_failed:attempt_{sync_attempts_this_device}")
+
+                    if sync_attempts_this_device >= MAX_SYNC_ATTEMPTS:
+                        # Re-initialize the device (matches wfview approach)
+                        emit_status("reinitializing_device")
+                        close_device(d2xx, f4, ft_handle)
+                        ft_handle = open_device(d2xx, f4, clock_divider)
+                        if ft_handle is None:
+                            emit_status("fatal:reinit_failed_after_sync_loss")
+                            break
+                        consecutive_bad_frames = 0
+                        sync_attempts_this_device = 0
+                continue
+
+            # Encode and write to stdout
+            payload = encode_pipe_payload(parsed)
+
+            # Write length-prefixed frame to stdout
+            sys.stdout.buffer.write(struct.pack('>I', len(payload)))
+            sys.stdout.buffer.write(payload)
+            sys.stdout.buffer.flush()
+
+            frame_count += 1
+
+            # Periodic diagnostic (every 30 frames)
+            if frame_count % 30 == 0:
+                now = time.time()
+                fps = 30.0 / (now - last_emit) if (now - last_emit) > 0 else 0
+                n_nonzero = sum(1 for b in parsed.wf1 if b > 0)
+                emit_status(
+                    f"diag:frames={frame_count}:fps={fps:.1f}:"
+                    f"wf1_max={max(parsed.wf1)}:wf1_nz={n_nonzero}:"
+                    f"span={parsed.scope_span}:s_meter={parsed.s_meter}"
+                )
+                last_emit = now
+
+    except Exception as e:
+        emit_status(f"pipe_error:{e}")
+    finally:
+        emit_status("pipe_stopping")
+        close_device(d2xx, f4, ft_handle)
+        emit_status("pipe_stopped")
+
+
+if __name__ == "__main__":
+    main()
