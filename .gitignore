@@ -25,3 +25,5 @@ Thumbs.db
 
 # Sensitive config (uncomment if needed)
 # config_local.py
+.env
+.env.example
