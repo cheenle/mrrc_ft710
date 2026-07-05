@@ -377,10 +377,23 @@ function connectAudioRX() {
         if (event.data instanceof ArrayBuffer) {
             window.__rxBytes += event.data.byteLength;
             const f32 = decodeRxAudioFrame(event.data);
-            if (f32 && audioRXWorklet) {
-                try {
-                    audioRXWorklet.port.postMessage({type: 'push', payload: f32});
-                } catch(e) {}
+            if (f32) {
+                window.__rxFrames = (window.__rxFrames || 0) + 1;
+                const pushed = (typeof audioRXWorklet !== 'undefined' && audioRXWorklet && audioRXWorklet.port);
+                if (window.__rxFrames === 1) {
+                    console.log('First audio frame: size=' + event.data.byteLength +
+                        ', decoded=' + f32.length + ' samples, worklet=' + (pushed ? 'ready' : 'missing'));
+                }
+                if (window.__rxFrames % 50 === 0) {
+                    console.log('Audio frames received: ' + window.__rxFrames +
+                        ' ctx=' + (audioRXContext ? audioRXContext.state : 'none') +
+                        ' pushed=' + (pushed ? 'yes' : 'no'));
+                }
+                if (pushed) {
+                    try {
+                        audioRXWorklet.port.postMessage({type: 'push', payload: f32});
+                    } catch(e) { console.debug('push error:', e); }
+                }
             }
         }
     };
@@ -419,7 +432,21 @@ function decodeRxAudioFrame(data) {
         if (!dec) return null;
         try {
             const f32 = dec.decode_float(payload);
-            return new Float32Array(f32);  // Copy out of WASM heap
+            const copy = new Float32Array(f32);  // Copy out of WASM heap
+            // Debug: check first frame audio levels
+            if (!window.__audioDbg) {
+                window.__audioDbg = true;
+                var peak = 0, sum = 0;
+                for (var i = 0; i < copy.length; i++) {
+                    var abs = Math.abs(copy[i]);
+                    if (abs > peak) peak = abs;
+                    sum += abs;
+                }
+                console.log('First Opus frame: ' + copy.length + ' samples, peak=' +
+                    (peak * 100).toFixed(1) + '%, avg=' + (sum / copy.length * 100).toFixed(2) + '%');
+                if (peak < 0.0001) console.warn('⚠ Audio data is near-silent — check radio AF gain / USB audio');
+            }
+            return copy;
         } catch(e) {
             console.debug('Opus decode error:', e);
             return null;
@@ -452,11 +479,22 @@ function startAudioRXPlayback() {
 
         // Resume if suspended (Chrome autoplay policy / iOS)
         if (audioRXContext.state === 'suspended') {
-            console.log('AudioContext suspended — waiting for user gesture');
+            console.log('AudioContext suspended — tap anywhere to enable audio');
+            // Show visible hint
+            var hint = document.createElement('div');
+            hint.id = 'audio-resume-hint';
+            hint.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;' +
+                'background:#f59e0b;color:#000;text-align:center;padding:10px;' +
+                'font-weight:bold;font-size:14px;cursor:pointer;';
+            hint.textContent = '🔊 点击此处启用音频  Tap to enable audio';
+            hint.onclick = function() { hint.remove(); };
+            document.body.appendChild(hint);
             // Resume on first user interaction
             var resumeAudio = function() {
                 audioRXContext.resume().then(function() {
-                    console.log('AudioContext resumed after user gesture');
+                    console.log('AudioContext resumed — audio should play now');
+                    var h = document.getElementById('audio-resume-hint');
+                    if (h) h.remove();
                 }).catch(function(e) {
                     console.warn('AudioContext resume failed:', e);
                 });

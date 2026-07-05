@@ -364,8 +364,14 @@ async def _audio_rx_loop():
                     if frames and audio_rx_clients:
                         if _first:
                             tag_name = "Opus" if audio.opus_enabled else "Int16 PCM"
-                            logger.info("RX audio broadcast active: %s, %d clients",
-                                       tag_name, len(audio_rx_clients))
+                            import struct as _struct
+                            _samples = _struct.unpack(f"<{len(pcm)//2}h", pcm[:200])
+                            _peak = max(abs(s) for s in _samples) / 32767 * 100
+                            logger.info("RX audio broadcast active: %s, %d clients, peak=%.1f%%",
+                                       tag_name, len(audio_rx_clients), _peak)
+                            if _peak < 1.0:
+                                logger.warning("RX audio is near-silent (peak=%.1f%%) — "
+                                             "check radio AF gain / USB audio connection", _peak)
                             _first = False
                         dead: set[WebSocket] = set()
                         for ws in list(audio_rx_clients):
