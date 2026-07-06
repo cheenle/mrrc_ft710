@@ -5,6 +5,7 @@ audio device name matching logic.
 """
 import struct
 import unittest
+from pathlib import Path
 
 from opus_rx import (
     AUDIO_TAG_PCM,
@@ -15,6 +16,9 @@ from opus_rx import (
     MIN_BITRATE,
     MAX_BITRATE,
 )
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 class CodecTagTests(unittest.TestCase):
@@ -57,7 +61,214 @@ class OpusConstantsTests(unittest.TestCase):
         self.assertLess(DEFAULT_BITRATE, MAX_BITRATE)
 
 
-class AudioFramingTests(unittest.TestCase):
+class TxFrontendContractTests(unittest.TestCase):
+    """TX browser path must preserve the 48 kHz / 20 ms Opus contract."""
+
+    def test_tx_capture_worklet_does_not_downsample_microphone_audio(self):
+        source = (REPO_ROOT / "static" / "tx_capture_worklet.js").read_text()
+        self.assertIn("this._outRate = 48000", source)
+        self.assertNotIn("this._outRate = 16000", source)
+
+    def test_tx_capture_worklet_resamples_actual_context_rate_to_48khz(self):
+        source = (REPO_ROOT / "static" / "tx_capture_worklet.js").read_text()
+        self.assertIn("this._resampleStep = this._inRate / this._outRate", source)
+        self.assertIn("_resampleTo48k", source)
+
+    def test_tx_opus_worker_encodes_20ms_48khz_frames(self):
+        source = (REPO_ROOT / "static" / "tx_opus_worker.js").read_text()
+        self.assertIn("var FRAME_SIZE = 960", source)
+        self.assertIn("new OpusEncoder(48000, 1, 2048, 20)", source)
+
+    def test_tx_opus_worker_updates_sab_read_pointer_with_atomic_index(self):
+        source = (REPO_ROOT / "static" / "tx_opus_worker.js").read_text()
+        self.assertIn("Atomics.store(_readPtr, 0, rp + n)", source)
+        self.assertNotIn("Atomics.store(_readPtr, rp + n)", source)
+
+    def test_tx_main_prefers_audio_worklet_frame_capture(self):
+        source = (REPO_ROOT / "static" / "ft710_main.js").read_text()
+        self.assertIn("audioWorklet.addModule('/tx_capture_worklet.js?v=tx-audio-4')", source)
+        self.assertIn("new AudioWorkletNode", source)
+        self.assertIn("type: 'float_frame'", source)
+
+    def test_tx_static_assets_are_cache_busted(self):
+        main_source = (REPO_ROOT / "static" / "ft710_main.js").read_text()
+        worker_source = (REPO_ROOT / "static" / "tx_opus_worker.js").read_text()
+        sw_source = (REPO_ROOT / "static" / "sw.js").read_text()
+        self.assertIn("tx_opus_worker.js?v=tx-audio-4", main_source)
+        self.assertIn("tx_capture_worklet.js?v=tx-audio-4", main_source)
+        self.assertIn("opus_codec.js?v=tx-audio-4", worker_source)
+        self.assertIn("ft710-v4", sw_source)
+
+    def test_tx_debug_tone_bypasses_microphone_capture(self):
+        main_source = (REPO_ROOT / "static" / "ft710_main.js").read_text()
+        worker_source = (REPO_ROOT / "static" / "tx_opus_worker.js").read_text()
+        self.assertIn("window.TXDebug", main_source)
+        self.assertIn("type: 'tone_start'", main_source)
+        self.assertIn("function startTone", worker_source)
+        self.assertIn("Math.sin(_tonePhase)", worker_source)
+
+    def test_tx_audio_drain_does_not_block_event_loop(self):
+        source = (REPO_ROOT / "server.py").read_text()
+        self.assertIn("await asyncio.to_thread(audio.write_tx_chunk)", source)
+
+    def test_tx_opus_encoder_uses_valid_high_quality_ctl_settings(self):
+        source = (REPO_ROOT / "static" / "modules" / "opus_codec.js").read_text()
+        self.assertIn("setValue(bitrate_ptr, 64000", source)
+        self.assertIn("_opus_encoder_ctl(this.handle, 4006, vbr_ptr)", source)
+        self.assertNotIn("_opus_encoder_ctl(this.handle, 4004, vbr_ptr)", source)
+        self.assertNotIn("_opus_encoder_ctl(this.handle, 4030", source)
+
+
+class TXBufferTests(unittest.TestCase):
+    """Server-side TX jitter buffer: pre-buffer, hard cap, thread-safe drain."""
+
+    def _make_handler(self):
+        """Build an AudioHandler without running __init__ (avoids PyAudio/Opus).
+        Only the TX-playback fields are wired, which is all feed/drain/write use.
+        """
+        import threading
+        from collections import deque
+        from audio_handler import AudioHandler
+        h = AudioHandler.__new__(AudioHandler)
+        h._tx_stream = None
+        h._tx_queue = deque()
+        h._tx_queued_bytes = 0
+        h._tx_primed = False
+        h._tx_lock = threading.Lock()
+        h._tx_write_lock = threading.Lock()
+        return h
+
+    # One 20 ms Opus frame decodes to 960 Int16 samples @ 48 k = 1920 bytes,
+    # which resamples to 882 samples @ 44.1 k = 1764 bytes (exact 160:147).
+    _FRAME48 = b"\x00" * 1920
+    _FRAME44_BYTES = 1764
+
+    def test_feed_drops_oldest_beyond_cap(self):
+        from audio_handler import TX_MAX_BUFFER_BYTES
+        h = self._make_handler()
+        h._tx_stream = object()  # non-None sentinel; feed only checks "is None"
+        for _ in range(60):      # feed well past the cap
+            h.feed_tx_audio(self._FRAME48)
+        # Queue must stay bounded by the cap (allow one frame of slack).
+        self.assertLessEqual(h._tx_queued_bytes, TX_MAX_BUFFER_BYTES + self._FRAME44_BYTES)
+        self.assertGreater(len(h._tx_queue), 0)
+
+    def test_feed_drops_when_stream_closed(self):
+        h = self._make_handler()
+        h._tx_stream = None
+        h.feed_tx_audio(self._FRAME48)
+        self.assertEqual(len(h._tx_queue), 0)
+        self.assertEqual(h._tx_queued_bytes, 0)
+
+    def test_write_prebuffers_before_first_write(self):
+        from audio_handler import TX_PREBUFFER_BYTES
+        h = self._make_handler()
+
+        class FakeStream:
+            def __init__(self):
+                self.writes = []
+
+            def is_active(self):
+                return True
+
+            def write(self, data):
+                self.writes.append(data)
+
+        stream = FakeStream()
+        h._tx_stream = stream
+        # One frame is below the pre-buffer threshold → no write yet.
+        h.feed_tx_audio(self._FRAME48)
+        h.write_tx_chunk()
+        self.assertEqual(len(stream.writes), 0)
+        self.assertFalse(h._tx_primed)
+        # Feed past the threshold → primed and drained.
+        for _ in range(10):
+            h.feed_tx_audio(self._FRAME48)
+        h.write_tx_chunk()
+        self.assertTrue(h._tx_primed)
+        self.assertGreater(len(stream.writes), 0)
+
+    def _fake_stream(self):
+        class FakeStream:
+            def __init__(self):
+                self.writes = []
+                self.stopped = False
+                self.closed = False
+
+            def is_active(self):
+                return not self.closed
+
+            def write(self, data):
+                self.writes.append(data)
+
+            def stop_stream(self):
+                self.stopped = True
+
+            def close(self):
+                self.closed = True
+        return FakeStream()
+
+    def test_graceful_stop_drains_queue_then_closes(self):
+        h = self._make_handler()
+        stream = self._fake_stream()
+        h._tx_stream = stream
+        for _ in range(3):
+            h.feed_tx_audio(self._FRAME48)
+        h._tx_primed = True
+        h.stop_tx(graceful=True)
+        self.assertEqual(len(stream.writes), 3)   # all queued frames → device
+        self.assertTrue(stream.stopped)            # Pa_StopStream drained device
+        self.assertTrue(stream.closed)
+        self.assertIsNone(h._tx_stream)
+        self.assertEqual(len(h._tx_queue), 0)
+
+    def test_graceful_stop_bounds_drain(self):
+        h = self._make_handler()
+        stream = self._fake_stream()
+        h._tx_stream = stream
+        for _ in range(20):
+            h.feed_tx_audio(self._FRAME48)
+        h._tx_primed = True
+        h.stop_tx(graceful=True, drain_ms=40)      # 40 ms = 2 frames
+        self.assertEqual(len(stream.writes), 2)    # only 2 drained, rest dropped
+        self.assertTrue(stream.closed)
+
+    def test_force_stop_drops_queue(self):
+        h = self._make_handler()
+        stream = self._fake_stream()
+        h._tx_stream = stream
+        for _ in range(5):
+            h.feed_tx_audio(self._FRAME48)
+        h.stop_tx(graceful=False)
+        self.assertEqual(len(stream.writes), 0)    # nothing drained (force)
+        self.assertTrue(stream.closed)
+        self.assertIsNone(h._tx_stream)
+
+
+class TXReleaseOrderTests(unittest.TestCase):
+    """PTT release must drain queued audio before dropping RF."""
+
+    def test_ptt_off_drains_before_rf_drop(self):
+        source = (REPO_ROOT / "server.py").read_text()
+        # Graceful stop_tx (drain) must precede the first set_ptt(False).
+        drain_idx = source.index("audio.stop_tx, True")
+        ptoff_idx = source.index("await cat.set_ptt(False)")
+        self.assertLess(drain_idx, ptoff_idx)
+
+    def test_tx_has_single_owner_guard(self):
+        source = (REPO_ROOT / "server.py").read_text()
+        self.assertIn("_tx_owner_ws", source)
+
+    def test_stop_does_not_clear_queue_on_s_text(self):
+        """'s:' must not clear the queue (would chop tail before drain)."""
+        source = (REPO_ROOT / "server.py").read_text()
+        # The 's:' branch should be a no-op pass, not a queue.clear()
+        s_branch = source[source.index('"s:"'):]
+        # No queue clear within the 's:'/'stop' text branch (first 400 chars)
+        self.assertNotIn("_tx_queue.clear()", s_branch[:400])
+
+
+
     """SDD §9.3, §9.4: Audio frame format (1-byte tag + payload)."""
 
     def test_tagged_pcm_frame_starts_with_zero(self):

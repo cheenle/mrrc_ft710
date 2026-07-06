@@ -34,6 +34,8 @@
                     <span class="freq-digit freq-small" id="f10h">0</span>
                 </div>
                 <div class="header-right">
+                    <button id="btn-wakelock" class="header-btn wakelock-btn" title="保持屏幕常亮" aria-pressed="false">☀</button>
+                    <button id="btn-fullscreen" class="header-btn fullscreen-btn" title="全屏切换" aria-pressed="false">⛶</button>
                     <button id="btn-power" class="header-btn power-btn" title="Connect / Disconnect">⚡</button>
                     <span class="vfo-indicator" id="vfo-indicator">VFO-A</span>
                 </div>
@@ -202,11 +204,11 @@
             <!-- Tuning Controls -->
             <section class="tuning-section">
                 <div class="tuning-row">
-                    <button class="tune-btn" data-step="-5000">&#x25C0;&#x25C0;</button>
-                    <button class="tune-btn" data-step="-1000">&#x25C0;</button>
+                    <button class="tune-btn" data-action="fast-left">&#x25C0;&#x25C0;</button>
+                    <button class="tune-btn" data-action="slow-left">&#x25C0;</button>
                     <button class="tune-step-btn" id="btn-step">1kHz</button>
-                    <button class="tune-btn" data-step="1000">&#x25B6;</button>
-                    <button class="tune-btn" data-step="5000">&#x25B6;&#x25B6;</button>
+                    <button class="tune-btn" data-action="slow-right">&#x25B6;</button>
+                    <button class="tune-btn" data-action="fast-right">&#x25B6;&#x25B6;</button>
                 </div>
             </section>
 

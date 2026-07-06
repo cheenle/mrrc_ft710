@@ -68,6 +68,11 @@ ctrl_clients: set[WebSocket] = set()
 spectrum_clients: set[WebSocket] = set()
 audio_rx_clients: set[WebSocket] = set()
 audio_tx_clients: set[WebSocket] = set()
+# Single-owner guard for the TX uplink: only the first connected TX client's
+# audio is fed to the radio. Prevents two open tabs from interleaving mic
+# frames into the same playback queue (garbled TX). A later client takes over
+# only after the current owner disconnects.
+_tx_owner_ws: Optional[WebSocket] = None
 _state_broadcast_task: asyncio.Task | None = None
 _scope_read_task: asyncio.Task | None = None
 _scope_broadcast_task: asyncio.Task | None = None
@@ -412,13 +417,19 @@ async def _audio_rx_loop():
 
 
 async def _audio_tx_drain_loop():
-    """Periodically drain queued TX audio to the sound card output."""
+    """Periodically drain queued TX audio to the sound card output.
+
+    Offloads the synchronous PyAudio write to a thread so it never
+    blocks the asyncio event loop.  Without this, a slow audio write
+    can stall all other async work — including CAT commands and state
+    broadcasts — causing UI stutter on both audio and CAT.
+    """
     global audio
     interval = 0.010  # 10 ms drain interval
     while True:
         try:
             if audio:
-                audio.write_tx_chunk()
+                await asyncio.to_thread(audio.write_tx_chunk)
         except asyncio.CancelledError:
             return
         except Exception:
@@ -494,6 +505,10 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
         }))
         return
 
+    # Brief pause of background polling so the user's next command
+    # doesn't queue behind a poll cycle on the serial lock.
+    scheduler and scheduler.note_user_command()
+
     try:
         if field == "freq" or field == "vfo_a_freq":
             freq = int(value)
@@ -527,6 +542,12 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                 if audio:
                     await asyncio.to_thread(audio.start_tx)
             else:
+                # Graceful TX stop: drain queued audio to the DAC and block
+                # until it has played (Pa_StopStream semantics), so word-
+                # endings go out over RF before we drop PTT. Must run off the
+                # event loop — the blocking drain can take up to TX_DRAIN_MS.
+                if audio:
+                    await asyncio.to_thread(audio.stop_tx, True)
                 # Force TX release with retries for safety
                 await cat.set_ptt(False)
                 # Verify
@@ -537,9 +558,6 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                         break
                     await cat.set_ptt(False)
                 radio.update(tx_status=0)
-                # Stop TX audio output
-                if audio:
-                    await asyncio.to_thread(audio.stop_tx)
             scheduler and scheduler.skip_next_poll("tx_status", 1.0)
 
         elif field == "tune":
@@ -1132,11 +1150,13 @@ async def ws_radio(ws: WebSocket):
 
     # Push full initial state
     try:
+        channels = _load_mem_channels()
         await ws.send_text(json.dumps({
             "type": "fullState",
             "data": radio.to_dict(),
             "bands": BANDS,
             "modes": UI_MODES,
+            "memChannels": channels,
         }))
     except Exception:
         ctrl_clients.discard(ws)
@@ -1231,8 +1251,12 @@ async def ws_audio_tx(ws: WebSocket):
     """TX mic uplink endpoint. Receives binary frames:
     1-byte codec tag (0x00=PCM, 0x01=Opus) + payload.
     Text frames: 'm:rate,...' for settings, 's:' for stop.
+
+    Single-owner: only the first connected client's audio is fed to the
+    radio; subsequent clients connect but their frames are ignored until
+    the owner disconnects.
     """
-    global audio, _opus_tx_decoder
+    global audio, _opus_tx_decoder, _tx_owner_ws
 
     token = ws.query_params.get("token", "")
     if not token or token not in _auth_tokens:
@@ -1241,7 +1265,11 @@ async def ws_audio_tx(ws: WebSocket):
 
     await ws.accept()
     audio_tx_clients.add(ws)
-    logger.info("Audio TX client connected (%d total)", len(audio_tx_clients))
+    is_owner = _tx_owner_ws is None
+    if is_owner:
+        _tx_owner_ws = ws
+    logger.info("Audio TX client connected (%d total, owner=%s)",
+                len(audio_tx_clients), is_owner)
 
     try:
         while True:
@@ -1250,6 +1278,9 @@ async def ws_audio_tx(ws: WebSocket):
                 break
 
             if "bytes" in msg and msg["bytes"] is not None:
+                # Only the owner's audio reaches the radio; ignore others.
+                if ws is not _tx_owner_ws:
+                    continue
                 data = msg["bytes"]
                 if len(data) < 2:
                     continue
@@ -1273,9 +1304,11 @@ async def ws_audio_tx(ws: WebSocket):
             elif "text" in msg and msg["text"]:
                 text = msg["text"]
                 if text.startswith("s:") or text == "stop":
-                    # Clear TX queue on stop
-                    if audio:
-                        audio._tx_queue.clear()
+                    # Client stopped capturing. Do NOT clear the queue here —
+                    # the PTT-release path drains queued audio before dropping
+                    # RF, so word-endings survive. Clearing now would chop
+                    # the tail if 's:' arrives before ptt:false.
+                    pass
                 elif text.startswith("m:"):
                     # Settings: rate, encode, etc.
                     try:
@@ -1288,11 +1321,13 @@ async def ws_audio_tx(ws: WebSocket):
         pass
     finally:
         audio_tx_clients.discard(ws)
-        # Force RX on TX WS disconnect (safety)
-        if audio:
-            await asyncio.to_thread(audio.stop_tx)
-            audio._tx_queue.clear()
-        logger.info("Audio TX client disconnected (%d remain)", len(audio_tx_clients))
+        if ws is _tx_owner_ws:
+            _tx_owner_ws = None
+            # Force RX on TX owner disconnect (safety)
+            if audio:
+                await asyncio.to_thread(audio.stop_tx)
+        logger.info("Audio TX client disconnected (%d remain, owner=%s)",
+                    len(audio_tx_clients), _tx_owner_ws is not None)
 
 
 # ── Static File Serving ─────────────────────────────────────────────

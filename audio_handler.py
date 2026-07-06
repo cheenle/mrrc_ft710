@@ -10,6 +10,7 @@ Uses PyAudio for sound card I/O and libopus for compression.
 
 import asyncio
 import logging
+import threading
 import time
 from collections import deque
 from typing import Optional
@@ -37,6 +38,21 @@ RX_CHANNELS = 1
 TX_SAMPLE_RATE = 44100       # FT-710 native USB audio rate
 TX_CHANNELS = 1
 
+# ── TX jitter-buffer config ────────────────────────────────────────────
+# The browser delivers one 20 ms Opus frame per ~20 ms over WebSocket, but
+# network jitter (especially mobile/Wi-Fi power-save) makes arrivals bursty.
+# Pre-buffering cushions the DAC before the first write (prevents underrun
+# clicks at PTT key-up); the hard cap bounds accumulated latency by dropping
+# the oldest queued frame.  Linear-interp resampling at the exact 160:147
+# ratio keeps 960→882 frame boundaries phase-continuous, so no per-frame
+# state is needed in the resampler itself.
+TX_FRAME_MS = 20
+TX_PREBUFFER_MS = 60          # ~3 frames cushion before playback starts
+TX_MAX_BUFFER_MS = 400        # drop oldest beyond this (~20 frames)
+TX_DRAIN_MS = 150             # bounded drain on PTT release (word-tail flush)
+TX_PREBUFFER_BYTES = TX_SAMPLE_RATE * TX_CHANNELS * 2 * TX_PREBUFFER_MS // 1000
+TX_MAX_BUFFER_BYTES = TX_SAMPLE_RATE * TX_CHANNELS * 2 * TX_MAX_BUFFER_MS // 1000
+
 
 class AudioHandler:
     """Captures RX audio from sound card and encodes via Opus.
@@ -52,6 +68,16 @@ class AudioHandler:
         self._tx_stream: Optional["pyaudio.Stream"] = None
         self._rx_running = False
         self._tx_queue: deque = deque()  # Queue of int16 PCM bytes to play
+        # TX playback state — guarded by _tx_lock so the drain loop (worker
+        # thread), feed_tx_audio (event-loop thread) and stop_tx (worker
+        # thread) never race on the stream handle or queue. _tx_write_lock
+        # serializes actual stream.write() calls so the drain loop and a
+        # graceful stop_tx never write the same PortAudio stream concurrently
+        # (PortAudio blocking I/O is not thread-safe per stream).
+        self._tx_lock = threading.Lock()
+        self._tx_write_lock = threading.Lock()
+        self._tx_queued_bytes = 0
+        self._tx_primed = False
 
         # Opus encoder for RX audio
         self.opus_enabled = True
@@ -317,7 +343,7 @@ class AudioHandler:
             return False
 
         try:
-            self._tx_stream = self._pa.open(
+            stream = self._pa.open(
                 format=pyaudio.paInt16,
                 channels=TX_CHANNELS,
                 rate=TX_SAMPLE_RATE,
@@ -325,45 +351,152 @@ class AudioHandler:
                 output_device_index=dev,
                 frames_per_buffer=RX_CHUNK_SIZE,
             )
-            self._tx_queue.clear()
-            dev_info = self._pa.get_device_info_by_index(dev)
-            logger.info("TX audio started: [%d] %s @ %d Hz (resampled from 48k Opus)",
-                        dev, dev_info.get('name', ''), TX_SAMPLE_RATE)
-            return True
         except Exception as e:
             logger.error("Failed to start TX audio: %s", e)
             return False
 
-    def stop_tx(self):
-        """Stop TX audio playback."""
-        if self._tx_stream:
+        # Atomically swap in the new stream and reset buffer state.
+        with self._tx_lock:
+            old = self._tx_stream
+            self._tx_stream = stream
+            self._tx_queue.clear()
+            self._tx_queued_bytes = 0
+            self._tx_primed = False
+
+        if old is not None:
+            # Wait for any in-flight write on the previous stream before
+            # closing it (write_tx_chunk holds _tx_write_lock during write).
+            with self._tx_write_lock:
+                try:
+                    old.stop_stream()
+                    old.close()
+                except Exception:
+                    pass
+
+        dev_info = self._pa.get_device_info_by_index(dev)
+        logger.info("TX audio started: [%d] %s @ %d Hz (pre-buffer %dms, cap %dms)",
+                    dev, dev_info.get('name', ''), TX_SAMPLE_RATE,
+                    TX_PREBUFFER_MS, TX_MAX_BUFFER_MS)
+        return True
+
+    def stop_tx(self, graceful: bool = False, drain_ms: int = TX_DRAIN_MS):
+        """Stop TX audio playback.
+
+        graceful=False (default — disconnect / teardown / safety):
+            Drop all queued audio and close immediately. PortAudio's
+            stop_stream() still drains whatever is already in the device
+            buffer (≤ ~60 ms) before close, avoiding a click.
+
+        graceful=True (normal PTT release):
+            Write remaining queued frames to the device (bounded by
+            drain_ms), then call stop_stream() — which BLOCKS until the
+            device buffer finishes playing to the DAC (Pa_StopStream
+            semantics) — so in-flight word-endings actually go out over RF
+            before the caller drops PTT. The caller MUST invoke this before
+            set_ptt(False), and MUST run it off the event loop (to_thread),
+            since the blocking drain can take up to drain_ms.
+
+        Both paths take _tx_write_lock so the drain loop can't write the
+        stream mid-close.
+        """
+        # Take ownership of the stream + queue atomically. After this, the
+        # drain loop's write_tx_chunk sees _tx_stream=None and stops.
+        with self._tx_lock:
+            stream = self._tx_stream
+            queue = self._tx_queue
+            self._tx_stream = None
+            self._tx_queue = deque()
+            self._tx_queued_bytes = 0
+            self._tx_primed = False
+
+        if stream is None:
+            return
+
+        with self._tx_write_lock:  # wait for any in-flight drain-loop write
+            if graceful and stream.is_active():
+                budget = TX_SAMPLE_RATE * TX_CHANNELS * 2 * drain_ms // 1000
+                flushed = 0
+                while queue and flushed < budget:
+                    data = queue.popleft()
+                    try:
+                        stream.write(data)  # blocks when device buffer full
+                        flushed += len(data)
+                    except Exception as e:
+                        logger.debug("TX graceful drain write error: %s", e)
+                        break
+            # Pa_StopStream blocks until pending device-buffer audio has
+            # played; this is what guarantees the tail reaches the DAC.
             try:
-                self._tx_stream.stop_stream()
-                self._tx_stream.close()
+                stream.stop_stream()
             except Exception:
                 pass
-            self._tx_stream = None
-        self._tx_queue.clear()
+            try:
+                stream.close()
+            except Exception:
+                pass
 
     def feed_tx_audio(self, pcm: bytes):
-        """Queue TX audio for playback. Input is 48 kHz PCM (from Opus decoder
-        or browser); resampled to 44.1 kHz for FT-710 native USB audio."""
-        if pcm and len(pcm) >= 2:
-            self._tx_queue.append(resample_48_to_441(pcm))
+        """Queue TX audio for playback. Input is 48 kHz Int16 PCM (from Opus
+        decoder or browser); resampled to 44.1 kHz for FT-710 native USB
+        audio. Enforces a hard queue-depth cap (drops oldest) to bound
+        latency under network jitter bursts.
+        """
+        if not pcm or len(pcm) < 2:
+            return
+        data = resample_48_to_441(pcm)
+        if not data:
+            return
+        with self._tx_lock:
+            if self._tx_stream is None:
+                return  # stream not open; drop stale frame
+            self._tx_queue.append(data)
+            self._tx_queued_bytes += len(data)
+            # Cap: drop oldest frames until under the limit (keep at least one
+            # so a single oversized frame still plays).
+            while (self._tx_queued_bytes > TX_MAX_BUFFER_BYTES
+                   and len(self._tx_queue) > 1):
+                self._tx_queued_bytes -= len(self._tx_queue.popleft())
 
     def write_tx_chunk(self):
         """Write queued TX audio to the output stream.
-        Call this from the asyncio event loop at regular intervals."""
-        if self._tx_stream is None or not self._tx_stream.is_active():
-            return
-        # Drain queued PCM to the output stream
-        while self._tx_queue:
-            data = self._tx_queue.popleft()
-            try:
-                self._tx_stream.write(data)
-            except Exception as e:
-                logger.debug("TX write error: %s", e)
-                break
+
+        Pre-buffers TX_PREBUFFER_MS before the first write to cushion
+        WebSocket jitter, then drains the queue one frame at a time.
+        PyAudio's blocking write() self-rate-limits to the DAC clock, so
+        this never outruns the device. Called from the asyncio event loop
+        via a worker thread (see _audio_tx_drain_loop in server.py).
+
+        The queue pop is under _tx_lock (brief); the blocking write is under
+        _tx_write_lock so feed_tx_audio (event loop) is never blocked by a
+        slow write, while a concurrent graceful stop_tx stays serialized.
+        """
+        while True:
+            with self._tx_lock:
+                stream = self._tx_stream
+                if stream is None or not stream.is_active():
+                    return
+                if not self._tx_primed:
+                    if self._tx_queued_bytes < TX_PREBUFFER_BYTES:
+                        return  # build cushion before first write
+                    self._tx_primed = True
+                    logger.debug("TX pre-buffer reached (%dms); playback starting",
+                                 TX_PREBUFFER_MS)
+                if not self._tx_queue:
+                    return
+                data = self._tx_queue.popleft()
+                self._tx_queued_bytes -= len(data)
+            # stop_tx / start_tx may have swapped out this stream while we
+            # waited for the write lock; if so, don't write to a stale/
+            # closed stream. (Visibility is fine under the GIL; the swap
+            # happens under _tx_lock with a release before contending here.)
+            with self._tx_write_lock:
+                if self._tx_stream is not stream:
+                    return
+                try:
+                    stream.write(data)
+                except Exception as e:
+                    logger.debug("TX write error: %s", e)
+                    return
 
     # ── Cleanup ─────────────────────────────────────────────────────
 

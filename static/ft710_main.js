@@ -252,8 +252,19 @@ function handleMessage(msg) {
                 uiModes.length = 0;
                 uiModes.push(...msg.modes);
             }
+            if (msg.memChannels) {
+                memChannels.length = 0;
+                memChannels.push(...msg.memChannels);
+                // Persist to sessionStorage
+                try { sessionStorage.setItem('ft710_memChannels', JSON.stringify(memChannels)); } catch(e) {}
+                renderMemoryChannels();
+            }
             radioState.ws_connected = true;
             renderAll();
+            // Also request memChannels explicitly (belt-and-suspenders with server push)
+            if (!msg.memChannels) {
+                sendMsg({type: 'memLoadAll'});
+            }
             break;
 
         case 'stateUpdate':
@@ -276,6 +287,10 @@ function handleMessage(msg) {
             if (msg.channels) {
                 memChannels.length = 0;
                 memChannels.push(...msg.channels);
+                // Persist to sessionStorage so channels survive page refresh
+                try {
+                    sessionStorage.setItem('ft710_memChannels', JSON.stringify(memChannels));
+                } catch(e) { /* ignore */ }
                 renderMemoryChannels();
             }
             break;
@@ -308,6 +323,18 @@ var _isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
     (navigator.maxTouchPoints > 1 && !/Chrome/.test(navigator.userAgent));
 
 function bodyload() {
+    // Restore memory channels from sessionStorage first (instant, before server responds)
+    try {
+        var savedMem = sessionStorage.getItem('ft710_memChannels');
+        if (savedMem) {
+            var parsed = JSON.parse(savedMem);
+            memChannels.length = 0;
+            memChannels.push(...parsed);
+            // Defer render until DOM is ready; renderMemoryChannels will be called
+            // again after fullState arrives, but this gives instant display
+        }
+    } catch(e) { /* ignore */ }
+
     // Wire power button
     var powerBtn = document.getElementById('btn-power');
     if (powerBtn) {
@@ -696,10 +723,50 @@ function connectAudioTX() {
     wsAudioTX.onerror = function() {};
 }
 
+function ensureTXOpusWorker() {
+    if (txOpusWorker) return txOpusWorker;
+    txOpusWorker = new Worker('/tx_opus_worker.js?v=tx-audio-4');
+    txOpusWorker.onmessage = function(ev) {
+        const d = ev.data || {};
+        if (d.type === 'tx_audio' && d.data instanceof ArrayBuffer) {
+            if (wsAudioTX && wsAudioTX.readyState === WebSocket.OPEN) {
+                wsAudioTX.send(d.data);
+            }
+        }
+    };
+    return txOpusWorker;
+}
+
 var _txMicStream = null;     // cached mic stream (reuse to avoid permission prompt)
 var _txMicCtx = null;        // cached TX AudioContext
 var _txMicSource = null;     // cached MediaStreamSource
 var _txMicSp = null;         // cached ScriptProcessor
+var _txMicAw = null;         // cached AudioWorkletNode
+var _txMicMute = null;       // zero-gain sink that keeps capture graph alive
+
+function flushTXCapture() {
+    if (_txMicAw && _txMicAw.port) {
+        try { _txMicAw.port.postMessage({type: 'flush'}); } catch(e) {}
+    }
+}
+
+function resampleFloat32To48k(input, inRate) {
+    if (!input || input.length === 0 || Math.abs(inRate - 48000) < 1) {
+        return input;
+    }
+    const outLen = Math.max(1, Math.round(input.length * 48000 / inRate));
+    const out = new Float32Array(outLen);
+    const step = inRate / 48000;
+    for (let i = 0; i < outLen; i++) {
+        const pos = i * step;
+        const idx = Math.floor(pos);
+        const frac = pos - idx;
+        const a = input[Math.min(idx, input.length - 1)];
+        const b = input[Math.min(idx + 1, input.length - 1)];
+        out[i] = a + (b - a) * frac;
+    }
+    return out;
+}
 
 function startTXAudio() {
     if (txAudioRunning) return;
@@ -708,6 +775,7 @@ function startTXAudio() {
     }
 
     txAudioRunning = true;
+    flushTXCapture();
     if (txOpusWorker) txOpusWorker.postMessage({type: 'start'});
     console.log('TX audio capture started');
 
@@ -723,17 +791,7 @@ function startTXAudio() {
     console.log('First TX — requesting mic permission...');
 
     // Start Opus worker for encoding
-    if (!txOpusWorker) {
-        txOpusWorker = new Worker('/tx_opus_worker.js');
-        txOpusWorker.onmessage = function(ev) {
-            const d = ev.data || {};
-            if (d.type === 'tx_audio' && d.data instanceof ArrayBuffer) {
-                if (wsAudioTX && wsAudioTX.readyState === WebSocket.OPEN) {
-                    wsAudioTX.send(d.data);
-                }
-            }
-        };
-    }
+    ensureTXOpusWorker();
 
     navigator.mediaDevices.getUserMedia({
         audio: {
@@ -755,27 +813,62 @@ function startTXAudio() {
         }
 
         _txMicSource = _txMicCtx.createMediaStreamSource(stream);
-        _txMicSp = _txMicCtx.createScriptProcessor(512, 1, 1);
 
-        _txMicSp.onaudioprocess = function(event) {
-            if (!txAudioRunning) return;
-            const input = event.inputBuffer.getChannelData(0);
-            if (txOpusWorker) {
-                const i16 = new Int16Array(input.length);
-                for (let i = 0; i < input.length; i++) {
-                    const v = input[i] * 32767;
-                    i16[i] = v > 32767 ? 32767 : (v < -32768 ? -32768 : (v | 0));
+        var canUseWorklet = !!(_txMicCtx.audioWorklet && window.AudioWorkletNode);
+
+        return (canUseWorklet
+            ? _txMicCtx.audioWorklet.addModule('/tx_capture_worklet.js?v=tx-audio-4')
+            : Promise.reject(new Error('AudioWorklet/SAB unavailable'))
+        ).then(function() {
+            _txMicAw = new AudioWorkletNode(_txMicCtx, 'tx-capture', {
+                numberOfInputs: 1,
+                numberOfOutputs: 1,
+                outputChannelCount: [1],
+            });
+            _txMicAw.port.onmessage = function(ev) {
+                const d = ev.data || {};
+                if (d.type === 'frame' && d.frame && txOpusWorker) {
+                    txOpusWorker.postMessage({
+                        type: 'float_frame',
+                        frame: d.frame,
+                    }, [d.frame]);
                 }
-                txOpusWorker.postMessage({
-                    type: 'frame',
-                    frame: i16.buffer,
-                }, [i16.buffer]);
-            }
-        };
+            };
+            _txMicMute = _txMicCtx.createGain();
+            _txMicMute.gain.value = 0;
 
-        _txMicSource.connect(_txMicSp);
-        _txMicSp.connect(_txMicCtx.destination);
-        console.log('TX audio capture initialized (mic permission granted)');
+            _txMicSource.connect(_txMicAw);
+            _txMicAw.connect(_txMicMute);
+            _txMicMute.connect(_txMicCtx.destination);
+            flushTXCapture();
+            console.log('TX audio capture initialized (AudioWorklet frame mode)');
+        }).catch(function(e) {
+            console.warn('TX AudioWorklet unavailable, fallback to ScriptProcessor:', e);
+            _txMicSp = _txMicCtx.createScriptProcessor(512, 1, 1);
+
+            _txMicSp.onaudioprocess = function(event) {
+                if (!txAudioRunning) return;
+                const input = resampleFloat32To48k(
+                    event.inputBuffer.getChannelData(0),
+                    _txMicCtx.sampleRate || 48000
+                );
+                if (txOpusWorker) {
+                    const i16 = new Int16Array(input.length);
+                    for (let i = 0; i < input.length; i++) {
+                        const v = input[i] * 32767;
+                        i16[i] = v > 32767 ? 32767 : (v < -32768 ? -32768 : (v | 0));
+                    }
+                    txOpusWorker.postMessage({
+                        type: 'frame',
+                        frame: i16.buffer,
+                    }, [i16.buffer]);
+                }
+            };
+
+            _txMicSource.connect(_txMicSp);
+            _txMicSp.connect(_txMicCtx.destination);
+            console.log('TX audio capture initialized (ScriptProcessor fallback)');
+        });
     }).catch(function(e) {
         console.error('TX audio mic access failed:', e);
         // Fallback: direct Int16 PCM without Opus
@@ -809,7 +902,10 @@ function startTXAudioFallback() {
 
         _txMicSp.onaudioprocess = function(event) {
             if (!txAudioRunning) return;
-            const input = event.inputBuffer.getChannelData(0);
+            const input = resampleFloat32To48k(
+                event.inputBuffer.getChannelData(0),
+                _txMicCtx.sampleRate || 48000
+            );
             const i16 = new Int16Array(input.length);
             for (let i = 0; i < input.length; i++) {
                 const v = input[i] * 32767;
@@ -835,12 +931,29 @@ function startTXAudioFallback() {
 function stopTXAudio() {
     txAudioRunning = false;
     if (txOpusWorker) txOpusWorker.postMessage({type: 'stop'});
+    flushTXCapture();
     // Keep mic stream alive for reuse — don't stop tracks
     if (wsAudioTX && wsAudioTX.readyState === WebSocket.OPEN) {
         wsAudioTX.send('s:');
     }
     console.log('TX audio stopped');
 }
+
+window.TXDebug = {
+    startTone: function(freq, level) {
+        connectAudioTX();
+        ensureTXOpusWorker().postMessage({
+            type: 'tone_start',
+            freq: freq || 1000,
+            level: level || 0.2,
+        });
+        console.warn('TX debug tone started. Press/hold PTT to transmit it.');
+    },
+    stopTone: function() {
+        if (txOpusWorker) txOpusWorker.postMessage({type: 'tone_stop'});
+        console.warn('TX debug tone stopped.');
+    },
+};
 
 // ── Bandwidth display ─────────────────────────────────────────────────
 (function() {
@@ -855,3 +968,140 @@ function stopTXAudio() {
         }
     }, 1000);
 })();
+
+// ── Screen Wake Lock + Fullscreen (mobile keep-foreground) ────────────
+// Wake Lock holds the screen on while the page is visible, preventing the
+// auto-lock that would interrupt a remote-control session. Fullscreen hides
+// browser chrome for a dedicated control surface. Both need a secure context
+// (HTTPS) and a user gesture; both degrade gracefully where the platform
+// doesn't support them (notably iOS Safari's non-video fullscreen).
+
+var WakeLockMgr = (function () {
+    var sentinel = null;     // active WakeLockSentinel, or null
+    var requested = false;   // user wants wake-lock on
+    var btn = null;
+
+    function available() { return 'wakeLock' in navigator; }
+
+    function setBtn(active) {
+        if (!btn) return;
+        btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+        btn.classList.toggle('active', active);
+        btn.title = active ? '屏幕常亮中（点击关闭）' : '保持屏幕常亮';
+    }
+
+    async function acquire() {
+        if (!available()) return false;
+        try {
+            sentinel = await navigator.wakeLock.request('screen');
+            sentinel.addEventListener('release', function () {
+                sentinel = null;
+                // Auto-released (tab switch / screen lock). Re-acquire if the
+                // user still wants it and the page is back in front.
+                if (requested && document.visibilityState === 'visible') {
+                    setTimeout(acquire, 200);
+                } else {
+                    setBtn(false);
+                }
+            });
+            return true;
+        } catch (e) {
+            // AbortError is normal (user gesture / visibility); others are real.
+            console.warn('wakeLock.request failed:', e && e.name);
+            return false;
+        }
+    }
+
+    async function enable() {
+        requested = true;
+        var ok = await acquire();
+        setBtn(ok);
+        if (!available()) {
+            console.warn('Wake Lock API unavailable; screen may still auto-lock.');
+        }
+    }
+
+    function disable() {
+        requested = false;
+        if (sentinel) {
+            try { sentinel.release(); } catch (e) {}
+            sentinel = null;
+        }
+        setBtn(false);
+    }
+
+    function toggle() { requested ? disable() : enable(); }
+
+    function init() {
+        btn = document.getElementById('btn-wakelock');
+        if (btn) btn.addEventListener('click', toggle);
+        // Wake lock is auto-released while hidden; re-acquire on return.
+        document.addEventListener('visibilitychange', function () {
+            if (requested && document.visibilityState === 'visible' && !sentinel) {
+                acquire().then(setBtn);
+            }
+        });
+    }
+
+    return { init: init, enable: enable, disable: disable, toggle: toggle };
+})();
+
+var FullscreenMgr = (function () {
+    var btn = null;
+
+    function isFullscreen() {
+        return !!(document.fullscreenElement || document.webkitFullscreenElement);
+    }
+
+    function setBtn(active) {
+        if (!btn) return;
+        btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+        btn.classList.toggle('active', active);
+        btn.title = active ? '退出全屏' : '全屏切换';
+    }
+
+    async function enter() {
+        var el = document.documentElement;
+        try {
+            if (el.requestFullscreen) await el.requestFullscreen();
+            else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+            else console.warn('Fullscreen API unavailable on this platform.');
+        } catch (e) {
+            console.warn('enterFullscreen failed:', e && e.name);
+        }
+    }
+
+    function exit() {
+        try {
+            if (document.exitFullscreen) document.exitFullscreen();
+            else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+        } catch (e) {}
+    }
+
+    function toggle() { isFullscreen() ? exit() : enter(); }
+
+    function init() {
+        btn = document.getElementById('btn-fullscreen');
+        if (btn) btn.addEventListener('click', toggle);
+        var sync = function () { setBtn(isFullscreen()); };
+        document.addEventListener('fullscreenchange', sync);
+        document.addEventListener('webkitfullscreenchange', sync);
+    }
+
+    return { init: init, toggle: toggle, isFullscreen: isFullscreen };
+})();
+
+document.addEventListener('DOMContentLoaded', function () {
+    WakeLockMgr.init();
+    FullscreenMgr.init();
+    // Wake Lock requires a user gesture, so auto-enable on the first
+    // interaction (the operator's first tap is usually the connect button).
+    function firstGesture() {
+        WakeLockMgr.enable();
+        document.removeEventListener('pointerdown', firstGesture);
+        document.removeEventListener('keydown', firstGesture);
+    }
+    document.addEventListener('pointerdown', firstGesture);
+    document.addEventListener('keydown', firstGesture);
+});
+
