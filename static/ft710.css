@@ -45,7 +45,8 @@ a { color: var(--accent); text-decoration: none; }
 /* ── App Container ─────────────────────────────────────────────── */
 .app-container {
     display: flex; flex-direction: column;
-    height: calc(100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    height: 100dvh; /* dynamic viewport: respects Safari address bar */
+    height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
     max-width: 480px; margin: 0 auto;
 }
 
@@ -79,6 +80,8 @@ a { color: var(--accent); text-decoration: none; }
 .freq-sep { font-size: 24px; color: var(--text-secondary); margin: 0 1px; }
 .freq-sep-small { font-size: 18px; color: var(--text-muted); }
 .header-right { display: flex; align-items: center; gap: 8px; }
+.power-btn { font-size: 20px; padding: 4px 8px; border-radius: var(--radius-sm); }
+.power-btn.active { color: var(--accent); }
 .vfo-indicator {
     font-size: 11px; font-weight: 700; padding: 3px 8px;
     background: var(--accent-dim); color: var(--accent); border-radius: var(--radius-sm);
@@ -111,7 +114,7 @@ a { color: var(--accent); text-decoration: none; }
     padding: 4px; margin-bottom: 4px; overflow: hidden;
 }
 #waterfall-canvas {
-    width: 100%; height: 80px; display: block;
+    width: 100%; height: 67px; display: block;
     border-radius: 4px;
 }
 #freq-scale-canvas {
@@ -122,22 +125,22 @@ a { color: var(--accent); text-decoration: none; }
 /* ── S-Meter ───────────────────────────────────────────────────── */
 .smeter-section {
     background: var(--bg-secondary); border-radius: var(--radius-md);
-    padding: 8px 10px; margin-bottom: 8px;
+    padding: 2px 4px; margin-bottom: 2px;
 }
 .smeter-container {
-    display: flex; align-items: center; gap: 8px;
+    display: flex; align-items: center; gap: 4px;
 }
-#smeter-canvas { flex: 1; height: 40px; border-radius: 4px; }
+#smeter-canvas { flex: 1; height: 8px; border-radius: 2px; }
 .smeter-value {
-    font-family: var(--font-mono); font-size: 22px; font-weight: 700;
-    color: var(--accent); min-width: 40px; text-align: center;
+    font-family: var(--font-mono); font-size: 7px; font-weight: 700;
+    color: var(--accent); min-width: 18px; text-align: center;
 }
 .smeter-dbm {
-    font-size: 11px; color: var(--text-muted); min-width: 55px; text-align: right;
+    font-size: 6px; color: var(--text-muted); min-width: 30px; text-align: right;
 }
 .smeter-labels {
-    display: flex; justify-content: space-between; margin-top: 2px;
-    font-size: 9px; color: var(--text-muted); padding: 0 2px;
+    display: flex; justify-content: space-between; margin-top: 0px;
+    font-size: 5px; color: var(--text-muted); padding: 0 1px;
 }
 
 /* ── Multi-meter ───────────────────────────────────────────────── */
@@ -261,6 +264,7 @@ a { color: var(--accent); text-decoration: none; }
 
 /* ── PTT Footer ─────────────────────────────────────────────────── */
 .ptt-footer {
+    position: sticky; bottom: 0; z-index: 100;
     flex-shrink: 0; padding: 8px 10px;
     padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
     background: var(--bg-secondary); border-top: 1px solid var(--border);

@@ -10,8 +10,8 @@ This repository contains a Python FastAPI server for Yaesu FT-710 web control pl
 | `cat_controller.py` | Serial CAT protocol (pyserial + asyncio.to_thread), 40+ command helpers |
 | `radio_state.py` | `RadioState` dataclass with dirty-field change tracking and derived properties |
 | `poll_scheduler.py` | 5-tier adaptive background polling (100ms→5s) with skip-on-command |
-| `audio_handler.py` | PyAudio sound card capture/playback, Opus encode, FT-710 device auto-detection |
-| `opus_rx.py` | libopus ctypes wrapper: `RxOpusEncoder` (48kHz), `TxOpusDecoder` (16kHz) |
+| `audio_handler.py` | PyAudio sound card capture/playback, Opus encode, FT-710 device auto-detection (name + mono-channel heuristic) |
+| `opus_rx.py` | libopus ctypes wrapper: `RxOpusEncoder` (48kHz), `TxOpusDecoder` (48kHz, unified with TX sample rate) |
 | `scope_handler.py` | Spectrum data container: FT4222 real FFT + S-meter Gaussian fallback |
 | `scope_pipe.py` | Standalone subprocess for FT4222 SPI I/O (avoids asyncio/ctypes conflicts) |
 | `scope_frame.py` | Shared frame parsing, pipe payload encode/decode, quality metrics |
@@ -24,8 +24,8 @@ Frontend assets in `static/`:
 - `ft710_main.js` — WebSocket client (4 channels), state management, audio RX/TX, spectrum
 - `ft710_ui.js` — All UI rendering: waterfall, S-meter, meters, controls, PTT
 - `rx_worklet_processor.js` — AudioWorklet: time-based jitter buffer RX playback
-- `tx_capture_worklet.js` — AudioWorklet: mic capture with 48k→16k downsample
-- `tx_opus_worker.js` — Web Worker: Opus encode from mic samples
+- `tx_capture_worklet.js` — AudioWorklet: mic capture (48kHz)
+- `tx_opus_worker.js` — Web Worker: Opus encode from mic samples (48kHz, 28kbps CBR)
 - `modules/opus_codec.js` + `opus_wasm.js` — Browser-side WASM Opus codec
 - `modules/ptt_manager.js` — PTT state machine + safety watchdog
 - `modules/settings_manager.js` — Cookie + localStorage persistence

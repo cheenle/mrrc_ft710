@@ -27,3 +27,6 @@ Thumbs.db
 # config_local.py
 .env
 .env.example
+
+# SSL certificates (contain private keys — do not commit)
+certs/

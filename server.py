@@ -24,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from config import (
     SERIAL_PORT, BAUD_RATE, WEB_PORT, WEB_HOST, WEB_PASSWORD,
+    SSL_CERTFILE, SSL_KEYFILE,
     SCOPE_SERIAL_PORT, SCOPE_BAUD_RATE, SCOPE_SPANS,
     AUTH_COOKIE, AUTH_TOKEN_BYTES, MEM_CHANNEL_COUNT, PTT_SAFETY_TIMEOUT,
     MODE_NUM_TO_NAME, MODE_NAME_TO_NUM, BANDS, UI_MODES,
@@ -1315,6 +1316,9 @@ def main():
     parser.add_argument("--baud", type=int, default=BAUD_RATE, help=f"Baud rate (default: {BAUD_RATE})")
     parser.add_argument("--password", default=WEB_PASSWORD, help="Web login password")
     parser.add_argument("--host", default=WEB_HOST, help=f"Bind address (default: {WEB_HOST})")
+    parser.add_argument("--ssl-cert", default=SSL_CERTFILE, help=f"SSL cert file (default: {SSL_CERTFILE})")
+    parser.add_argument("--ssl-key", default=SSL_KEYFILE, help=f"SSL key file (default: {SSL_KEYFILE})")
+    parser.add_argument("--no-ssl", action="store_true", help="Disable SSL (use plain HTTP)")
     args = parser.parse_args()
 
     # Set env vars BEFORE uvicorn imports the app module
@@ -1324,12 +1328,25 @@ def main():
     os.environ["FT710_WEB_PASSWORD"] = args.password
     os.environ["FT710_WEB_HOST"] = args.host
 
+    # SSL configuration
+    ssl_kwargs = {}
+    if not args.no_ssl and os.path.exists(args.ssl_cert) and os.path.exists(args.ssl_key):
+        ssl_kwargs = {
+            "ssl_certfile": args.ssl_cert,
+            "ssl_keyfile": args.ssl_key,
+        }
+        logger.info("SSL enabled: %s", args.ssl_cert)
+    else:
+        logger.warning("SSL disabled or cert/key not found (cert=%s key=%s)",
+                       args.ssl_cert, args.ssl_key)
+
     uvicorn.run(
         "server:app",
         host=args.host,
         port=args.port,
         log_level="info",
         reload=False,
+        **ssl_kwargs,
     )
 
 

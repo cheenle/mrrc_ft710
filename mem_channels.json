@@ -1,11 +1,11 @@
 {
   "channels": [
-    null,
     {
       "freq": 7050000,
       "mode": "LSB",
       "label": "40m 7.050"
     },
+    null,
     null,
     null,
     null,

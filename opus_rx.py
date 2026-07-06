@@ -43,17 +43,17 @@ OPUS_APPLICATION_VOIP = 2048
 OPUS_APPLICATION_AUDIO = 2049
 OPUS_OK = 0
 
-# RX audio is now 48 kHz mono (raised from 16 kHz so WFM keeps its full ~15 kHz
-# audio band — at 16 kHz the 8 kHz Nyquist gutted broadcast FM). 20 ms frame =
-# 960 samples. TX (phone mic uplink) stays 16 kHz — that path is verified and
-# the client still sends 16 kHz, so RX_RATE and TX_RATE are deliberately split.
+# RX audio: 48 kHz mono (required by Opus encoder — 44.1k is not supported).
+# The FT-710 USB device runs at 44.1k native; PyAudio/PortAudio resamples to 48k.
+# TX (phone mic uplink) also 48 kHz — must match PyAudio TX_SAMPLE_RATE.
 RX_RATE = 48000
 RX_CHANNELS = 1
-TX_RATE = 16000
+TX_RATE = 48000
 TX_CHANNELS = 1
 FRAME_MS = 20
 FRAME_SAMPLES = RX_RATE * FRAME_MS // 1000   # 960 @ 48 kHz
 TX_MAX_FRAME_SAMPLES = 5760  # 120 ms max Opus frame @ 48 kHz (worst case)
+TX_FRAME_SAMPLES = TX_RATE * FRAME_MS // 1000  # 960 @ 48 kHz
 MAX_PACKET_BYTES = 4000   # output buffer ceiling (never reached in practice)
 
 # Bitrate is controlled via the opus_encode max_data_bytes cap (see module
@@ -212,7 +212,12 @@ class RxOpusEncoder:
         while n - off >= frame_bytes:
             frame = buf[off:off + frame_bytes]
             off += frame_bytes
-            pcm_ptr = ctypes.cast(frame, ctypes.POINTER(ctypes.c_int16))
+            # Cast bytes → pointer correctly: create a ctypes array from the
+            # bytes buffer, then cast to an int16 pointer.  ctypes.cast() does
+            # NOT accept raw Python bytes — it needs a ctypes object.
+            nsamples = len(frame) // 2
+            c_arr = (ctypes.c_int16 * nsamples).from_buffer_copy(frame)
+            pcm_ptr = ctypes.cast(c_arr, ctypes.POINTER(ctypes.c_int16))
             ret = self._lib.opus_encode(
                 self._enc, pcm_ptr, FRAME_SAMPLES,
                 self._outbuf, self._cap)

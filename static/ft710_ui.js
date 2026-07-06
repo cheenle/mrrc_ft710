@@ -347,7 +347,7 @@ function initWaterfall() {
     const rect = canvas.parentElement.getBoundingClientRect();
     const w = Math.max(100, rect.width - 8); // Minimum 100px wide
     canvas.width = w;
-    canvas.height = 120;  // Match WF_HISTORY rows
+    canvas.height = 67;  // Compact waterfall
     waterfallHistory = [];
     waterfallInitialized = true;
 }
@@ -362,7 +362,7 @@ function ensureWaterfallInitialized() {
         const rect = canvas.parentElement.getBoundingClientRect();
         if (rect.width > 100) {
             canvas.width = rect.width - 8;
-            canvas.height = 120;
+            canvas.height = 67;
             waterfallHistory = [];
         }
     }
@@ -379,59 +379,30 @@ function renderWaterfallRow(wf1) {
     const w = canvas.width;
     const h = canvas.height;
 
-    // Decimate/resample 850 spectrum points to canvas width
-    const row = new Uint8Array(w);
-    const ratio = wf1.length / w;
-    for (let x = 0; x < w; x++) {
-        const srcIdx = Math.floor(x * ratio);
-        row[x] = Math.min(255, wf1[srcIdx] || 0);
-    }
-    waterfallHistory.push(row);
-    if (waterfallHistory.length > h) {
-        waterfallHistory.shift();
-    }
+    // Scroll canvas content up by 1px
+    ctx.drawImage(canvas, 0, 1, w, h - 1, 0, 0, w, h - 1);
 
-    // Render full waterfall
-    const imageData = ctx.createImageData(w, h);
-    for (let y = 0; y < waterfallHistory.length; y++) {
-        const histRow = waterfallHistory[y];
-        const outY = h - 1 - y; // newest at bottom
-        for (let x = 0; x < w; x++) {
-            const val = histRow[x];
-            const idx = (outY * w + x) * 4;
-            // Color mapping: black → blue → green → yellow → red
-            let r, g, b;
-            if (val < 32) {
-                r = 0; g = 0; b = val * 3;
-            } else if (val < 64) {
-                const t = (val - 32) / 32;
-                r = 0; g = t * 127; b = 96 + t * 96;
-            } else if (val < 128) {
-                const t = (val - 64) / 64;
-                r = t * 255; g = 127 + t * 128; b = 192 * (1 - t);
-            } else if (val < 192) {
-                const t = (val - 128) / 64;
-                r = 255; g = 255 * (1 - t * 0.5); b = 0;
-            } else {
-                r = 255; g = 127 - (val - 192) * 0.5; b = 0;
-            }
-            imageData.data[idx] = r;
-            imageData.data[idx + 1] = g;
-            imageData.data[idx + 2] = b;
-            imageData.data[idx + 3] = 255;
-        }
+    // Draw new row at the bottom (1px high)
+    const srcLen = wf1.length;
+    for (let x = 0; x < w; x++) {
+        // Linear interpolation from source data to canvas width
+        const srcPos = (x / w) * srcLen;
+        const srcIdx = Math.floor(srcPos);
+        const frac = srcPos - srcIdx;
+        const v1 = wf1[srcIdx] || 0;
+        const v2 = (srcIdx + 1 < srcLen) ? wf1[srcIdx + 1] : v1;
+        const val = Math.min(255, v1 + (v2 - v1) * frac);
+
+        // Classic ham waterfall: black→dark blue→blue→cyan→white
+        let r, g, b;
+        const v = val / 255;
+        r = Math.floor(v * v * 180);
+        g = Math.floor(v * v * v * 255);
+        b = Math.floor(5 + v * 250);
+
+        ctx.fillStyle = 'rgb(' + Math.floor(r) + ',' + Math.floor(g) + ',' + Math.floor(b) + ')';
+        ctx.fillRect(x, h - 1, 1, 1);
     }
-    // Fill empty rows with black
-    for (let y = waterfallHistory.length; y < h; y++) {
-        for (let x = 0; x < w; x++) {
-            const idx = (y * w + x) * 4;
-            imageData.data[idx] = 0;
-            imageData.data[idx + 1] = 0;
-            imageData.data[idx + 2] = 0;
-            imageData.data[idx + 3] = 255;
-        }
-    }
-    ctx.putImageData(imageData, 0, 0);
 
     // Update frequency scale
     renderFreqScale(w);
@@ -503,7 +474,7 @@ function renderUpdates(dirtyFields) {
         'mode', 'mode_name', 'mode_display', 'band_name', 'tx_status',
         'is_transmitting', 'filter_width', 'filter_hz', 'preamp', 'preamp_label',
         'attenuator', 'attenuator_label', 'noise_blanker', 'noise_reduction',
-        'auto_notch', 'compressor', 'tuner_status', 'rf_power', 'af_gain',
+        'auto_notch', 'compressor', 'tuner_status', 'rf_power',
         'split', 'serial_connected', 'scope_span', 'scope_speed', 'scope_mode',
         'scope_start_freq',
     ];
@@ -599,7 +570,13 @@ function initUI() {
         if (nextBand) {
             sendCommand('band', nextBand.name);
             radioState.band_name = nextBand.name;
-            radioState.vfo_a_freq = nextBand.default_freq;
+            // Update active VFO frequency
+            if (radioState.active_vfo === 'A') {
+                radioState.vfo_a_freq = nextBand.default_freq;
+            } else {
+                radioState.vfo_b_freq = nextBand.default_freq;
+            }
+            sendCommand('freq', nextBand.default_freq);
             renderFrequency();
             renderButtonLabels();
             renderStatusBar();
@@ -709,11 +686,15 @@ function initUI() {
     });
     document.getElementById('slider-afgain').addEventListener('input', function() {
         setText('val-afgain', this.value);
+        // Control browser audio volume (gain 0.0–1.0 from slider 0–255)
+        var g = parseInt(this.value) / 255.0;
+        if (typeof AudioRX_gain_node !== 'undefined' && AudioRX_gain_node) {
+            AudioRX_gain_node.gain.value = g;
+        }
+        radioState.af_gain = parseInt(this.value);
     });
     document.getElementById('slider-afgain').addEventListener('change', function() {
-        const v = parseInt(this.value);
-        sendCommand('af_gain', v);
-        radioState.af_gain = v;
+        // No-op: browser-side volume only, don't send CAT command
     });
     document.getElementById('slider-micgain').addEventListener('input', function() {
         setText('val-micgain', this.value);
@@ -789,13 +770,14 @@ function initUI() {
             }
         });
 
-        // Long press: save
+        // Long press: save (uses active VFO)
         btn.addEventListener('touchstart', function(e) {
             pressTimer = setTimeout(function() {
+                var saveFreq = radioState.active_vfo === 'A' ? radioState.vfo_a_freq : radioState.vfo_b_freq;
                 const ch = {
-                    freq: radioState.vfo_a_freq,
+                    freq: saveFreq,
                     mode: radioState.mode_name,
-                    label: radioState.band_name + ' ' + (radioState.vfo_a_freq / 1e6).toFixed(3),
+                    label: radioState.band_name + ' ' + (saveFreq / 1e6).toFixed(3),
                 };
                 memChannels[idx] = ch;
                 sendMsg({
@@ -808,13 +790,14 @@ function initUI() {
         });
         btn.addEventListener('touchend', function() { clearTimeout(pressTimer); });
         btn.addEventListener('touchcancel', function() { clearTimeout(pressTimer); });
-        // Desktop long press
+        // Desktop long press (uses active VFO)
         btn.addEventListener('mousedown', function(e) {
             pressTimer = setTimeout(function() {
+                var saveFreq = radioState.active_vfo === 'A' ? radioState.vfo_a_freq : radioState.vfo_b_freq;
                 const ch = {
-                    freq: radioState.vfo_a_freq,
+                    freq: saveFreq,
                     mode: radioState.mode_name,
-                    label: radioState.band_name + ' ' + (radioState.vfo_a_freq / 1e6).toFixed(3),
+                    label: radioState.band_name + ' ' + (saveFreq / 1e6).toFixed(3),
                 };
                 memChannels[idx] = ch;
                 sendMsg({

@@ -48,11 +48,11 @@
 |-----------|-------|
 | Type | Architectural |
 | Status | Implemented |
-| Decision | Both `/WSaudioRX` and `/WSaudioTX` carry a 1-byte codec tag per frame: `0x00` = Int16 PCM, `0x01` = Opus (48kHz mono RX, 16kHz mono TX). Default Opus; falls back to PCM. |
+| Decision | Both `/WSaudioRX` and `/WSaudioTX` carry a 1-byte codec tag per frame: `0x00` = Int16 PCM, `0x01` = Opus. RX: 48kHz @ 64kbps (fullband, transparent for broadcast music). TX: 48kHz @ 28kbps CBR (voice-optimized, VBR/FEC/DTX/HPF disabled). Default Opus; falls back to PCM. |
 
 **Problem**: (RX) Int16 PCM at 48kHz mono costs ~768kbps — heavy on mobile/WiFi. Opus at 64kbps cuts that 12×. (TX) Browser mic Opus encoding saves uplink bandwidth. A per-frame tag removes negotiation races — receiver inspects tag and decodes accordingly.
 
-**Rationale**: `opus_rx.py` (copied from sunmrrc) provides direct ctypes libopus bindings. Uses `max_data_bytes` cap on `opus_encode()` to control bitrate — avoids arm64 variadic `opus_encoder_ctl` issues. Browser uses WASM `OpusDecoder`/`OpusEncoder`.
+**Rationale**: `opus_rx.py` (copied from sunmrrc) provides direct ctypes libopus bindings. Uses `max_data_bytes` cap on `opus_encode()` to control bitrate — avoids arm64 variadic `opus_encoder_ctl` issues. Browser uses WASM `OpusDecoder`/`OpusEncoder`. TX encoder configured for voice: complexity=3 (real-time), VBR=OFF (stable packet size), FEC=OFF (WebSocket TCP), DTX=OFF (no priming gaps), HPF=OFF (preserve low-end).
 
 **Consequences**: Adds libopus dependency (optional — degrades gracefully to PCM). Codec is user-switchable. `AUDIO_TAG_PCM` / `AUDIO_TAG_OPUS` are constants in both Python and JavaScript.
 
@@ -104,13 +104,13 @@
 |-----------|-------|
 | Type | Design |
 | Status | Implemented |
-| Decision | Scan PyAudio device list for "FT-710", "FT710", or "YAESU" in device name; fall back to system default input/output |
+| Decision | Multi-layer device selection: (1) explicit `FT710_AUDIO_RX_DEVICE`/`FT710_AUDIO_TX_DEVICE` env var (index or name substring), (2) name match for "FT-710"/"FT710"/"YAESU", (3) mono-channel heuristic (FT-710 USB audio has 1 input channel vs typical stereo USB mics), (4) full-duplex heuristic for TX (device with both input + output), (5) system default fallback |
 
-**Problem**: The FT-710 USB audio device name varies by OS and driver version. Hardcoding a device index is fragile.
+**Problem**: The FT-710 USB audio device name varies by OS and driver version. Hardcoding a device index is fragile. Previous version only searched by name substring and fell back to first input device — could select webcam mic instead of FT-710.
 
-**Rationale**: Name-based matching is more robust than index-based. Logs available devices at startup for debugging. Falls back gracefully if FT-710 audio isn't found (audio disabled, server still works).
+**Rationale**: Name-based matching is more robust than index-based. The mono-channel heuristic is reliable: FT-710 provides exactly 1 input channel (mono RX), while webcams and USB mics typically offer 2 (stereo). Full-duplex preference for TX ensures the same device is used for both RX and TX paths. Logs all available devices at startup for debugging.
 
-**Consequences**: Audio may use wrong device if multiple USB audio devices are present and none match the pattern. Configurable device index override is a future enhancement.
+**Consequences**: Audio may still use wrong device if multiple mono USB audio devices are present. Configurable device override via env vars is the recommended approach for such setups.
 
 ## AD-009: 5-Tier Adaptive Polling
 
@@ -140,7 +140,21 @@
 
 **Consequences**: Channels survive server restarts. File is human-editable. No per-user channel isolation (single shared-password model).
 
-## 8.11 Decision Summary
+## AD-011: Unified 48kHz TX Audio Pipeline
+
+| Attribute | Value |
+|-----------|-------|
+| Type | Design |
+| Status | Implemented |
+| Decision | TX audio chain runs entirely at 48 kHz: browser `getUserMedia({sampleRate:48000})` → Opus encode at 48 kHz (960-sample frames) → server `TxOpusDecoder` at 48 kHz → PyAudio playback at 48 kHz. No sample-rate conversion anywhere in the TX path. |
+
+**Problem**: V1.0 captured mic audio at 16 kHz (320 samples/20ms frame) but PyAudio played back at 48 kHz (expecting 960 samples/20ms). The 3:1 rate mismatch caused the output stream to underrun — every 20ms Opus frame produced 320 samples that filled only 1/3 of the 960-sample playback buffer. The remaining 2/3 was stale/residual buffer data, producing audible crackling ("咔咔咔") on transmitted audio.
+
+**Rationale**: Eliminating the sample-rate conversion eliminates the underrun. Opus at 48 kHz with 28 kbps CBR encodes voice-quality audio — the codec internally allocates bits to the speech band regardless of the nominal sample rate. Browser `getUserMedia` at 48 kHz works on all modern platforms (iOS 15+, Chrome, Firefox). The FT-710 USB audio interface natively operates at 48 kHz.
+
+**Consequences**: Browser mic capture at 48 kHz uses slightly more CPU than 16 kHz (3× sample count), but the encoding cost is dominated by Opus frame processing, not sample count. Opus frames are 960 samples (still 20ms), matching the RX encoder's frame size. PCM fallback path also unified at 48 kHz. `TX_RATE` and `TX_SAMPLE_RATE` are now identical — no future mismatch possible.
+
+## 8.12 Decision Summary
 
 | ID | Topic | Status |
 |----|-------|--------|
@@ -154,3 +168,4 @@
 | AD-008 | PyAudio FT-710 auto-detection | Implemented |
 | AD-009 | 5-tier adaptive polling | Implemented |
 | AD-010 | Memory channels as server-side JSON | Implemented |
+| AD-011 | Unified 48kHz TX audio pipeline | Implemented |

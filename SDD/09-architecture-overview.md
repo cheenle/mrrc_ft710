@@ -98,22 +98,24 @@ FT-710 USB Audio Output
 
 ```text
 Browser Microphone
-  → getUserMedia({sampleRate:16000, channelCount:1})
-    → AudioContext.createScriptProcessor(320)  // 20ms @ 16kHz
-      → Float32 → Int16 conversion
-        → Opus Worker (tx_opus_worker.js):
-          → Int16 → Float32 → OpusEncoder.encode_float()
-            → 1-byte tag (0x01) + Opus packet
+  → getUserMedia({sampleRate:48000, channelCount:1})
+    → AudioContext.createMediaStreamSource → ScriptProcessor(512)  // ~10.7ms @ 48kHz
+      → Float32 → Int16 conversion (×32767)
+        → Opus Worker (tx_opus_worker.js, 48kHz):
+          → Int16 → Float32 (÷32768) → OpusEncoder.encode_float(960-sample frames)
+            → 1-byte tag (0x01) + Opus packet (28kbps CBR, complexity=3)
           → OR PCM fallback: 1-byte tag (0x00) + Int16 bytes
-            → postMessage({type:'tx_audio', data:tagged.buffer})
+            → postMessage({type:'tx_audio', data:tagged.buffer}, [tagged.buffer])
               → main thread: wsAudioTX.send(tagged)
                 → /WSaudioTX → server
-                  → Opus: TxOpusDecoder.decode() → Int16 PCM
+                  → Opus: TxOpusDecoder.decode() → Int16 PCM (48kHz, 960 samples/frame)
                   → PCM: pass-through
                     → AudioHandler.feed_tx_audio() → _tx_queue
                       → AudioHandler.write_tx_chunk() (10ms drain loop)
-                        → PyAudio output stream → FT-710 USB Audio Input
+                        → PyAudio output stream (48kHz, mono) → FT-710 USB Audio Input
 ```
+
+**TX sample rate is unified at 48 kHz** across the entire chain — browser capture, Opus encode/decode, and PyAudio playback all match. This eliminates the v1.0 sample-rate mismatch (16 kHz mic → 48 kHz playback) that caused audible crackling on transmitted audio.
 
 ## 9.5 Spectrum Signal Chain
 

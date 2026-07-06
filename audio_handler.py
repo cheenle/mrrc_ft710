@@ -30,7 +30,7 @@ except ImportError:
     logger.warning("PyAudio not available — audio disabled. Install: pip install pyaudio")
 
 # ── Audio Config ───────────────────────────────────────────────────────
-RX_SAMPLE_RATE = 48000       # Capture at 48 kHz
+RX_SAMPLE_RATE = 48000       # Capture at 48 kHz (Opus requirement)
 RX_CHUNK_SIZE = 960          # 20 ms @ 48 kHz (matches Opus frame)
 RX_CHANNELS = 1
 TX_SAMPLE_RATE = 48000       # Playback at 48 kHz
@@ -85,13 +85,43 @@ class AudioHandler:
     # ── RX: Capture from sound card → Opus frames ──────────────────
 
     def _find_rx_device(self) -> Optional[int]:
-        """Find a suitable input device. Tries the explicit device first,
-        then falls back to any device with input channels."""
+        """Find a suitable input device.
+
+        Priority:
+        1. Explicit device index/name from config (env FT710_AUDIO_RX_DEVICE)
+        2. Name match: "FT-710", "FT710", "YAESU"
+        3. FT-710 heuristics: single input channel (in=1) — FT-710 USB audio
+           has one mono RX input, unlike stereo USB mics (in=2)
+        4. Fallback: first device with any input channels
+        """
         if self.rx_device is not None:
             return self.rx_device
         if self._pa is None:
             return None
-        # Try to find a device with "FT-710" or "USB Audio" in the name
+
+        from config import AUDIO_RX_DEVICE
+        if AUDIO_RX_DEVICE:
+            # Try as integer index first
+            try:
+                idx = int(AUDIO_RX_DEVICE)
+                if 0 <= idx < self._pa.get_device_count():
+                    info = self._pa.get_device_info_by_index(idx)
+                    if info.get('maxInputChannels', 0) > 0:
+                        logger.info("Using configured audio input: [%d] %s", idx, info.get('name', ''))
+                        return idx
+                    logger.warning("Configured device [%d] has no input channels", idx)
+            except ValueError:
+                pass
+            # Try as name substring
+            for i in range(self._pa.get_device_count()):
+                info = self._pa.get_device_info_by_index(i)
+                if info.get('maxInputChannels', 0) > 0:
+                    if AUDIO_RX_DEVICE.lower() in info.get('name', '').lower():
+                        logger.info("Found configured audio input: [%d] %s", i, info.get('name', ''))
+                        return i
+            logger.warning("Configured audio device '%s' not found", AUDIO_RX_DEVICE)
+
+        # Try to find a device with "FT-710" or "YAESU" in the name
         for i in range(self._pa.get_device_count()):
             info = self._pa.get_device_info_by_index(i)
             if info.get('maxInputChannels', 0) > 0:
@@ -99,6 +129,23 @@ class AudioHandler:
                 if 'FT-710' in name or 'FT710' in name or 'YAESU' in name.upper():
                     logger.info("Found FT-710 audio input: [%d] %s", i, name)
                     return i
+
+        # Heuristic: FT-710 USB audio has exactly 1 input channel (mono RX)
+        # Most other "USB Audio CODEC" devices have 2 (stereo). Prefer mono.
+        mono_candidates = []
+        for i in range(self._pa.get_device_count()):
+            info = self._pa.get_device_info_by_index(i)
+            channels = info.get('maxInputChannels', 0)
+            if channels == 1:
+                mono_candidates.append((i, info.get('name', '')))
+        if mono_candidates:
+            idx, name = mono_candidates[0]
+            logger.info("Using mono audio input (likely FT-710): [%d] %s", idx, name)
+            if len(mono_candidates) > 1:
+                logger.info("  Other mono candidates: %s",
+                            ', '.join(f"[{i}] {n}" for i, n in mono_candidates[1:]))
+            return idx
+
         # Fallback: first device with input channels
         for i in range(self._pa.get_device_count()):
             info = self._pa.get_device_info_by_index(i)
@@ -200,12 +247,37 @@ class AudioHandler:
     # ── TX: Receive from browser → play to sound card ───────────────
 
     def _find_tx_device(self) -> Optional[int]:
-        """Find a suitable output device."""
+        """Find a suitable output device.
+
+        Priority:
+        1. Explicit device from config (env FT710_AUDIO_TX_DEVICE)
+        2. Name match: "FT-710", "FT710", "YAESU"
+        3. Heuristic: device with both input AND output (full-duplex USB audio)
+        4. Fallback: system default output
+        """
         if self.tx_device is not None:
             return self.tx_device
         if self._pa is None:
             return None
-        # Try FT-710 USB audio output
+
+        from config import AUDIO_TX_DEVICE
+        if AUDIO_TX_DEVICE:
+            try:
+                idx = int(AUDIO_TX_DEVICE)
+                if 0 <= idx < self._pa.get_device_count():
+                    info = self._pa.get_device_info_by_index(idx)
+                    if info.get('maxOutputChannels', 0) > 0:
+                        logger.info("Using configured audio output: [%d] %s", idx, info.get('name', ''))
+                        return idx
+            except ValueError:
+                for i in range(self._pa.get_device_count()):
+                    info = self._pa.get_device_info_by_index(i)
+                    if info.get('maxOutputChannels', 0) > 0:
+                        if AUDIO_TX_DEVICE.lower() in info.get('name', '').lower():
+                            logger.info("Found configured audio output: [%d] %s", i, info.get('name', ''))
+                            return i
+
+        # Try FT-710 USB audio output by name
         for i in range(self._pa.get_device_count()):
             info = self._pa.get_device_info_by_index(i)
             if info.get('maxOutputChannels', 0) > 0:
@@ -213,6 +285,15 @@ class AudioHandler:
                 if 'FT-710' in name or 'FT710' in name or 'YAESU' in name.upper():
                     logger.info("Found FT-710 audio output: [%d] %s", i, name)
                     return i
+
+        # Heuristic: prefer a device that has BOTH input and output
+        # (full-duplex USB audio like FT-710)
+        for i in range(self._pa.get_device_count()):
+            info = self._pa.get_device_info_by_index(i)
+            if info.get('maxOutputChannels', 0) > 0 and info.get('maxInputChannels', 0) > 0:
+                logger.info("Using full-duplex audio output: [%d] %s", i, info.get('name', ''))
+                return i
+
         # Fallback: system default output
         try:
             default = self._pa.get_default_output_device_info()

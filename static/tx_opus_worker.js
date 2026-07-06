@@ -16,7 +16,7 @@
 // stop, so no control-plane changes are needed.
 var AUDIO_TAG_OPUS = 0x01;
 var AUDIO_TAG_PCM  = 0x00;
-var FRAME_SIZE = 320;   // 20 ms @ 16 kHz
+var FRAME_SIZE = 960;   // 20 ms @ 48 kHz
 
 // Opus WASM runtime + codec (public assets, no auth needed).
 // importScripts is synchronous — the OpusEncoder global is ready
@@ -73,7 +73,7 @@ var _useOpus = true;      // true = Opus encode, false = raw Int16 PCM
 
 function ensureEncoder() {
   if (!encoder) {
-    encoder = new OpusEncoder(16000, 1, 2048, 20);
+    encoder = new OpusEncoder(48000, 1, 2048, 20);
   }
 }
 

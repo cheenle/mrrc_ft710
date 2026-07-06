@@ -304,18 +304,82 @@ function updateConnectionStatus(connected) {
 }
 
 // ── Initialization ──────────────────────────────────────────────────
+var _isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
+    (navigator.maxTouchPoints > 1 && !/Chrome/.test(navigator.userAgent));
+
 function bodyload() {
-    connectWebSocket();
+    // Wire power button
+    var powerBtn = document.getElementById('btn-power');
+    if (powerBtn) {
+        powerBtn.addEventListener('click', function() {
+            if (wsRadio && wsRadio.readyState === WebSocket.OPEN) {
+                // Disconnect
+                wsRadio.close();
+                if (wsAudioRX) wsAudioRX.close();
+                if (wsAudioTX) wsAudioTX.close();
+                updateConnectionStatus(false);
+                powerBtn.classList.remove('active');
+                powerBtn.textContent = '⚡';
+            } else {
+                // Connect: call AudioRX_start() SYNCHRONOUSLY from user gesture
+                // so AudioContext is created while iOS gesture context is active
+                powerBtn.classList.add('active');
+                powerBtn.textContent = '🔊';
+                if (typeof connectAudioRX === 'function') connectAudioRX();
+                // iOS audio unlock: MUST play a sound during user gesture.
+                // AudioContext.resume() alone is NOT enough on iOS — the Web Audio
+                // clock stays frozen until an actual buffer is processed.
+                try {
+                    if (typeof AudioRX_context !== 'undefined' && AudioRX_context) {
+                        var _uO = AudioRX_context.createOscillator();
+                        var _uG = AudioRX_context.createGain();
+                        _uG.gain.value = 0.001;
+                        _uO.connect(_uG);
+                        _uG.connect(AudioRX_context.destination);
+                        _uO.frequency.value = 440;
+                        _uO.start(0);
+                        _uO.stop(AudioRX_context.currentTime + 0.01);
+                        console.log('iOS audio unlock: oscillator fired');
+                    }
+                } catch(_) {}
+                if (typeof connectAudioTX === 'function') connectAudioTX();
+                connectWebSocket();
+            }
+        });
+    }
+
+    if (_isMobile) {
+        console.log('Mobile detected — tap ⚡ to connect');
+        if (powerBtn) { powerBtn.classList.add('active'); powerBtn.textContent = '🔇'; }
+    } else {
+        if (powerBtn) { powerBtn.classList.add('active'); powerBtn.textContent = '🔊'; }
+        connectWebSocket();
+    }
     requestWakeLock();
 }
 
+var _wakeLock = null;
 async function requestWakeLock() {
-    if ('wakeLock' in navigator) {
-        try {
-            await navigator.wakeLock.request('screen');
-        } catch(e) {}
+    if (!('wakeLock' in navigator)) return;
+    try {
+        _wakeLock = await navigator.wakeLock.request('screen');
+        console.log('Wake Lock acquired');
+        _wakeLock.addEventListener('release', function() {
+            _wakeLock = null;
+            console.log('Wake Lock released — re-requesting...');
+            requestWakeLock();
+        });
+    } catch(e) {
+        console.log('Wake Lock failed:', e.message);
     }
 }
+
+// Re-acquire Wake Lock when page becomes visible again
+document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible' && !_wakeLock) {
+        requestWakeLock();
+    }
+});
 
 // ── Keyboard support ────────────────────────────────────────────────
 document.addEventListener('keydown', function(e) {
@@ -420,17 +484,18 @@ function wsAudioRXerror(err) {
 
 // ── Start audio RX (adapted from sunmrrc AudioRX_start) ───────────────
 function AudioRX_start() {
+    // Avoid duplicate connections — MUST be before cleanup to prevent
+    // destroying a freshly-created AudioContext on re-entrant calls.
+    if (wsAudioRX && (wsAudioRX.readyState === WebSocket.OPEN || wsAudioRX.readyState === WebSocket.CONNECTING)) {
+        console.log('AudioRX already connected, skipping');
+        return;
+    }
+
     // Clean up old context
     if (AudioRX_context && AudioRX_context.state !== 'closed') {
         try { AudioRX_context.close(); } catch(e) {}
         AudioRX_context = null;
         AudioRX_source_node = null;
-    }
-
-    // Avoid duplicate connections
-    if (wsAudioRX && (wsAudioRX.readyState === WebSocket.OPEN || wsAudioRX.readyState === WebSocket.CONNECTING)) {
-        console.log('AudioRX already connected, skipping');
-        return;
     }
 
     const url = wsUrlWithAuth('/WSaudioRX');
@@ -505,7 +570,7 @@ function AudioRX_start() {
                 const rxNode = new AudioWorkletNode(AudioRX_context, 'rx-player');
                 AudioRX_source_node = rxNode;
                 // Configure jitter buffer
-                try { rxNode.port.postMessage({type:'config', prebufferMs:220, recoveryMs:90, maxMs:800}); } catch(_){}
+                try { rxNode.port.postMessage({type:'config', prebufferMs:120, recoveryMs:60, maxMs:300}); } catch(_){}
                 // Wire the push callback
                 window.__pushRxFrame = function(f32) {
                     rxNode.port.postMessage({type: 'push', payload: f32});
@@ -520,7 +585,8 @@ function AudioRX_start() {
                 }
                 rxNode.connect(AudioRX_gain_node);
                 AudioRX_gain_node.connect(AudioRX_context.destination);
-                console.log('Audio RX playback started (AudioWorklet)');
+                AudioRX_gain_node.gain.value = 1.0;  // Ensure not muted
+                console.log('Audio RX playback started (AudioWorklet) gain=' + AudioRX_gain_node.gain.value);
             } catch(e) {
                 console.warn('AudioWorklet failed, fallback to ScriptProcessor:', e);
                 useAudioWorklet = false;
@@ -534,6 +600,7 @@ function AudioRX_start() {
             var queue = [];
             var queuedSamples = 0;
             var prebufferSamples = Math.round(0.060 * AudioRX_sampleRate); // 60ms
+            var maxBufferSamples = Math.round(0.300 * AudioRX_sampleRate);  // 300ms cap
             var priming = true;
 
             AudioRX_source_node.onaudioprocess = function(event) {
@@ -562,10 +629,14 @@ function AudioRX_start() {
                 }
             };
 
-            // Wire push callback to queue
+            // Wire push callback to queue (with latency cap)
             window.__pushRxFrame = function(f32) {
                 queue.push(f32);
                 queuedSamples += f32.length;
+                // Drop oldest frames if buffer exceeds 300ms
+                while (queuedSamples > maxBufferSamples && queue.length > 1) {
+                    queuedSamples -= queue.shift().length;
+                }
             };
 
             // ── onmessage set AFTER processor is ready ──
@@ -575,14 +646,19 @@ function AudioRX_start() {
                     window.__rxBytes += msg.data.byteLength;
                     var float32Data = decodeRxAudioFrame(msg.data);
                     if (float32Data) {
-                        window.__pushRxFrame(float32Data);
+                        queue.push(float32Data);
+                        queuedSamples += float32Data.length;
+                        while (queuedSamples > maxBufferSamples && queue.length > 1) {
+                            queuedSamples -= queue.shift().length;
+                        }
                     }
                 }
             };
 
             AudioRX_source_node.connect(AudioRX_gain_node);
             AudioRX_gain_node.connect(AudioRX_context.destination);
-            console.log('Audio RX playback started (ScriptProcessor fallback)');
+            AudioRX_gain_node.gain.value = 1.0;
+            console.log('Audio RX playback started (ScriptProcessor) gain=' + AudioRX_gain_node.gain.value);
         }
     })();
 }
@@ -619,13 +695,31 @@ function connectAudioTX() {
     wsAudioTX.onerror = function() {};
 }
 
+var _txMicStream = null;     // cached mic stream (reuse to avoid permission prompt)
+var _txMicCtx = null;        // cached TX AudioContext
+var _txMicSource = null;     // cached MediaStreamSource
+var _txMicSp = null;         // cached ScriptProcessor
+
 function startTXAudio() {
     if (txAudioRunning) return;
     if (!wsAudioTX || wsAudioTX.readyState !== WebSocket.OPEN) {
         connectAudioTX();
     }
 
-    console.log('Starting TX audio capture...');
+    txAudioRunning = true;
+    if (txOpusWorker) txOpusWorker.postMessage({type: 'start'});
+    console.log('TX audio capture started');
+
+    // If we already have a cached mic stream, reuse it — no permission prompt
+    if (_txMicStream) {
+        if (_txMicCtx && _txMicCtx.state === 'suspended') {
+            _txMicCtx.resume().catch(function(){});
+        }
+        return;
+    }
+
+    // First time: get mic permission
+    console.log('First TX — requesting mic permission...');
 
     // Start Opus worker for encoding
     if (!txOpusWorker) {
@@ -640,35 +734,31 @@ function startTXAudio() {
         };
     }
 
-    // Capture mic via getUserMedia, encode, send
     navigator.mediaDevices.getUserMedia({
         audio: {
-            sampleRate: 16000,
+            sampleRate: 48000,
             channelCount: 1,
             echoCancellation: false,
             noiseSuppression: false,
             autoGainControl: false,
         }
     }).then(function(stream) {
+        _txMicStream = stream;
         txAudioStream = stream;
 
-        // Create AudioContext for capture (16kHz for TX)
-        const ctx = new (window.AudioContext || window.webkitAudioContext)({
-            sampleRate: 16000,
+        _txMicCtx = new (window.AudioContext || window.webkitAudioContext)({
+            sampleRate: 48000,
         });
-
-        if (ctx.state === 'suspended') {
-            ctx.resume().catch(function(){});
+        if (_txMicCtx.state === 'suspended') {
+            _txMicCtx.resume().catch(function(){});
         }
 
-        const source = ctx.createMediaStreamSource(stream);
-        // Chrome requires buffer size to be a power of two (256|512|1024|...)
-        const sp = ctx.createScriptProcessor(512, 1, 1); // ~32ms @ 16kHz
+        _txMicSource = _txMicCtx.createMediaStreamSource(stream);
+        _txMicSp = _txMicCtx.createScriptProcessor(512, 1, 1);
 
-        sp.onaudioprocess = function(event) {
+        _txMicSp.onaudioprocess = function(event) {
             if (!txAudioRunning) return;
             const input = event.inputBuffer.getChannelData(0);
-            // Convert Float32 → Int16 for the Opus worker
             if (txOpusWorker) {
                 const i16 = new Int16Array(input.length);
                 for (let i = 0; i < input.length; i++) {
@@ -682,11 +772,9 @@ function startTXAudio() {
             }
         };
 
-        source.connect(sp);
-        sp.connect(ctx.destination); // Required by some browsers
-        txAudioRunning = true;
-        if (txOpusWorker) txOpusWorker.postMessage({type: 'start'});
-        console.log('TX audio capture started');
+        _txMicSource.connect(_txMicSp);
+        _txMicSp.connect(_txMicCtx.destination);
+        console.log('TX audio capture initialized (mic permission granted)');
     }).catch(function(e) {
         console.error('TX audio mic access failed:', e);
         // Fallback: direct Int16 PCM without Opus
@@ -695,26 +783,30 @@ function startTXAudio() {
 }
 
 function startTXAudioFallback() {
-    // Simplified TX without Opus Worker — send Int16 PCM directly
+    if (_txMicStream) {
+        if (_txMicCtx && _txMicCtx.state === 'suspended') {
+            _txMicCtx.resume().catch(function(){});
+        }
+        return;
+    }
+
     navigator.mediaDevices.getUserMedia({
         audio: {
-            sampleRate: 16000,
+            sampleRate: 48000,
             channelCount: 1,
             echoCancellation: false,
             noiseSuppression: false,
             autoGainControl: false,
         }
     }).then(function(stream) {
+        _txMicStream = stream;
         txAudioStream = stream;
-        const ctx = new (window.AudioContext || window.webkitAudioContext)({
-            sampleRate: 16000,
-        });
-        if (ctx.state === 'suspended') ctx.resume().catch(function(){});
+        _txMicCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
+        if (_txMicCtx.state === 'suspended') _txMicCtx.resume().catch(function(){});
+        _txMicSource = _txMicCtx.createMediaStreamSource(stream);
+        _txMicSp = _txMicCtx.createScriptProcessor(512, 1, 1);
 
-        const source = ctx.createMediaStreamSource(stream);
-        const sp = ctx.createScriptProcessor(512, 1, 1); // power-of-2 required by Chrome
-
-        sp.onaudioprocess = function(event) {
+        _txMicSp.onaudioprocess = function(event) {
             if (!txAudioRunning) return;
             const input = event.inputBuffer.getChannelData(0);
             const i16 = new Int16Array(input.length);
@@ -722,7 +814,6 @@ function startTXAudioFallback() {
                 const v = input[i] * 32767;
                 i16[i] = v > 32767 ? 32767 : (v < -32768 ? -32768 : (v | 0));
             }
-            // Tag as PCM (0x00) + data
             const tagged = new Uint8Array(1 + i16.byteLength);
             tagged[0] = 0x00;
             tagged.set(new Uint8Array(i16.buffer), 1);
@@ -731,9 +822,8 @@ function startTXAudioFallback() {
             }
         };
 
-        source.connect(sp);
-        sp.connect(ctx.destination);
-        txAudioRunning = true;
+        _txMicSource.connect(_txMicSp);
+        _txMicSp.connect(_txMicCtx.destination);
         console.log('TX audio capture started (PCM fallback)');
     }).catch(function(e) {
         console.error('TX audio fallback failed:', e);
@@ -744,10 +834,7 @@ function startTXAudioFallback() {
 function stopTXAudio() {
     txAudioRunning = false;
     if (txOpusWorker) txOpusWorker.postMessage({type: 'stop'});
-    if (txAudioStream) {
-        txAudioStream.getTracks().forEach(function(t) { t.stop(); });
-        txAudioStream = null;
-    }
+    // Keep mic stream alive for reuse — don't stop tracks
     if (wsAudioTX && wsAudioTX.readyState === WebSocket.OPEN) {
         wsAudioTX.send('s:');
     }

@@ -30,6 +30,21 @@ Open `http://localhost:8888` in a browser. Default password: `ft710`.
 | `FT710_FT4222_CLK_DIV` | `5` | SPI clock divider (1=fastest, 9=slowest). Default CLK_DIV_16 ≈ 21 fps |
 | `FT710_SCOPE_PORT` | *(optional)* | Scope serial port (Standard COM Port, for SCU-LAN10 models) |
 | `FT710_SCOPE_BAUD` | `115200` | Scope serial baud rate |
+| `FT710_AUDIO_RX_DEVICE` | *(auto)* | Audio input device (index or name substring, e.g. `"FT-710"` or `"3"`) |
+| `FT710_AUDIO_TX_DEVICE` | *(auto)* | Audio output device (index or name substring) |
+
+### CLI Arguments
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--port` | `8888` | Web server port |
+| `--serial-port` | `/dev/cu.SLAB_USBtoUART` | CAT serial port |
+| `--baud` | `38400` | CAT serial baud rate |
+| `--password` | `ft710` | Login password |
+| `--host` | `::` | Bind address (IPv6 dual-stack) |
+| `--ssl-cert` | `certs/fullchain.pem` | SSL certificate file |
+| `--ssl-key` | `certs/radio.vlsc.net.key` | SSL private key file |
+| `--no-ssl` | *(flag)* | Disable SSL (plain HTTP) |
 
 ## Architecture
 
@@ -70,10 +85,14 @@ FT-710 USB Audio → PyAudio capture (48kHz Int16) → Opus encode (64kbps)
 
 **TX Audio:**
 ```
-Microphone → getUserMedia (16kHz) → ScriptProcessor
-  → Opus Worker encode → /WSaudioTX tagged frames
-    → Server TxOpusDecoder → PyAudio playback → FT-710 USB Audio Input
+Microphone → getUserMedia (48kHz) → ScriptProcessor (512buf, ~10.7ms)
+  → Float32→Int16 → Opus Worker encode (48kHz, 960-sample frames, 28kbps CBR)
+    → /WSaudioTX tagged frames (1B tag 0x01 + Opus packet)
+      → Server TxOpusDecoder (48kHz) → Int16 PCM (960 samples/20ms)
+        → PyAudio playback (48kHz, mono) → FT-710 USB Audio Input
 ```
+
+TX chain runs entirely at 48 kHz — browser capture, Opus encode/decode, and PyAudio playback all match. This avoids the sample-rate mismatch that caused crackling at v1.0.
 
 Opus falls back to Int16 PCM when libopus is unavailable (server or browser).
 
@@ -155,9 +174,9 @@ FT710/
 | Feature | Implementation |
 |---------|---------------|
 | RX Audio | PyAudio capture → Opus 64kbps → AudioWorklet playback |
-| TX Audio | Browser mic → Opus 64kbps → PyAudio → radio |
-| Codec | Tagged dual-codec: Opus default, Int16 PCM fallback |
-| Bandwidth | Opus ~48-64kbps (12× smaller than 768kbps PCM) |
+| TX Audio | Browser mic (48kHz) → Opus 28kbps CBR → server TxOpusDecoder → PyAudio 48kHz → radio |
+| Codec | Tagged dual-codec: Opus (28kbps CBR TX, 64kbps RX) with Int16 PCM fallback |
+| Bandwidth | Opus ~28-64kbps (12-27× smaller than 768kbps PCM) |
 
 ## Polling Strategy
 

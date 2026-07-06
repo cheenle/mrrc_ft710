@@ -8,8 +8,8 @@
 | CatController | Backend core | `cat_controller.py` | Serial CAT protocol: connect, disconnect, send_command, query, set; all high-level command helpers (40+ methods) |
 | RadioState | Backend core | `radio_state.py` | Dataclass with dirty-field change tracking; to_dict/to_dirty_dict serialization; from_sync_result deserialization; derived properties (mode_name, s_unit, band_name, filter_hz) |
 | PollScheduler | Backend core | `poll_scheduler.py` | 5-tier asyncio timer-based polling; skip_on_command; CAT query → response → state update pipeline |
-| AudioHandler | Backend core | `audio_handler.py` | PyAudio device enumeration, RX capture stream, TX playback stream, Opus encode (via RxOpusEncoder), audio device auto-detection |
-| OpusCodec | Backend support | `opus_rx.py` | RxOpusEncoder (48kHz mono), TxOpusDecoder (16kHz mono); direct ctypes libopus bindings; bitrate via max_data_bytes cap |
+| AudioHandler | Backend core | `audio_handler.py` | PyAudio device enumeration, RX capture stream (48kHz), TX playback stream (48kHz), Opus encode (via RxOpusEncoder), multi-layer audio device auto-detection (name + mono heuristic + full-duplex) |
+| OpusCodec | Backend support | `opus_rx.py` | RxOpusEncoder (48kHz mono, 64kbps), TxOpusDecoder (48kHz mono); direct ctypes libopus bindings; bitrate via max_data_bytes cap |
 | ScopeHandler | Backend core | `scope_handler.py` | Spectrum data container; update_from_scope_frame (real) and update_from_radio_state (synthetic); get_spectrum_binary for WS broadcast |
 | ScopePipe | Backend core | `scope_pipe.py` | Standalone subprocess: FT4222 SPI init + read loop; frame sync; stdout binary frames + stderr STATUS diagnostics |
 | ScopeFrame | Backend support | `scope_frame.py` | Shared frame parsing: parse_pipe_payload, WF_SIZE constant, quality metrics |
@@ -35,8 +35,8 @@
 | OpusWASM | Frontend audio | `static/modules/opus_wasm.js` | Emscripten-compiled libopus WASM binary |
 | OpusCodecJS | Frontend audio | `static/modules/opus_codec.js` | JavaScript OpusEncoder/OpusDecoder classes wrapping WASM |
 | RxWorklet | Frontend audio | `static/rx_worklet_processor.js` | AudioWorklet: queue-based playback with time-based jitter buffer (prebuffer 220ms, recovery 90ms, max 800ms) |
-| TxCaptureWorklet | Frontend audio | `static/tx_capture_worklet.js` | AudioWorklet: mic capture, 48k→16k downsample, SAB ring buffer write or postMessage fallback |
-| TxOpusWorker | Frontend audio | `static/tx_opus_worker.js` | Web Worker: SAB ring consumer, Opus encoder, postMessage to main thread for WS send |
+| TxCaptureWorklet | Frontend audio | `static/tx_capture_worklet.js` | AudioWorklet: mic capture (48kHz), SAB ring buffer write or postMessage fallback |
+| TxOpusWorker | Frontend audio | `static/tx_opus_worker.js` | Web Worker: SAB ring consumer, Opus encoder (48kHz, 960-sample frames, 28kbps CBR), postMessage to main thread for WS send (transferable buffers) |
 | ServiceWorker | Frontend support | `static/sw.js` | Cache static assets; bypass JS/HTML to prevent stale cache |
 
 ## 11.2 Backend Component Collaboration (Startup)
@@ -80,10 +80,10 @@ PTT button touchstart/mousedown:
     → handlePTTStart()
       → sendCommand('ptt', true)
       → startTXAudio()
-        → new Worker('tx_opus_worker.js')
-        → navigator.mediaDevices.getUserMedia({audio:{sampleRate:16000}})
-        → AudioContext + createScriptProcessor(320)
-        → Float32→Int16→Worker→Opus encode→wsAudioTX.send()
+        → new Worker('tx_opus_worker.js') (if not cached)
+        → navigator.mediaDevices.getUserMedia({audio:{sampleRate:48000}})  // 48kHz
+        → AudioContext({sampleRate:48000}) + createScriptProcessor(512)
+        → Float32→Int16→Worker→Opus encode (48kHz, 960-sample frames)→wsAudioTX.send()
 
 PTT button touchend/mouseup:
   → PTTManager.pttEnd()
@@ -91,7 +91,7 @@ PTT button touchend/mouseup:
       → sendCommand('ptt', false)
       → stopTXAudio()
         → worker.postMessage({type:'stop'})
-        → stream.getTracks().stop()
+        → Keep mic stream cached (avoid re-prompt on next PTT)
         → wsAudioTX.send('s:')
       → PTTManager starts watchdog (500ms verify)
 ```

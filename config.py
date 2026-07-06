@@ -5,6 +5,9 @@ Mode tables, band definitions, filter widths, S-meter calibration, and
 environment-based configuration with sensible defaults.
 """
 import os
+from pathlib import Path
+
+SCRIPT_DIR = Path(__file__).resolve().parent
 
 # ── Serial Configuration ────────────────────────────────────────────
 # macOS default: /dev/cu.SLAB_USBtoUART  (FT-710 Enhanced COM Port)
@@ -12,6 +15,12 @@ import os
 SERIAL_PORT = os.environ.get("FT710_SERIAL_PORT", "/dev/cu.SLAB_USBtoUART")
 BAUD_RATE = int(os.environ.get("FT710_BAUD_RATE", "38400"))
 SERIAL_TIMEOUT = float(os.environ.get("FT710_SERIAL_TIMEOUT", "1.0"))
+
+# ── Audio Device ──────────────────────────────────────────────────────
+# Set a specific device index or substring to match in device name
+# (e.g., "4" for device index 4, or "FT-710" to match by name)
+AUDIO_RX_DEVICE = os.environ.get("FT710_AUDIO_RX_DEVICE", "")
+AUDIO_TX_DEVICE = os.environ.get("FT710_AUDIO_TX_DEVICE", "")
 
 # ── Scope/Spectrum Serial Port ─────────────────────────────────────
 # FT-710 Standard COM Port for scope data (second USB serial interface)
@@ -35,7 +44,12 @@ SCOPE_SPANS: dict[int, dict] = {
 # ── Web Server Configuration ────────────────────────────────────────
 WEB_PORT = int(os.environ.get("FT710_WEB_PORT", "8888"))
 WEB_PASSWORD = os.environ.get("FT710_WEB_PASSWORD", "ft710")
-WEB_HOST = os.environ.get("FT710_WEB_HOST", "0.0.0.0")
+WEB_HOST = os.environ.get("FT710_WEB_HOST", "::")  # IPv6 dual-stack
+
+# SSL (Let's Encrypt certs for radio.vlsc.net)
+CERT_DIR = SCRIPT_DIR / "certs"
+SSL_CERTFILE = os.environ.get("FT710_SSL_CERT", str(CERT_DIR / "fullchain.pem"))
+SSL_KEYFILE = os.environ.get("FT710_SSL_KEY", str(CERT_DIR / "radio.vlsc.net.key"))
 
 # ── Auth ────────────────────────────────────────────────────────────
 AUTH_COOKIE = "ft710_auth"
