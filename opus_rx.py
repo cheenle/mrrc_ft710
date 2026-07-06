@@ -44,8 +44,9 @@ OPUS_APPLICATION_AUDIO = 2049
 OPUS_OK = 0
 
 # RX audio: 48 kHz mono (required by Opus encoder — 44.1k is not supported).
-# The FT-710 USB device runs at 44.1k native; PyAudio/PortAudio resamples to 48k.
-# TX (phone mic uplink) also 48 kHz — must match PyAudio TX_SAMPLE_RATE.
+# The FT-710 USB device runs at 44.1k native; audio_handler.py captures at 44.1k
+# and explicitly resamples to 48k via audio_resample.py (numpy linear interp).
+# TX (phone mic uplink) also 48 kHz through Opus, resampled to 44.1k for playback.
 RX_RATE = 48000
 RX_CHANNELS = 1
 TX_RATE = 48000

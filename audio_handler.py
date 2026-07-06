@@ -17,6 +17,7 @@ from typing import Optional
 import numpy as np
 
 from opus_rx import RxOpusEncoder, AUDIO_TAG_PCM, AUDIO_TAG_OPUS, DEFAULT_BITRATE
+from audio_resample import resample_441_to_48, resample_48_to_441
 
 logger = logging.getLogger("ft710.audio")
 
@@ -30,10 +31,10 @@ except ImportError:
     logger.warning("PyAudio not available — audio disabled. Install: pip install pyaudio")
 
 # ── Audio Config ───────────────────────────────────────────────────────
-RX_SAMPLE_RATE = 48000       # Capture at 48 kHz (Opus requirement)
-RX_CHUNK_SIZE = 960          # 20 ms @ 48 kHz (matches Opus frame)
+RX_SAMPLE_RATE = 44100       # FT-710 native USB audio rate
+RX_CHUNK_SIZE = 882          # 20 ms @ 44.1 kHz (= 960 samples after resampling to 48k)
 RX_CHANNELS = 1
-TX_SAMPLE_RATE = 48000       # Playback at 48 kHz
+TX_SAMPLE_RATE = 44100       # FT-710 native USB audio rate
 TX_CHANNELS = 1
 
 
@@ -179,7 +180,7 @@ class AudioHandler:
             )
             self._rx_running = True
             dev_info = self._pa.get_device_info_by_index(dev)
-            logger.info("RX audio started: [%d] %s @ %d Hz",
+            logger.info("RX audio started: [%d] %s @ %d Hz (resampled to 48k for Opus)",
                         dev, dev_info.get('name', ''), RX_SAMPLE_RATE)
             return True
         except Exception as e:
@@ -211,7 +212,7 @@ class AudioHandler:
                 to_read = min(count, RX_CHUNK_SIZE * 4)
                 data = self._rx_stream.read(to_read, exception_on_overflow=False)
                 if data and len(data) >= 2:
-                    return data
+                    return resample_441_to_48(data)
         except OSError as e:
             if "Stream not open" in str(e) or "No such device" in str(e):
                 logger.warning("RX stream lost — attempting restart")
@@ -326,7 +327,7 @@ class AudioHandler:
             )
             self._tx_queue.clear()
             dev_info = self._pa.get_device_info_by_index(dev)
-            logger.info("TX audio started: [%d] %s @ %d Hz",
+            logger.info("TX audio started: [%d] %s @ %d Hz (resampled from 48k Opus)",
                         dev, dev_info.get('name', ''), TX_SAMPLE_RATE)
             return True
         except Exception as e:
@@ -345,8 +346,10 @@ class AudioHandler:
         self._tx_queue.clear()
 
     def feed_tx_audio(self, pcm: bytes):
-        """Queue TX audio for playback."""
-        self._tx_queue.append(pcm)
+        """Queue TX audio for playback. Input is 48 kHz PCM (from Opus decoder
+        or browser); resampled to 44.1 kHz for FT-710 native USB audio."""
+        if pcm and len(pcm) >= 2:
+            self._tx_queue.append(resample_48_to_441(pcm))
 
     def write_tx_chunk(self):
         """Write queued TX audio to the output stream.
