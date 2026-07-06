@@ -82,6 +82,8 @@ a { color: var(--accent); text-decoration: none; }
 .header-right { display: flex; align-items: center; gap: 8px; }
 .power-btn { font-size: 20px; padding: 4px 8px; border-radius: var(--radius-sm); }
 .power-btn.active { color: var(--accent); }
+.wakelock-btn, .fullscreen-btn { font-size: 18px; padding: 4px 7px; border-radius: var(--radius-sm); }
+.wakelock-btn.active, .fullscreen-btn.active { color: var(--accent); }
 .vfo-indicator {
     font-size: 11px; font-weight: 700; padding: 3px 8px;
     background: var(--accent-dim); color: var(--accent); border-radius: var(--radius-sm);
