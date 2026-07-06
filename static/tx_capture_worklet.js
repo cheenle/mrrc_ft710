@@ -1,8 +1,7 @@
 // AudioWorklet TX capture → SharedArrayBuffer (zero main-thread path)
 // =====================================================================
-// Writes downsampled 16 kHz float32 samples directly into a SAB ring
-// buffer.  The Opus Worker reads from the same SAB and sends via its own
-// WebSocket — the main thread never touches audio samples.
+// Resamples the browser's actual capture rate to 48 kHz float32 and posts
+// exact 20 ms frames to the main thread for Opus worker encoding.
 //
 // Ring buffer layout (same as modules/tx_sab_ring.js):
 //   word[0] = write_pos (Uint32, producer advances atomically)
@@ -12,11 +11,13 @@
 class TxCaptureSABProcessor extends AudioWorkletProcessor {
   constructor(options) {
     super(options);
-    this._inRate = sampleRate;                    // typically 48000
-    this._outRate = 16000;
-    this._dsRatio = Math.max(1, Math.round(this._inRate / this._outRate));
-    this._decimBlock = this._dsRatio * 160;       // 480 samples @ 48k ≈ 10 ms
+    this._inRate = sampleRate;                    // actual AudioContext rate
+    this._outRate = 48000;
+    this._resampleStep = this._inRate / this._outRate;
+    this._blockSize = Math.round(this._outRate * 0.010);  // 480 samples @ 48k
     this._inBuf = new Float32Array(0);
+    this._outBuf = new Float32Array(0);
+    this._srcPos = 0;
 
     // SAB state (set via port message)
     this._sab = null;
@@ -28,7 +29,7 @@ class TxCaptureSABProcessor extends AudioWorkletProcessor {
 
     // Frame accumulator for legacy postMessage path (used when SAB unavailable)
     this._frameAcc = new Float32Array(0);
-    this._frameSize = Math.round(this._outRate * 0.020);  // 320 samples @ 16kHz
+    this._frameSize = Math.round(this._outRate * 0.020);  // 960 samples @ 48kHz
     this._scale = 0x7FFF;
 
     this.port.onmessage = (ev) => {
@@ -42,7 +43,9 @@ class TxCaptureSABProcessor extends AudioWorkletProcessor {
         this._enabled  = true;
       } else if (d.type === 'flush') {
         this._inBuf = new Float32Array(0);
+        this._outBuf = new Float32Array(0);
         this._frameAcc = new Float32Array(0);
+        this._srcPos = 0;
         if (this._writePtr) Atomics.store(this._writePtr, 0, 0);
         if (this._readPtr)  Atomics.store(this._readPtr, 0, 0);
       }
@@ -74,6 +77,41 @@ class TxCaptureSABProcessor extends AudioWorkletProcessor {
     Atomics.store(this._writePtr, 0, wp + n);
   }
 
+  _resampleTo48k(input) {
+    if (Math.abs(this._resampleStep - 1) < 0.000001) {
+      return input;
+    }
+
+    var merged = new Float32Array(this._inBuf.length + input.length);
+    merged.set(this._inBuf);
+    merged.set(input, this._inBuf.length);
+    this._inBuf = merged;
+
+    var output = [];
+    while (Math.floor(this._srcPos) + 1 < this._inBuf.length) {
+      var i = Math.floor(this._srcPos);
+      var frac = this._srcPos - i;
+      output.push(this._inBuf[i] + (this._inBuf[i + 1] - this._inBuf[i]) * frac);
+      this._srcPos += this._resampleStep;
+    }
+
+    var consumed = Math.floor(this._srcPos);
+    if (consumed > 0) {
+      this._inBuf = this._inBuf.subarray(consumed);
+      this._srcPos -= consumed;
+    }
+
+    return new Float32Array(output);
+  }
+
+  _appendOutput(samples) {
+    if (!samples || samples.length === 0) return;
+    var merged = new Float32Array(this._outBuf.length + samples.length);
+    merged.set(this._outBuf);
+    merged.set(samples, this._outBuf.length);
+    this._outBuf = merged;
+  }
+
   // ── Audio processing ─────────────────────────────────
 
   process(inputs, outputs) {
@@ -82,47 +120,23 @@ class TxCaptureSABProcessor extends AudioWorkletProcessor {
       return true;
     }
     var ch = input[0];
-    var R = this._dsRatio;
 
-    // Append to input buffer
-    var merged = new Float32Array(this._inBuf.length + ch.length);
-    merged.set(this._inBuf);
-    merged.set(ch, this._inBuf.length);
-    this._inBuf = merged;
+    this._appendOutput(this._resampleTo48k(ch));
 
-    // Downsample in fixed-size blocks
-    while (this._inBuf.length >= this._decimBlock) {
-      var blockOut = this._decimBlock / R;
-      var decimated = new Float32Array(blockOut);
-      for (var i = 0; i < blockOut; i++) {
-        var sum = 0;
-        var base = i * R;
-        for (var j = 0; j < R; j++) {
-          sum += this._inBuf[base + j];
-        }
-        decimated[i] = sum / R;
-      }
-      this._inBuf = this._inBuf.subarray(this._decimBlock);
+    // Feed fullband 48 kHz microphone audio in fixed 10 ms chunks.
+    while (this._outBuf.length >= this._blockSize) {
+      var block = this._outBuf.subarray(0, this._blockSize);
+      this._outBuf = this._outBuf.subarray(this._blockSize);
 
-      if (this._enabled) {
-        // ── SAB path: write directly, zero main-thread involvement ──
-        this._writeRing(decimated, decimated.length);
-      } else {
-        // ── Legacy path: accumulate 20ms frames, post Int16 ──
-        var accMerged = new Float32Array(this._frameAcc.length + decimated.length);
-        accMerged.set(this._frameAcc);
-        accMerged.set(decimated, this._frameAcc.length);
-        this._frameAcc = accMerged;
-        while (this._frameAcc.length >= this._frameSize) {
-          var frame = this._frameAcc.subarray(0, this._frameSize);
-          this._frameAcc = this._frameAcc.subarray(this._frameSize);
-          var i16 = new Int16Array(this._frameSize);
-          for (var k = 0; k < this._frameSize; k++) {
-            var v = frame[k] * this._scale;
-            i16[k] = v > 32767 ? 32767 : (v < -32768 ? -32768 : (v | 0));
-          }
-          this.port.postMessage(i16);
-        }
+      var accMerged = new Float32Array(this._frameAcc.length + block.length);
+      accMerged.set(this._frameAcc);
+      accMerged.set(block, this._frameAcc.length);
+      this._frameAcc = accMerged;
+      while (this._frameAcc.length >= this._frameSize) {
+        var frame = new Float32Array(this._frameSize);
+        frame.set(this._frameAcc.subarray(0, this._frameSize));
+        this._frameAcc = this._frameAcc.subarray(this._frameSize);
+        this.port.postMessage({type: 'frame', frame: frame.buffer}, [frame.buffer]);
       }
     }
 

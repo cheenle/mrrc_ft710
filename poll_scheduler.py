@@ -38,6 +38,11 @@ class PollScheduler:
         self._user_command_lock = asyncio.Lock()
         # Skip certain polls after a user set command to avoid echo
         self._skip_until: dict[str, float] = {}
+        # Timestamp of the last user-initiated command; pollers pause briefly
+        # so the user's next command doesn't queue behind a poll cycle.
+        self._last_user_command: float = 0.0
+        # How long (seconds) to pause background polling after a user command.
+        self._user_command_pause: float = 0.3
 
     async def start(self):
         """Launch all background polling tasks."""
@@ -61,6 +66,28 @@ class PollScheduler:
             await asyncio.gather(*self._tasks, return_exceptions=True)
         self._tasks.clear()
         logger.info("Poll scheduler stopped")
+
+    def note_user_command(self):
+        """Record that a user-initiated command was just sent.
+
+        Called by server.py after every UI-triggered set command.
+        Causes poll loops to briefly pause so the user's next command
+        isn't stuck behind a queued poll cycle on the serial lock.
+        """
+        import time
+        self._last_user_command = time.time()
+
+    async def _polling_paused(self) -> bool:
+        """Return True if background polling should yield for a user command.
+
+        When the user is actively tuning or adjusting settings, each
+        poll cycle sends 3+ serial commands (FA/MD0/SM0).  If a user
+        command arrives during that cycle, it waits behind all of them.
+        By pausing briefly after each user command, the next user command
+        can grab the serial lock immediately.
+        """
+        import time
+        return time.time() < self._last_user_command + self._user_command_pause
 
     def skip_next_poll(self, field: str, duration: float = 2.0):
         """Skip polling for a given field for `duration` seconds.
@@ -88,6 +115,9 @@ class PollScheduler:
         failures = 0
         while self._running:
             try:
+                if await self._polling_paused():
+                    await asyncio.sleep(0.05)
+                    continue
                 if self.cat.connected:
                     changes = {}
                     if not await self._should_skip("if"):
@@ -132,6 +162,9 @@ class PollScheduler:
         failures = 0
         while self._running:
             try:
+                if await self._polling_paused():
+                    await asyncio.sleep(0.05)
+                    continue
                 if self.cat.connected and not await self._should_skip("tx_status"):
                     ptt = await self.cat.get_ptt()
                     if ptt is not None:
@@ -156,6 +189,9 @@ class PollScheduler:
         """Poll RM4/RM5/RM6 during transmit.  Idle during RX."""
         while self._running:
             try:
+                if await self._polling_paused():
+                    await asyncio.sleep(0.05)
+                    continue
                 if self.cat.connected and self.state.is_transmitting:
                     changes = {}
                     if not await self._should_skip("alc_meter"):
@@ -198,6 +234,9 @@ class PollScheduler:
 
         while self._running:
             try:
+                if await self._polling_paused():
+                    await asyncio.sleep(0.05)
+                    continue
                 if self.cat.connected:
                     changes = {}
                     for field, cmd, parser in fields_to_poll:
@@ -227,6 +266,9 @@ class PollScheduler:
         """Very slow poll for drain current, voltage, compressor state."""
         while self._running:
             try:
+                if await self._polling_paused():
+                    await asyncio.sleep(0.05)
+                    continue
                 if self.cat.connected:
                     changes = {}
                     if not await self._should_skip("id_meter"):

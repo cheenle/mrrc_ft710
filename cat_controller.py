@@ -181,6 +181,30 @@ class CatController:
                 self._connected = False
                 return None
 
+    async def send_set_command(self, cmd: str) -> bool:
+        """Send a set command WITHOUT waiting for a response.
+
+        FT-710 set commands often don't produce a response or produce
+        a delayed response.  Waiting for one would block the serial lock
+        for SERIAL_TIMEOUT (1.0s) on every user UI action, causing
+        noticeable CAT stutter when tuning or adjusting settings.
+
+        This is a write-only fire-and-forget — the serial lock is held
+        only for the write duration (~1-2ms), keeping the UI responsive.
+        """
+        async with self._lock:
+            if not self._connected or self._ser is None:
+                return False
+
+            raw = (cmd + ";").encode("ascii")
+            try:
+                await self._write(raw)
+                return True
+            except Exception as e:
+                logger.error("Serial write error for '%s': %s", cmd, e)
+                self._connected = False
+                return False
+
     async def query(self, cmd: str) -> Optional[str]:
         """Send a query command (no value, just prefix + ';').
 
@@ -191,15 +215,12 @@ class CatController:
     async def set(self, cmd: str) -> bool:
         """Send a set command (prefix + value + ';').
 
-        Returns True if no ? error response was received.
+        Returns True if the write succeeded.  Uses send_set_command
+        (write-only) for responsiveness; does NOT block on a response.
 
         Example: set("FA014200000") -> True
         """
-        resp = await self.send_command(cmd)
-        if resp is not None and "?" in resp:
-            logger.warning("CAT error response for '%s': %s", cmd, resp)
-            return False
-        return True
+        return await self.send_set_command(cmd)
 
     # ── High-Level Command Helpers ─────────────────────────────────
 

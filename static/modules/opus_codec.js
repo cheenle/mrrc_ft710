@@ -40,27 +40,28 @@ var OpusEncoder = (function () {
 
         // OPUS_SET_COMPLEXITY_REQUEST = 4010
         // 编码复杂度 (0-10, 默认 10)
-        // TX 编码跑在主线程；移动 Safari 上 complexity=5 仍偶发拉长
-        // 编码/发送间隔，服务端会收到 100ms 级空窗。3 更偏实时性，
-        // 对窄带语音音质影响很小，但能显著降低主线程编码尖峰。
+        // TX 编码跑在 Worker；complexity=5 在音质和移动端 CPU 间折中。
         var complexity_ptr = allocate(4, 'i32', ALLOC_STACK);
-        setValue(complexity_ptr, 3, 'i32');
+        setValue(complexity_ptr, 5, 'i32');
         _opus_encoder_ctl(this.handle, 4010, complexity_ptr);
 
         // OPUS_SET_BITRATE_REQUEST = 4002
         // 目标比特率 (默认自动)
-        // 短波语音 24-32kbps 透明，兼顾带宽占用
+        // TX 优先发射保真，64kbps mono 对语音留足余量。
         var bitrate_ptr = allocate(4, 'i32', ALLOC_STACK);
-        setValue(bitrate_ptr, 28000, 'i32');  // 28kbps
+        setValue(bitrate_ptr, 64000, 'i32');  // 64kbps
         _opus_encoder_ctl(this.handle, 4002, bitrate_ptr);
 
-        // OPUS_SET_VBR_REQUEST = 4004
-        // 可变比特率 (默认开启)
-        // TX 发射优先稳定的编码成本和包大小；关闭 VBR，避免语音复杂度
-        // 突变时编码耗时抖动，带宽仍固定在 28 kbps 级别。
+        // OPUS_SET_MAX_BANDWIDTH_REQUEST = 4004, OPUS_BANDWIDTH_FULLBAND = 1105
+        var bandwidth_ptr = allocate(4, 'i32', ALLOC_STACK);
+        setValue(bandwidth_ptr, 1105, 'i32');
+        _opus_encoder_ctl(this.handle, 4004, bandwidth_ptr);
+
+        // OPUS_SET_VBR_REQUEST = 4006
+        // TX 发射优先稳定包间隔和包大小；64kbps CBR 避免复杂语音段码率波动。
         var vbr_ptr = allocate(4, 'i32', ALLOC_STACK);
         setValue(vbr_ptr, 0, 'i32');  // 0 = 关闭 VBR
-        _opus_encoder_ctl(this.handle, 4004, vbr_ptr);
+        _opus_encoder_ctl(this.handle, 4006, vbr_ptr);
 
         // OPUS_SET_INBAND_FEC_REQUEST = 4012
         // 前向纠错。TX 走 WebSocket/TCP：不会乱序丢 UDP 包，FEC 只会增加
@@ -90,14 +91,13 @@ var OpusEncoder = (function () {
         setValue(signal_ptr, 3001, 'i32');  // VOICE
         _opus_encoder_ctl(this.handle, 4024, signal_ptr);
 
-        // OPUS_SET_HP_FILTER_REQUEST = 4030 (内部高通滤波器)
-        // 默认启用 ~80-120Hz 高通，会切除低频成分
-        // 设为 0 禁用以保留语音厚度
-        var hp_ptr = allocate(4, 'i32', ALLOC_STACK);
-        setValue(hp_ptr, 0, 'i32');  // 0 = 禁用高通滤波器
-        _opus_encoder_ctl(this.handle, 4030, hp_ptr);
+        // OPUS_SET_LSB_DEPTH_REQUEST = 4036
+        // 输入是 16-bit 等效麦克风 PCM/float32，告知编码器有效位深。
+        var lsb_ptr = allocate(4, 'i32', ALLOC_STACK);
+        setValue(lsb_ptr, 16, 'i32');
+        _opus_encoder_ctl(this.handle, 4036, lsb_ptr);
 
-        console.log('🎵 Opus 编码器优化: complexity=3, bitrate=28kbps, VBR=OFF, FEC=OFF, DTX=OFF, HPF=OFF');
+        console.log('🎵 Opus TX: complexity=5, bitrate=64kbps, CBR, fullband, FEC=OFF, DTX=OFF');
     }
     OpusEncoder.prototype.encode = function (pcm) {
         var output = [];

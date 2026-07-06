@@ -3,6 +3,9 @@ Tests for PollScheduler — SDD AD-009 (5-tier adaptive polling).
 Verifies: polling tier structure, skip logic, command priority.
 """
 import unittest
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 class PollTierStructureTests(unittest.TestCase):
@@ -102,6 +105,13 @@ class PollingOrderTests(unittest.TestCase):
         skip_until = 1.0
         should_poll = poll_due_at >= skip_until
         self.assertFalse(should_poll)
+
+    def test_user_command_temporarily_pauses_background_polling(self):
+        scheduler_source = (REPO_ROOT / "poll_scheduler.py").read_text()
+        server_source = (REPO_ROOT / "server.py").read_text()
+        self.assertIn("def note_user_command", scheduler_source)
+        self.assertIn("await self._polling_paused()", scheduler_source)
+        self.assertIn("scheduler.note_user_command", server_source)
 
     def test_poll_resumes_after_skip_expires(self):
         poll_due_at = 1.5

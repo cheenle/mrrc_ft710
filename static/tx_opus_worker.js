@@ -21,7 +21,7 @@ var FRAME_SIZE = 960;   // 20 ms @ 48 kHz
 // Opus WASM runtime + codec (public assets, no auth needed).
 // importScripts is synchronous — the OpusEncoder global is ready
 // before the first onmessage handler runs.
-importScripts('/modules/opus_wasm.js', '/modules/opus_codec.js');
+importScripts('/modules/opus_wasm.js?v=tx-audio-4', '/modules/opus_codec.js?v=tx-audio-4');
 
 // ── SAB ring buffer (consumer side) ────────────────────
 // Layout: word[0]=write_pos, word[1]=read_pos, word[2+]=float32 data
@@ -60,7 +60,7 @@ function sabRead(n) {
   if (n > first) {
     for (var i = 0; i < n - first; i++) out[first + i] = _data[i];
   }
-  Atomics.store(_readPtr, rp + n);
+  Atomics.store(_readPtr, 0, rp + n);
   return out;
 }
 
@@ -70,6 +70,10 @@ var encoder = null;
 var running = false;
 var _pollTimer = null;
 var _useOpus = true;      // true = Opus encode, false = raw Int16 PCM
+var _toneTimer = null;
+var _tonePhase = 0;
+var _toneFreq = 1000;
+var _toneLevel = 0.2;
 
 function ensureEncoder() {
   if (!encoder) {
@@ -107,8 +111,8 @@ function encodeAndPost(floatSamples) {
 }
 
 // ── Poll loop: one frame per poll, self-scheduling ─────
-// AudioWorklet writes ~160 float32 samples to SAB every ~10 ms.
-// A complete 320-sample Opus frame is ready every ~20 ms.  Polling
+// AudioWorklet writes ~480 float32 samples to SAB every ~10 ms.
+// A complete 960-sample Opus frame is ready every ~20 ms.  Polling
 // at 5 ms catches each frame within 5 ms of readiness without ever
 // draining more than one at a time.  The self-scheduling setTimeout
 // (not setInterval) avoids callback stacking when the main thread
@@ -147,6 +151,31 @@ function stopPolling() {
   }
 }
 
+function startTone(freq, level) {
+  stopTone();
+  ensureEncoder();
+  _toneFreq = Math.max(20, Math.min(3000, Number(freq) || 1000));
+  _toneLevel = Math.max(0.01, Math.min(0.8, Number(level) || 0.2));
+  _tonePhase = 0;
+  _toneTimer = setInterval(function() {
+    var frame = new Float32Array(FRAME_SIZE);
+    var step = 2 * Math.PI * _toneFreq / 48000;
+    for (var i = 0; i < FRAME_SIZE; i++) {
+      frame[i] = Math.sin(_tonePhase) * _toneLevel;
+      _tonePhase += step;
+      if (_tonePhase > 2 * Math.PI) _tonePhase -= 2 * Math.PI;
+    }
+    encodeAndPost(frame);
+  }, 20);
+}
+
+function stopTone() {
+  if (_toneTimer) {
+    clearInterval(_toneTimer);
+    _toneTimer = null;
+  }
+}
+
 // ── Main-thread commands ───────────────────────────────
 
 self.onmessage = function(ev) {
@@ -166,6 +195,9 @@ self.onmessage = function(ev) {
     var f32 = new Float32Array(frame.length);
     for (var i = 0; i < frame.length; i++) f32[i] = frame[i] / 32768.0;
     encodeAndPost(f32);
+  } else if (d.type === 'float_frame') {
+    if (!running || !d.frame) return;
+    encodeAndPost(new Float32Array(d.frame));
   } else if (d.type === 'start') {
     running = true;
     ensureEncoder();
@@ -174,8 +206,13 @@ self.onmessage = function(ev) {
   } else if (d.type === 'stop') {
     running = false;
     stopPolling();
+  } else if (d.type === 'tone_start') {
+    startTone(d.freq, d.level);
+  } else if (d.type === 'tone_stop') {
+    stopTone();
   } else if (d.type === 'close') {
     running = false;
     stopPolling();
+    stopTone();
   }
 };

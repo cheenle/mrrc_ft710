@@ -607,20 +607,36 @@ function initUI() {
         renderButtonLabels();
     });
 
-    // Tuning buttons
+    // Tuning buttons — resolve step dynamically from currentTuneStep
     document.querySelectorAll('.tune-btn').forEach(btn => {
         btn.addEventListener('click', function() {
-            tuneBy(parseInt(this.dataset.step));
+            const action = this.dataset.action;
+            let delta = 0;
+            if (action === 'slow-left')  delta = -currentTuneStep;
+            if (action === 'slow-right') delta = currentTuneStep;
+            if (action === 'fast-left')  delta = -(currentTuneStep * 5);
+            if (action === 'fast-right') delta = currentTuneStep * 5;
+            if (delta !== 0) tuneBy(delta);
         });
     });
 
-    // Step button
+    // Step button — cycle through preset step sizes
     document.getElementById('btn-step').addEventListener('click', function() {
         const idx = tuneSteps.indexOf(currentTuneStep);
         const nextIdx = (idx + 1) % tuneSteps.length;
         currentTuneStep = tuneSteps[nextIdx];
         const labels = {10:'10Hz', 100:'100Hz', 1000:'1kHz', 5000:'5kHz', 10000:'10kHz', 25000:'25kHz'};
-        this.textContent = labels[currentTuneStep] || currentTuneStep + 'Hz';
+        const stepLabel = labels[currentTuneStep] || currentTuneStep + 'Hz';
+        this.textContent = stepLabel;
+        // Update tune button tooltips so the user knows what each does
+        document.querySelectorAll('.tune-btn').forEach(btn => {
+            const action = btn.dataset.action;
+            if (action === 'slow-left' || action === 'slow-right') {
+                btn.title = 'Step ' + stepLabel;
+            } else if (action === 'fast-left' || action === 'fast-right') {
+                btn.title = 'Step ' + (currentTuneStep * 5 / 1000) + 'kHz';
+            }
+        });
     });
 
     // Toggle switches
@@ -780,6 +796,8 @@ function initUI() {
                     label: radioState.band_name + ' ' + (saveFreq / 1e6).toFixed(3),
                 };
                 memChannels[idx] = ch;
+                // Persist locally so channels survive page refresh
+                try { sessionStorage.setItem('ft710_memChannels', JSON.stringify(memChannels)); } catch(e) {}
                 sendMsg({
                     type: 'memSave',
                     channels: memChannels,
@@ -800,6 +818,8 @@ function initUI() {
                     label: radioState.band_name + ' ' + (saveFreq / 1e6).toFixed(3),
                 };
                 memChannels[idx] = ch;
+                // Persist locally so channels survive page refresh
+                try { sessionStorage.setItem('ft710_memChannels', JSON.stringify(memChannels)); } catch(e) {}
                 sendMsg({
                     type: 'memSave',
                     channels: memChannels,
@@ -957,6 +977,8 @@ function showMemoryManager() {
         btn.addEventListener('click', function() {
             const idx = parseInt(this.dataset.clear);
             memChannels[idx] = null;
+            // Persist locally so channels survive page refresh
+            try { sessionStorage.setItem('ft710_memChannels', JSON.stringify(memChannels)); } catch(e) {}
             sendMsg({type: 'memSave', channels: memChannels});
             renderMemoryChannels();
             overlay.remove();

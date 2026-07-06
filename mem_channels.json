@@ -5,10 +5,30 @@
       "mode": "LSB",
       "label": "40m 7.050"
     },
-    null,
-    null,
-    null,
-    null,
-    null
+    {
+      "freq": 14920000,
+      "mode": "USB",
+      "label": "GEN 14.920"
+    },
+    {
+      "freq": 14920000,
+      "mode": "USB",
+      "label": "GEN 14.920"
+    },
+    {
+      "freq": 14920000,
+      "mode": "USB",
+      "label": "GEN 14.920"
+    },
+    {
+      "freq": 14920000,
+      "mode": "USB",
+      "label": "GEN 14.920"
+    },
+    {
+      "freq": 14920000,
+      "mode": "USB",
+      "label": "GEN 14.920"
+    }
   ]
 }

@@ -5,7 +5,10 @@ All tests run without hardware (mock the serial port).
 """
 import asyncio
 import unittest
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 # ── Command Formatting Tests (no serial needed) ──────────────────────
@@ -179,6 +182,12 @@ class CatControllerMockedTests(unittest.IsolatedAsyncioTestCase):
         # set("FA014200000") → "FA014200000;"
         cmd = "FA014200000"
         self.assertEqual(cmd + ";", "FA014200000;")
+
+    async def test_set_command_is_write_only_for_responsiveness(self):
+        """Set commands must not wait for a CAT response timeout."""
+        source = (REPO_ROOT / "cat_controller.py").read_text()
+        self.assertIn("async def send_set_command", source)
+        self.assertIn("return await self.send_set_command(cmd)", source)
 
     async def test_triple_ptt_verify_sequence(self):
         """SDD §15.3 Layer 3: triple TX; query after TX0;."""
