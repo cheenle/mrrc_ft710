@@ -8,6 +8,7 @@ real-time control and state updates, plus REST APIs for memory
 channels and authentication.
 """
 import asyncio
+import concurrent.futures
 import hashlib
 import json
 import logging
@@ -524,7 +525,7 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                 radio.update(tx_status=1)
                 # Start TX audio output (mic → radio)
                 if audio:
-                    audio.start_tx()
+                    await asyncio.to_thread(audio.start_tx)
             else:
                 # Force TX release with retries for safety
                 await cat.set_ptt(False)
@@ -538,7 +539,7 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                 radio.update(tx_status=0)
                 # Stop TX audio output
                 if audio:
-                    audio.stop_tx()
+                    await asyncio.to_thread(audio.stop_tx)
             scheduler and scheduler.skip_next_poll("tx_status", 1.0)
 
         elif field == "tune":
@@ -855,7 +856,19 @@ async def lifespan(app: FastAPI):
 
     # ── Audio handler ──────────────────────────────────────────────
     audio = AudioHandler()
-    audio.start_rx()
+    # Use a thread with timeout — FT-710 USB audio can hang on open
+    _audio_ok = False
+    _pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    _audio_fut = _pool.submit(audio.start_rx)
+    try:
+        _audio_ok = _audio_fut.result(timeout=8)
+    except concurrent.futures.TimeoutError:
+        logger.warning("Audio RX init timed out (8s) — FT-710 USB audio may be unresponsive")
+        logger.warning("  Try reconnecting the FT-710 USB cable or power-cycling the radio")
+    except Exception as e:
+        logger.warning("Audio RX init failed: %s", e)
+    finally:
+        _pool.shutdown(wait=False)  # Don't block on the hung p.open() thread
 
     # TX Opus decoder (browser mic → server → radio)
     try:
@@ -864,8 +877,9 @@ async def lifespan(app: FastAPI):
         logger.warning("TX Opus decoder unavailable: %s", e)
         _opus_tx_decoder = None
 
-    # Start audio tasks
-    _audio_rx_task = asyncio.create_task(_audio_rx_loop(), name="audio_rx")
+    # Start audio tasks (skip if audio init failed)
+    if _audio_ok:
+        _audio_rx_task = asyncio.create_task(_audio_rx_loop(), name="audio_rx")
     _audio_tx_task = asyncio.create_task(_audio_tx_drain_loop(), name="audio_tx")
 
     # Start scope handler — broadcasts S-meter fallback until real data arrives
@@ -928,7 +942,7 @@ async def lifespan(app: FastAPI):
             pass
         _opus_tx_decoder = None
     if audio:
-        audio.close()
+        await asyncio.to_thread(audio.close)
         audio = None
 
     # Stop scope
@@ -1141,7 +1155,7 @@ async def ws_radio(ws: WebSocket):
             except Exception:
                 pass
             if audio:
-                audio.stop_tx()
+                await asyncio.to_thread(audio.stop_tx)
 
 
 # ── Spectrum WebSocket ───────────────────────────────────────────────
@@ -1268,7 +1282,7 @@ async def ws_audio_tx(ws: WebSocket):
         audio_tx_clients.discard(ws)
         # Force RX on TX WS disconnect (safety)
         if audio:
-            audio.stop_tx()
+            await asyncio.to_thread(audio.stop_tx)
             audio._tx_queue.clear()
         logger.info("Audio TX client disconnected (%d remain)", len(audio_tx_clients))
 
