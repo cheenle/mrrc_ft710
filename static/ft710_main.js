@@ -467,7 +467,8 @@ function decodeRxAudioFrame(data) {
 
 // ── Push RX frame to worklet (set during AudioRX_start) ───────────────
 // No-op placeholder — replaced when AudioWorklet or ScriptProcessor is ready
-window.__pushRxFrame = function(f32) {};
+var __pushRxFrameNoop = function(f32) {};
+window.__pushRxFrame = __pushRxFrameNoop;
 
 // ── WebSocket event handlers ──────────────────────────────────────────
 function wsAudioRXopen() {

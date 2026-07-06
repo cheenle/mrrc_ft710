@@ -975,6 +975,9 @@ async def add_security_headers(request: Request, call_next):
 
 # Paths that don't require authentication
 PUBLIC_PATHS = {"/login", "/api/auth/login", "/favicon.png", "/manifest.json", "/sw.js"}
+# WebSocket paths: must NOT be redirected — WebSocket can't follow 302.
+# Let the WS handler check auth and close with proper code 4001.
+WS_PATHS = {"/WSradio", "/WSspectrum", "/WSaudioRX", "/WSaudioTX"}
 
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
@@ -987,6 +990,11 @@ async def auth_middleware(request: Request, call_next):
 
     # Allow login API
     if path == "/api/auth/login":
+        return await call_next(request)
+
+    # WebSocket paths: pass through (WS handlers send code 4001 on auth failure
+    # so the browser's handleAuthExpired() can act on it properly).
+    if path in WS_PATHS:
         return await call_next(request)
 
     # Check auth
