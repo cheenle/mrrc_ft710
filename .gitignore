@@ -29,4 +29,6 @@ Thumbs.db
 .env.example
 
 # SSL certificates (contain private keys — do not commit)
+# No trailing slash: also ignores the `certs` symlink (-> external dir).
+certs
 certs/
