@@ -927,13 +927,9 @@ async def lifespan(app: FastAPI):
         await _init_scope_cat()
         scheduler = PollScheduler(cat, radio, on_state_changed=_broadcast_state)
         await scheduler.start()
-        print(f"[STARTUP] PollScheduler started OK", file=_sys.stderr, flush=True)
     else:
         logger.warning("Could not connect to radio. Server will serve UI only.")
         logger.warning("Check serial port: %s", SERIAL_PORT)
-        print(f"[STARTUP] NO CAT — poll scheduler NOT running. "
-              f"Frequency changes can only come from scope or client.",
-              file=_sys.stderr, flush=True)
 
     # ── Audio handler ──────────────────────────────────────────────
     audio = AudioHandler()
