@@ -489,10 +489,6 @@ async def _handle_ws_message(ws: WebSocket, msg_str: str):
                 }))
 
     elif msg_type == "set":
-        if field == "ptt":
-            import time as _time
-            logger.info("[PTT-ARRIVE] ws msg field=ptt value=%s t=%.3f",
-                        value, _time.monotonic())
         await _execute_set_command(field, value, ws)
 
     elif msg_type == "memLoadAll":
@@ -575,11 +571,7 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                 # starts immediately; open the audio output stream in the
                 # background so pa.open() latency (~100 ms) doesn't delay
                 # the keyup.
-                import time as _time
-                _t0 = _time.monotonic()
                 await cat.set_ptt(True)
-                _t1 = _time.monotonic()
-                logger.info("[PTT-PRESS] set_ptt lock+write = %.0f ms", (_t1 - _t0) * 1000)
                 radio.update(tx_status=1)
                 if audio:
                     # Open the TX audio stream in the background so pa.open()
