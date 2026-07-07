@@ -49,7 +49,7 @@ TX_CHANNELS = 1
 TX_FRAME_MS = 20
 TX_PREBUFFER_MS = 60          # ~3 frames cushion before playback starts
 TX_MAX_BUFFER_MS = 400        # drop oldest beyond this (~20 frames)
-TX_DRAIN_MS = 150             # bounded drain on PTT release (word-tail flush)
+TX_DRAIN_MS = 80              # bounded drain on PTT release (word-tail flush)
 TX_PREBUFFER_BYTES = TX_SAMPLE_RATE * TX_CHANNELS * 2 * TX_PREBUFFER_MS // 1000
 TX_MAX_BUFFER_BYTES = TX_SAMPLE_RATE * TX_CHANNELS * 2 * TX_MAX_BUFFER_MS // 1000
 

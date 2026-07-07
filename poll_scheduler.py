@@ -123,37 +123,46 @@ class PollScheduler:
                 if self.cat.connected:
                     changes = {}
                     if not await self._should_skip("if"):
-                        # Active VFO (VS) — must be queried so the server
-                        # knows which VFO the radio is actually receiving on.
+                        # Each query releases the serial lock briefly, but
+                        # without an inter-query pause check a user command
+                        # (e.g. PTT) can stall behind the whole 5-query
+                        # cycle (~200 ms).  Re-checking _polling_paused()
+                        # before every query lets PTT preempt the cycle
+                        # after the in-flight query (~50 ms) instead.
+                        # Active VFO (VS) — which VFO the radio receives on.
                         active = await self.cat.get_active_vfo()
                         if active is not None:
                             changes["active_vfo"] = active
-                        # VFO-A frequency
-                        freq = await self.cat.get_frequency("A")
-                        if freq is not None and 30000 <= freq <= 75000000:
-                            changes["vfo_a_freq"] = freq
-                            # Log every ~10 s (100 iterations) or on any change
-                            if (freq != _last_logged_freq
-                                    or _loop_count % 100 == 0):
-                                _delta = ""
-                                if _last_logged_freq is not None:
-                                    _delta = f" ({freq - _last_logged_freq:+d} Hz)"
-                                logger.info(
-                                    "IF poll: vfo_a=%d Hz active=%s%s (loop=%d)",
-                                    freq, active or "?", _delta, _loop_count)
-                                _last_logged_freq = freq
-                        # VFO-B frequency (the radio may be listening on B)
-                        freq_b = await self.cat.get_frequency("B")
-                        if freq_b is not None and 30000 <= freq_b <= 75000000:
-                            changes["vfo_b_freq"] = freq_b
-                        # Mode
-                        mode = await self.cat.get_mode()
-                        if mode is not None:
-                            changes["mode"] = mode
-                        # S-meter
-                        sm = await self.cat.get_s_meter()
-                        if sm is not None:
-                            changes["s_meter"] = sm
+                        if not await self._polling_paused():
+                            # VFO-A frequency
+                            freq = await self.cat.get_frequency("A")
+                            if freq is not None and 30000 <= freq <= 75000000:
+                                changes["vfo_a_freq"] = freq
+                                # Log every ~10 s (100 iterations) or on change
+                                if (freq != _last_logged_freq
+                                        or _loop_count % 100 == 0):
+                                    _delta = ""
+                                    if _last_logged_freq is not None:
+                                        _delta = f" ({freq - _last_logged_freq:+d} Hz)"
+                                    logger.info(
+                                        "IF poll: vfo_a=%d Hz active=%s%s (loop=%d)",
+                                        freq, active or "?", _delta, _loop_count)
+                                    _last_logged_freq = freq
+                        if not await self._polling_paused():
+                            # VFO-B frequency (the radio may be listening on B)
+                            freq_b = await self.cat.get_frequency("B")
+                            if freq_b is not None and 30000 <= freq_b <= 75000000:
+                                changes["vfo_b_freq"] = freq_b
+                        if not await self._polling_paused():
+                            # Mode
+                            mode = await self.cat.get_mode()
+                            if mode is not None:
+                                changes["mode"] = mode
+                        if not await self._polling_paused():
+                            # S-meter
+                            sm = await self.cat.get_s_meter()
+                            if sm is not None:
+                                changes["s_meter"] = sm
                     if changes:
                         changed = self.state.update(**changes)
                         if changed and self._on_state_changed:
@@ -282,6 +291,11 @@ class PollScheduler:
                 if self.cat.connected:
                     changes = {}
                     for field, cmd, parser in fields_to_poll:
+                        # Yield between queries if a user command (PTT, tune,
+                        # etc.) is pending — otherwise this 13-query cycle
+                        # holds the serial lock for ~500 ms and stalls PTT.
+                        if await self._polling_paused():
+                            break
                         if await self._should_skip(field):
                             continue
                         resp = await self.cat.query(cmd)

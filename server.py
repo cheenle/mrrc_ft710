@@ -567,11 +567,19 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
         elif field == "ptt":
             tx = value is True or str(value).lower() == "true"
             if tx:
+                # Key the radio first (fire-and-forget CAT write) so TX
+                # starts immediately; open the audio output stream in the
+                # background so pa.open() latency (~100 ms) doesn't delay
+                # the keyup.
                 await cat.set_ptt(True)
                 radio.update(tx_status=1)
-                # Start TX audio output (mic → radio)
                 if audio:
-                    await asyncio.to_thread(audio.start_tx)
+                    # Open the TX audio stream in the background so pa.open()
+                    # latency doesn't delay the keyup.  Errors are logged via
+                    # the done-callback instead of propagating to the handler.
+                    _tx_start = asyncio.create_task(asyncio.to_thread(audio.start_tx))
+                    _tx_start.add_done_callback(
+                        lambda t: t.exception() and logger.warning("start_tx failed: %s", t.exception()))
             else:
                 # Graceful TX stop: drain queued audio to the DAC and block
                 # until it has played (Pa_StopStream semantics), so word-
@@ -579,11 +587,13 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                 # event loop — the blocking drain can take up to TX_DRAIN_MS.
                 if audio:
                     await asyncio.to_thread(audio.stop_tx, True)
-                # Force TX release with retries for safety
+                # Drop PTT immediately after the drain.
                 await cat.set_ptt(False)
-                # Verify
+                # Lightweight verify: the radio obeys TX0; almost always
+                # released on the first check.  Short retries (was 3×200 ms)
+                # keep release snappy while still catching a stuck keyup.
                 for _ in range(3):
-                    await asyncio.sleep(0.2)
+                    await asyncio.sleep(0.05)
                     ptt = await cat.get_ptt()
                     if ptt == 0:
                         break
