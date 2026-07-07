@@ -557,7 +557,8 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                     if ptt == 0:
                         break
                     await cat.set_ptt(False)
-                radio.update(tx_status=0)
+                radio.update(tx_status=0, power_meter=0, alc_meter=0,
+                             swr_meter=0, comp_meter=0)
             scheduler and scheduler.skip_next_poll("tx_status", 1.0)
 
         elif field == "tune":

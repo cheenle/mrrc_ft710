@@ -970,128 +970,170 @@ window.TXDebug = {
 })();
 
 // ── Screen Wake Lock + Fullscreen (mobile keep-foreground) ────────────
-// Wake Lock API (primary) + silent-audio loop (fallback for iOS Safari /
+// Wake Lock API (primary) + silent-video/-audio fallback (iOS Safari /
 // older Android) keeps the screen on while the page is visible. Fullscreen
 // hides browser chrome. Both need a secure context (HTTPS) and a user
-// gesture; the operator must explicitly tap the ☀ / ⛶ buttons.
+// gesture.
+//
+// Fallback MUST start synchronously from the click handler — on iOS Safari
+// mediaElement.play() is rejected outside a direct user-gesture call chain
+// (await / setTimeout break it). That was the root cause of the first
+// attempt: play() inside an async function lost the gesture.
 
 var WakeLockMgr = (function () {
-    var sentinel = null;       // WakeLockSentinel (null = not acquired)
-    var requested = false;     // user wants wake-lock active
-    var audioEl = null;        // silent <audio> fallback element
+    var sentinel = null;       // WakeLockSentinel
+    var videoEl = null;        // <video> fallback
+    var audioEl = null;        // <audio> fallback (belt-and-suspenders)
+    var requested = false;     // user wants wake-lock
     var btn = null;
+    var _gestured = false;     // first user gesture has fired
 
     // ── helpers ──────────────────────────────────────────────
 
     function wakeLockAvailable() { return 'wakeLock' in navigator; }
-    function supported() { return wakeLockAvailable() || true; }  // audio fallback always works
+    function active() { return sentinel !== null || videoEl !== null || audioEl !== null; }
 
-    function setBtn(active, unsupported) {
+    function setBtn(on, hint) {
         if (!btn) return;
-        btn.setAttribute('aria-pressed', String(active));
-        btn.classList.toggle('active', active);
-        if (unsupported) {
-            btn.title = '防锁屏（当前浏览器不支持 Wake Lock，使用音频保活）';
+        btn.setAttribute('aria-pressed', String(on));
+        btn.classList.toggle('active', on);
+        if (hint === 'unsupported') {
+            btn.title = '防锁屏（使用视频/音频保活）';
             btn.style.opacity = '0.55';
         } else {
-            btn.title = active ? '屏幕常亮中（点击关闭）' : '保持屏幕常亮';
+            btn.title = on ? '屏幕常亮中（点击关闭）' : '保持屏幕常亮';
             btn.style.opacity = '';
         }
     }
 
-    // ── fallback: silent audio loop ─────────────────────────
-    // Keeps iOS Safari and older Chrome from sleeping by holding an active
-    // audio session. The WAV data URI is 44 bytes of PCM silence at 8 kHz
-    // mono — zero CPU cost and no audible output (volume=0).
-    // Must be called from a user-gesture handler (click/touchstart).
-    function startAudioFallback() {
-        if (audioEl) return true;
+    // ── fallback (synchronous — called inside click handler) ──
+
+    function startFallback() {
+        var ok = false;
+        // 1. Silent <video> — the proven NoSleep technique.
+        if (!videoEl) {
+            try {
+                videoEl = document.createElement('video');
+                videoEl.setAttribute('playsinline', '');
+                videoEl.setAttribute('muted', '');
+                videoEl.loop = true;
+                videoEl.width = 1; videoEl.height = 1;
+                videoEl.style.cssText = 'position:fixed;bottom:0;right:0;width:1px;height:1px;opacity:0.01;pointer-events:none';
+                // Tiny silent WAV — universally decodable.
+                videoEl.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
+                document.body.appendChild(videoEl);
+                videoEl.play();  // synchronous
+                ok = true;
+            } catch (e) { videoEl = null; }
+        }
+        // 2. Silent <audio> as additional anchor (belt & suspenders).
+        if (!audioEl) {
+            try {
+                audioEl = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');
+                audioEl.loop = true;
+                audioEl.volume = 0;
+                audioEl.play();  // synchronous
+                ok = true;
+            } catch (e) { audioEl = null; }
+        }
+        return ok;
+    }
+
+    function stopFallback() {
+        if (videoEl) { try { videoEl.pause(); videoEl.removeAttribute('src'); videoEl.load(); videoEl.remove(); } catch (e) {} videoEl = null; }
+        if (audioEl) { try { audioEl.pause(); audioEl.removeAttribute('src'); audioEl.load(); } catch (e) {} audioEl = null; }
+    }
+
+    // ── Wake Lock (async, called after sync fallback) ───────
+
+    async function acquireWakeLock() {
+        if (!wakeLockAvailable()) return false;
         try {
-            audioEl = new Audio(
-                'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');
-            audioEl.loop = true;
-            audioEl.volume = 0;
-            audioEl.play().catch(function () {});  // ignore AbortError / NotAllowed
+            sentinel = await navigator.wakeLock.request('screen');
+            sentinel.addEventListener('release', function () {
+                sentinel = null;
+                if (requested && document.visibilityState === 'visible') {
+                    setTimeout(acquireWakeLock, 500);
+                }
+                setBtn(active(), wakeLockAvailable() ? false : 'unsupported');
+            });
             return true;
         } catch (e) {
             return false;
         }
     }
 
-    function stopAudioFallback() {
-        if (!audioEl) return;
-        try { audioEl.pause(); audioEl.removeAttribute('src'); audioEl.load(); } catch (e) {}
-        audioEl = null;
-    }
-
-    // ── acquire / release ───────────────────────────────────
-
-    async function acquire() {
-        // Primary: Wake Lock API (Chrome, Edge, Safari≥16.4 PWA).
-        if (wakeLockAvailable()) {
-            try {
-                sentinel = await navigator.wakeLock.request('screen');
-                sentinel.addEventListener('release', function () {
-                    sentinel = null;
-                    if (requested && document.visibilityState === 'visible') {
-                        setTimeout(acquire, 500);
-                    } else if (requested) {
-                        setBtn(true, false);
-                    } else {
-                        setBtn(false, false);
-                    }
-                });
-                return true;   // acquired
-            } catch (e) {
-                console.warn('Wake Lock request failed, trying audio fallback:', e && e.name);
-            }
-        }
-        // Fallback: silent audio loop.
-        return startAudioFallback();
-    }
-
     // ── public API ──────────────────────────────────────────
 
     async function enable() {
         requested = true;
-        var ok = await acquire();
-        setBtn(ok, !wakeLockAvailable());
-        if (!ok) console.warn('Wake lock: all methods failed.');
+        var ok = false;
+        if (!active()) {
+            // Fallback must have been started sync by the click handler.
+            // If enable() is called from visibilitychange (not a click),
+            // fallback may not be running — start it via wakeLock only.
+        }
+        ok = await acquireWakeLock() || active();
+        setBtn(ok, wakeLockAvailable() ? false : 'unsupported');
     }
 
     function disable() {
         requested = false;
-        if (sentinel) {
-            try { sentinel.release(); } catch (e) {}
-            sentinel = null;
-        }
-        stopAudioFallback();
+        if (sentinel) { try { sentinel.release(); } catch (e) {} sentinel = null; }
+        stopFallback();
         setBtn(false, false);
-    }
-
-    async function toggle() {
-        if (requested) { disable(); } else { await enable(); }
     }
 
     function init() {
         btn = document.getElementById('btn-wakelock');
         if (!btn) return;
-        // Use pointerdown/touchstart for 0-latency feel on mobile; click as
-        // the reliable fallback. Only fire once per gesture.
-        btn.addEventListener('click', toggle);
-        btn.addEventListener('touchstart', function (e) {
-            // Let the button's click handler run; this just makes it snappy.
-        }, { passive: true });
-        // Re-acquire when the page returns to foreground after a tab switch
-        // (Wake Lock is auto-released while hidden).
+
+        // Click handler: start fallback SYNCHRONOUSLY (iOS requires a direct
+        // user-gesture call chain for media.play()), then async enable.
+        btn.addEventListener('click', function () {
+            if (active()) { disable(); return; }
+            var hasWL = wakeLockAvailable();
+            // Sync: start fallback from the click gesture
+            if (!hasWL) startFallback();
+            // Async: request Wake Lock (the browser extends transient activation
+            // to async operations for ~5 s, so this is fine).
+            requested = true;
+            acquireWakeLock().then(function (ok) {
+                setBtn(ok || active(), hasWL ? false : 'unsupported');
+            });
+        });
+
+        // Re-acquire Wake Lock when the page returns to foreground.
         document.addEventListener('visibilitychange', function () {
             if (requested && document.visibilityState === 'visible' && !sentinel) {
-                acquire().then(function (ok) { setBtn(ok, !wakeLockAvailable()); });
+                acquireWakeLock().then(function (ok) {
+                    setBtn(active(), wakeLockAvailable() ? false : 'unsupported');
+                });
             }
         });
     }
 
-    return { init: init, enable: enable, disable: disable, toggle: toggle, requested: function(){return requested;} };
+    // ── Auto-enable on first user gesture (any tap) ────────
+    // The first touch/click/key anywhere on the page auto-enables the
+    // wake lock so the operator doesn't have to remember. This fires once
+    // and never races with the button because it checks active().
+    function initAutoEnable() {
+        function onFirst(ev) {
+            if (_gestured || active()) return;
+            _gestured = true;
+            var hasWL = wakeLockAvailable();
+            if (!hasWL) startFallback();
+            requested = true;
+            acquireWakeLock().then(function (ok) {
+                setBtn(ok || active(), hasWL ? false : 'unsupported');
+            });
+        }
+        document.addEventListener('touchstart', onFirst, { once: true, passive: false });
+        document.addEventListener('pointerdown', onFirst, { once: true });
+        document.addEventListener('keydown', onFirst, { once: true });
+    }
+
+    return { init: init, initAutoEnable: initAutoEnable, active: active };
 })();
 
 var FullscreenMgr = (function () {
@@ -1141,6 +1183,7 @@ var FullscreenMgr = (function () {
 
 document.addEventListener('DOMContentLoaded', function () {
     WakeLockMgr.init();
+    WakeLockMgr.initAutoEnable();
     FullscreenMgr.init();
 });
 

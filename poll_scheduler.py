@@ -168,7 +168,15 @@ class PollScheduler:
                 if self.cat.connected and not await self._should_skip("tx_status"):
                     ptt = await self.cat.get_ptt()
                     if ptt is not None:
+                        was_tx = self.state.tx_status > 0
                         changed = self.state.update(tx_status=ptt)
+                        # Reset TX-only meters to zero when transitioning to RX,
+                        # otherwise they keep the last TX reading forever
+                        # (the TX-meters poller only runs during transmit).
+                        if ptt == 0 and was_tx:
+                            changed |= self.state.update(
+                                power_meter=0, alc_meter=0,
+                                swr_meter=0, comp_meter=0)
                         if changed and self._on_state_changed:
                             await self._on_state_changed()
                         failures = 0
