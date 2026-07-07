@@ -26,7 +26,8 @@ class ScopeFrame:
     attenuator: int = 0
     mode: int = 0
     s_meter: int = 0
-    vfoa_freq: int = 0
+    vfoa_freq: int = 0           # offset 64, 5-byte BCD (matches wfview yaesucommander.cpp:192)
+    vfoa_freq_bin: int = 0       # offset 132, 4-byte BE binary (wfview comment: "VFOA Freq in Hex (BE)")
     scope_start_freq: int = 0
 
 
@@ -89,6 +90,14 @@ def parse_scope_frame(frame: bytes, require_sync: bool = True) -> ScopeFrame:
             parsed.scope_start_freq = struct.unpack(">I", data[144:148])[0]
         except struct.error:
             parsed.scope_start_freq = 0
+        # Binary VFOA frequency at offset 132 (4-byte BE).  wfview's comment
+        # maps 00 D8 24 08 → 14.165 MHz, so this is the VFO-A frequency in
+        # straight binary, not BCD.  Decoded here for comparison with the
+        # BCD value at offset 64 and with the CAT FA; query.
+        try:
+            parsed.vfoa_freq_bin = struct.unpack(">I", data[132:136])[0]
+        except struct.error:
+            parsed.vfoa_freq_bin = 0
 
     return parsed
 
@@ -131,6 +140,7 @@ def encode_pipe_payload(frame: ScopeFrame) -> bytes:
         "mode": frame.mode,
         "s_meter": frame.s_meter,
         "vfoa_freq": frame.vfoa_freq,
+        "vfoa_freq_bin": frame.vfoa_freq_bin,
         "scope_start_freq": frame.scope_start_freq,
     }
     meta_bytes = json.dumps(metadata, separators=(",", ":")).encode("utf-8")
@@ -172,5 +182,6 @@ def parse_pipe_payload(payload: bytes) -> ScopeFrame:
         mode=int(metadata.get("mode", 0)),
         s_meter=int(metadata.get("s_meter", 0)),
         vfoa_freq=int(metadata.get("vfoa_freq", 0)),
+        vfoa_freq_bin=int(metadata.get("vfoa_freq_bin", 0)),
         scope_start_freq=int(metadata.get("scope_start_freq", 0)),
     )

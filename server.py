@@ -20,6 +20,7 @@ import sys
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -137,6 +138,11 @@ async def _broadcast_state():
         "fields": radio.to_dirty_dict(dirty),
         "dirty": list(dirty),
     }
+    # DIAGNOSTIC: log any broadcast that touches frequency
+    if "vfo_a_freq" in update["fields"] or "vfo_b_freq" in update["fields"]:
+        import sys
+        print(f"[BROADCAST] freq={update['fields'].get('vfo_a_freq')} "
+              f"dirty={list(dirty)}", file=sys.stderr, flush=True)
     data = json.dumps(update)
     dead: set[WebSocket] = set()
     for ws in ctrl_clients:
@@ -167,16 +173,15 @@ async def _on_scope_frame(_scope: ScopeHandler):
     Also feeds radio state back into scope for S-meter fallback."""
     if _scope.last_update > 0:
         changes = {}
+        # S-meter from scope is 30 fps (vs 10 fps CAT) — safe to merge
+        # because CAT corrects it every 100 ms.
         if _scope.s_meter >= 0:
             changes["s_meter"] = _scope.s_meter
-        if _scope.vfoa_freq > 0:
-            changes["vfo_a_freq"] = _scope.vfoa_freq
-        if _scope.mode > 0:
-            changes["mode"] = _scope.mode
-        if _scope.preamp >= 0:
-            changes["preamp"] = _scope.preamp
-        if _scope.attenuator >= 0:
-            changes["attenuator"] = _scope.attenuator
+        # vfo_a_freq / mode / preamp / attenuator are deliberately NOT
+        # taken from scope frames.  The CAT poll path is the single source
+        # of truth for these fields — scope data can lag behind user
+        # commands and would fight the poll for control, causing the
+        # displayed frequency to drift or "adjust itself".
         if _scope.scope_span >= 0:
             changes["scope_span"] = _scope.scope_span
         if _scope.scope_mode >= 0:
@@ -184,6 +189,14 @@ async def _on_scope_frame(_scope: ScopeHandler):
         if _scope.scope_start_freq >= 0:
             changes["scope_start_freq"] = _scope.scope_start_freq
         if changes:
+            # DIAGNOSTIC: log every scope-triggered state write to stderr.
+            # vfoa_freq (BCD @64) vs vfoa_freq_bin (binary @132): the binary
+            # one should match the CAT FA; query; the BCD one is the scope's
+            # own center/cursor field and may lag or drift.
+            import sys
+            print(f"[SCOPE->STATE] writing keys={list(changes.keys())} "
+                  f"vfoa_bcd={_scope.vfoa_freq} vfoa_bin={_scope.vfoa_freq_bin}",
+                  file=sys.stderr, flush=True)
             radio.update(**changes)
             await _broadcast_state()
 
@@ -499,6 +512,11 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
     """Execute a set command against the radio."""
     global cat, radio, scheduler
 
+    # DIAGNOSTIC: log every frequency/mode-affecting command
+    if field in ("freq", "vfo_a_freq", "vfo_b_freq", "mode", "band"):
+        import sys as _sys
+        print(f"[WS-SET] field={field} value={value}", file=_sys.stderr, flush=True)
+
     if cat is None or not cat.connected:
         await ws.send_text(json.dumps({
             "type": "error", "message": "Radio not connected",
@@ -510,7 +528,20 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
     scheduler and scheduler.note_user_command()
 
     try:
-        if field == "freq" or field == "vfo_a_freq":
+        if field == "freq":
+            # "freq" targets whichever VFO is currently active on the radio,
+            # so web tuning actually affects the receiving VFO.  (Explicit
+            # vfo_a_freq / vfo_b_freq below force a specific VFO.)
+            freq = int(value)
+            vfo = radio.active_vfo or "A"
+            await cat.set_frequency(freq, vfo)
+            if vfo == "B":
+                radio.update(vfo_b_freq=freq)
+            else:
+                radio.update(vfo_a_freq=freq)
+            scheduler and scheduler.skip_next_poll("if", 1.0)
+
+        elif field == "vfo_a_freq":
             freq = int(value)
             await cat.set_frequency(freq, "A")
             radio.update(vfo_a_freq=freq)
@@ -739,6 +770,45 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
             on = value is True or str(value).lower() in ("true", "1")
             await cat.set_xit(on)
 
+        elif field == "scope_on":
+            on = value is True or str(value).lower() in ("true", "1")
+            await cat.set_scope_on(on)
+            radio.update(scope_on=on)
+            scheduler and scheduler.skip_next_poll("scope_on", 3.0)
+
+        elif field == "antenna":
+            v = int(value)
+            if 1 <= v <= 3:
+                await cat.set_antenna(v)
+                radio.update(antenna=v)
+                scheduler and scheduler.skip_next_poll("antenna", 3.0)
+
+        elif field == "agc":
+            v = int(value)
+            if 0 <= v <= 3:
+                await cat.set_agc(v)
+                radio.update(agc=v)
+                scheduler and scheduler.skip_next_poll("agc", 3.0)
+
+        elif field == "dnr" or field == "dnr_level":
+            v = max(0, min(15, int(value)))
+            await cat.set_dnr(v)
+            radio.update(dnr_level=v)
+            scheduler and scheduler.skip_next_poll("dnr_level", 3.0)
+
+        elif field == "contour" or field == "contour_level":
+            v = max(0, min(255, int(value)))
+            await cat.set_contour(v)
+            radio.update(contour_level=v)
+            scheduler and scheduler.skip_next_poll("contour_level", 5.0)
+
+        elif field == "drive":
+            # Drive maps to RF Power (PC) on FT-710 Yaesu
+            v = max(5, min(100, int(value)))
+            await cat.set_drive(v)
+            radio.update(rf_power=v)
+            scheduler and scheduler.skip_next_poll("rf_power", 3.0)
+
         elif field == "band":
             # Set band by name
             band_name = str(value)
@@ -864,14 +934,23 @@ async def lifespan(app: FastAPI):
     connected = await cat.connect()
     radio.serial_connected = connected
 
+    # DIAGNOSTIC: always print CAT connection status
+    import sys as _sys
+    print(f"\n[STARTUP] CAT connected={connected} poll_will_run={connected} "
+          f"port={SERIAL_PORT}", file=_sys.stderr, flush=True)
+
     if connected:
         await _initial_state_sync()
         await _init_scope_cat()
         scheduler = PollScheduler(cat, radio, on_state_changed=_broadcast_state)
         await scheduler.start()
+        print(f"[STARTUP] PollScheduler started OK", file=_sys.stderr, flush=True)
     else:
         logger.warning("Could not connect to radio. Server will serve UI only.")
         logger.warning("Check serial port: %s", SERIAL_PORT)
+        print(f"[STARTUP] NO CAT — poll scheduler NOT running. "
+              f"Frequency changes can only come from scope or client.",
+              file=_sys.stderr, flush=True)
 
     # ── Audio handler ──────────────────────────────────────────────
     audio = AudioHandler()

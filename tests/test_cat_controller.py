@@ -96,9 +96,11 @@ class CatCommandFormattingTests(unittest.TestCase):
         self.assertEqual(f"SS06{0:02d}", "SS0600")
 
     def test_tuner_command_format(self):
-        self.assertEqual(f"AC{0:03d}", "AC000")
-        self.assertEqual(f"AC{1:03d}", "AC001")
-        self.assertEqual(f"AC{2:03d}", "AC002")
+        # AC P1P2P3: P1=0, P2=type(0=off/1=std/2=ATAS), P3=tuning(0/1)
+        tuner_map = {0: "000", 1: "010", 2: "011"}
+        self.assertEqual(f"AC{tuner_map[0]}", "AC000")   # off/bypass
+        self.assertEqual(f"AC{tuner_map[1]}", "AC010")   # ATU on, not tuning
+        self.assertEqual(f"AC{tuner_map[2]}", "AC011")   # ATU on, tuning
 
     def test_band_stack_command(self):
         cmd = f"BS{2:02d}"  # 20m band

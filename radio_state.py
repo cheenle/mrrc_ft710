@@ -13,6 +13,7 @@ from config import (
     MODE_NUM_TO_NAME, MODE_DISPLAY_NAMES, PREAMP_LABELS, ATTENUATOR_LABELS,
     get_band_for_frequency, get_filter_widths_for_mode, get_filter_hz,
     raw_to_dbm, raw_to_s_unit,
+    raw_to_power, raw_to_swr, raw_to_voltage, raw_to_current,
 )
 
 
@@ -63,10 +64,17 @@ class RadioState:
     break_in: bool = False             # BI;
 
     # ── Scope State ───────────────────────────────────────────────
+    scope_on: bool = True              # SS01; scope display on/off
     scope_span: int = 6                # SS05; 6=100 kHz
     scope_speed: int = 2               # SS00;
     scope_mode: int = 0                # SS06;
     scope_start_freq: int = 0          # Hz, from scope frame metadata when available
+
+    # ── Extended DSP Settings ─────────────────────────────────────
+    antenna: int = 1                   # AN; antenna select 1-3
+    agc: int = 1                       # GT; AGC 0=OFF/1=FAST/2=MED/3=SLOW
+    dnr_level: int = 0                 # DN; DNR level 0(OFF)-15
+    contour_level: int = 0             # CO; Contour level 0-255
 
     # ── Connection State ──────────────────────────────────────────
     serial_connected: bool = False
@@ -111,6 +119,31 @@ class RadioState:
         return raw_to_s_unit(self.s_meter)
 
     @property
+    def power_watts(self) -> float:
+        """TX power in watts (RM5 raw 0-255 -> W via calibration)."""
+        return raw_to_power(self.power_meter)
+
+    @property
+    def swr_ratio(self) -> float:
+        """SWR ratio (RM6 raw 0-255 -> 1.0..9.9 via calibration)."""
+        return raw_to_swr(self.swr_meter)
+
+    @property
+    def vd_volts(self) -> float:
+        """Drain/supply voltage (RM8 raw 0-255 -> V via calibration)."""
+        return raw_to_voltage(self.vd_meter)
+
+    @property
+    def id_amps(self) -> float:
+        """Drain current (RM7 raw 0-255 -> A via calibration)."""
+        return raw_to_current(self.id_meter)
+
+    @property
+    def alc_pct(self) -> float:
+        """ALC deflection as 0-100% (RM4 raw 0-255)."""
+        return max(0.0, min(100.0, self.alc_meter / 255.0 * 100.0))
+
+    @property
     def filter_hz(self) -> Optional[int]:
         """Current filter width in Hz."""
         return get_filter_hz(self.mode_name, self.filter_width)
@@ -140,6 +173,21 @@ class RadioState:
             if old_value != new_value:
                 setattr(self, field, new_value)
                 changed.add(field)
+                # Log frequency / mode changes with stack trace so we can
+                # identify which code path is causing unexpected drifts.
+                if field in ("vfo_a_freq", "vfo_b_freq", "mode"):
+                    import traceback
+                    import logging
+                    _log = logging.getLogger("ft710.state")
+                    _stack = traceback.extract_stack(limit=8)
+                    _caller = " <- ".join(
+                        f"{f.filename.split('/')[-1]}:{f.lineno}/{f.name}"
+                        for f in _stack[:-1]  # exclude this frame
+                    )
+                    _log.warning(
+                        "%s changed: %s → %s [caller: %s]",
+                        field, old_value, new_value, _caller,
+                    )
         if changed:
             self._dirty_fields.update(changed)
             self.last_update = time.time()
@@ -202,10 +250,16 @@ class RadioState:
             "vox": self.vox,
             "break_in": self.break_in,
             # Scope
+            "scope_on": self.scope_on,
             "scope_span": self.scope_span,
             "scope_speed": self.scope_speed,
             "scope_mode": self.scope_mode,
             "scope_start_freq": self.scope_start_freq,
+            # Extended DSP
+            "antenna": self.antenna,
+            "agc": self.agc,
+            "dnr_level": self.dnr_level,
+            "contour_level": self.contour_level,
             # Connection
             "serial_connected": self.serial_connected,
             "last_update": self.last_update,
@@ -221,6 +275,11 @@ class RadioState:
                 "preamp_label": self.preamp_label,
                 "attenuator_label": self.attenuator_label,
                 "is_transmitting": self.is_transmitting,
+                "power_watts": self.power_watts,
+                "swr_ratio": self.swr_ratio,
+                "vd_volts": self.vd_volts,
+                "id_amps": self.id_amps,
+                "alc_pct": self.alc_pct,
             })
         return d
 
@@ -240,6 +299,7 @@ class RadioState:
         _parsers = {
             "vfo_a_freq": lambda r: int(r[2:]) if len(r) > 2 else 0,
             "vfo_b_freq": lambda r: int(r[2:]) if len(r) > 2 else 0,
+            "active_vfo": lambda r: "B" if (r and r.endswith("1")) else "A",
             "mode": lambda r: int(r[3:], 16) if len(r) >= 4 else 1,
             "tx_status": lambda r: int(r[2:]) if len(r) > 2 else 0,
             "s_meter": lambda r: int(r[3:]) if len(r) > 3 else 0,
@@ -251,8 +311,17 @@ class RadioState:
             "noise_blanker": lambda r: r.endswith("1"),
             "noise_reduction": lambda r: r.endswith("1"),
             "auto_notch": lambda r: r.endswith("1"),
-            "tuner_status": lambda r: int(r[2:]) if len(r) > 2 else 0,
+            # AC P1P2P3: "010"→ATU on, "011"→tuning. Map P3==1→tuning(2), P2==1→on(1), else off(0)
+            "tuner_status": lambda r: (
+                2 if len(r) > 4 and r[4] == '1' else
+                1 if len(r) > 3 and r[3] == '1' else 0
+            ) if r and len(r) > 2 else 0,
             "power_on": lambda r: r.endswith("1"),
+            "scope_on": lambda r: int(r[4:]) == 1 if r and len(r) >= 5 else True,
+            "antenna": lambda r: int(r[2:]) if r and len(r) >= 3 else 1,
+            "agc": lambda r: int(r[2:]) if r and len(r) >= 4 else 1,
+            "dnr_level": lambda r: int(r[2:5]) if r and len(r) >= 5 else 0,
+            "contour_level": lambda r: int(r[2:5]) if r and len(r) >= 5 else 0,
         }
 
         for field, raw in sync_data.items():

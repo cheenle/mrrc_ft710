@@ -75,16 +75,31 @@ class CatController:
             await asyncio.sleep(0.5)
             await asyncio.to_thread(self._ser.reset_input_buffer)
 
+            # Mark connected early so send_set_command/query will work.
+            self._connected = True
+
+            # Disable AI (Auto Information) mode FIRST, before any query.
+            # If a previous session left AI1 enabled, the radio streams IF
+            # frames continuously, which makes every query (ID/FA/MD0/SM0)
+            # time out waiting for a matching response.  Sending AI0 stops
+            # the stream so queries work reliably.  We poll actively instead
+            # of relying on AI frames.
+            await self.send_set_command("AI0")
+            # Give the radio a moment to stop streaming and drain any
+            # in-flight IF frames from the input buffer.
+            await asyncio.sleep(0.2)
+            await asyncio.to_thread(self._ser.reset_input_buffer)
+            logger.info("AI (Auto Information) mode disabled")
+
             # Verify the radio responds
             resp = await self.query("ID")
             if resp is not None and "ID" in resp:
-                self._connected = True
                 model_id = resp[2:] if len(resp) >= 6 else resp
                 self._model = model_id
                 logger.info("Connected to FT-710 (ID=%s) on %s", model_id, self.port)
             else:
                 logger.warning("No ID response from radio on %s. Check connection.", self.port)
-                self._connected = True  # Mark connected anyway; UI still works
+                # Stay connected — UI still works, polls will retry.
             return self._connected
         except Exception as e:
             logger.error("Failed to connect to %s: %s", self.port, e)
@@ -118,9 +133,17 @@ class CatController:
             self._ser.flush()
 
         await asyncio.to_thread(_w)
+        # FT-710 CAT processor needs ~20ms between commands (matches Hamlib)
+        await asyncio.sleep(0.02)
 
-    async def _read_until(self, terminator: bytes = b";") -> bytes:
-        """Read bytes from serial port until terminator or timeout."""
+    async def _read_until(self, terminator: bytes = b";",
+                          expected_prefix: str = "") -> bytes:
+        """Read bytes from serial port until a matching response is found.
+
+        If expected_prefix is given, skips any complete messages that don't
+        start with the prefix (e.g. AI frames that arrived before the real
+        response) and continues reading until a match or timeout.
+        """
         if self._ser is None or not self._ser.is_open:
             raise serial.SerialException("Port not open")
 
@@ -133,9 +156,29 @@ class CatController:
                     chunk = self._ser.read(waiting)
                     buf.extend(chunk)
                     if terminator in buf:
-                        # Return everything up to and including the terminator
                         idx = buf.find(terminator)
-                        return bytes(buf[:idx + len(terminator)])
+                        msg = bytes(buf[:idx + len(terminator)])
+
+                        if expected_prefix:
+                            try:
+                                msg_str = msg.decode(
+                                    "ascii", errors="replace").rstrip(";")
+                            except Exception:
+                                msg_str = ""
+                            if not msg_str.startswith(expected_prefix):
+                                # AI frame or stale data — discard and
+                                # keep looking in the remaining bytes.
+                                logger.debug(
+                                    "Skipping unexpected response %r "
+                                    "(expected prefix %r)",
+                                    msg_str[:40], expected_prefix)
+                                buf = bytearray(
+                                    buf[idx + len(terminator):])
+                                # If there is already another complete
+                                # message in buf, process it next iter.
+                                continue
+
+                        return msg
                 # Only sleep if no data was waiting
                 time.sleep(0.01)
             # Timeout — return whatever we have
@@ -150,6 +193,10 @@ class CatController:
 
         All serial I/O is serialized through self._lock.
         Returns the response string (without trailing ';') or None on timeout/error.
+
+        Uses the command as the expected response prefix so that AI
+        (Auto Information) frames arriving ahead of the real response
+        are skipped instead of being mistaken for the answer.
 
         Args:
             cmd: CAT command string WITHOUT trailing ';' (it's appended here).
@@ -166,9 +213,11 @@ class CatController:
                 self._connected = False
                 return None
 
-            # Read response
+            # Read response — skip any AI frames that don't match the
+            # expected command prefix.
             try:
-                response_bytes = await self._read_until(b";")
+                response_bytes = await self._read_until(
+                    b";", expected_prefix=cmd)
                 if response_bytes is None:
                     logger.debug("Command timeout (no data): %s", cmd)
                     return None
@@ -227,6 +276,16 @@ class CatController:
     async def set_frequency(self, freq_hz: int, vfo: str = "A") -> bool:
         prefix = "FA" if vfo.upper() == "A" else "FB"
         return await self.set(f"{prefix}{freq_hz:09d}")
+
+    async def get_active_vfo(self) -> Optional[str]:
+        """Query which VFO is active.  Returns "A" or "B" (or None).
+
+        FT-710 VS; response: "VS0" = VFO-A active, "VS1" = VFO-B active.
+        """
+        resp = await self.query("VS")
+        if resp and len(resp) >= 3:
+            return "B" if resp.endswith("1") else "A"
+        return None
 
     async def get_frequency(self, vfo: str = "A") -> Optional[int]:
         prefix = "FA" if vfo.upper() == "A" else "FB"
@@ -318,10 +377,20 @@ class CatController:
             return None
 
     async def get_meter(self, meter: str) -> Optional[int]:
+        """Read a raw meter value (RM3..RM8).  Returns the raw 0-255 value.
+
+        FT-710 RM response format is 9 chars: "RM" + meter_id + 6 digits,
+        e.g. "RM5150000" for Power raw=150.  The meaningful raw value
+        (0-255, per FT-710.rig Min=0/Max=255) is the FIRST 3 of those 6
+        digits; the trailing 3 digits are zero padding.  (wfview reads
+        Bytes=6 = prefix(3)+value(3) and ignores the extra padding.)
+        Previously this used resp[4:] which dropped the high digit and
+        returned garbage for any value whose top digit was non-zero.
+        """
         resp = await self.query(meter)
-        if resp and len(resp) >= 4:
+        if resp and len(resp) >= 6:
             try:
-                return int(resp[4:])
+                return int(resp[3:6])
             except ValueError:
                 return None
         return None
@@ -369,7 +438,10 @@ class CatController:
         return await self.set(f"PR0{1 if on else 0}")
 
     async def set_tuner(self, value: int) -> bool:
-        return await self.set(f"AC{value:03d}")
+        # AC P1P2P3;  P1=0, P2=type(0=off/1=std/2=ATAS), P3=tuning(0/1)
+        tuner_map = {0: "000", 1: "010", 2: "011"}
+        v = tuner_map.get(value, "000")
+        return await self.set(f"AC{v}")
 
     async def set_vfo(self, vfo: str) -> bool:
         cmd = "VS0" if vfo.upper() == "A" else "VS1"
@@ -389,6 +461,79 @@ class CatController:
 
     async def set_band_stack(self, bsr: int) -> bool:
         return await self.set(f"BS{bsr:02d}")
+
+    async def set_scope_on(self, on: bool) -> bool:
+        """Set scope display on/off (SS01)."""
+        return await self.set(f"SS01{1 if on else 0}")
+
+    async def get_scope_on(self) -> Optional[int]:
+        resp = await self.query("SS01")
+        if resp and len(resp) >= 5:
+            try:
+                return int(resp[4:])
+            except ValueError:
+                return None
+        return None
+
+    async def set_antenna(self, ant: int) -> bool:
+        """Set antenna select 1-3 (AN)."""
+        return await self.set(f"AN{ant}")
+
+    async def get_antenna(self) -> Optional[int]:
+        resp = await self.query("AN")
+        if resp and len(resp) >= 3:
+            try:
+                return int(resp[2:])
+            except ValueError:
+                return None
+        return None
+
+    async def set_agc(self, value: int) -> bool:
+        """Set AGC time constant 0-3 (GT)."""
+        return await self.set(f"GT{value:02d}")
+
+    async def get_agc(self) -> Optional[int]:
+        resp = await self.query("GT")
+        if resp and len(resp) >= 4:
+            try:
+                return int(resp[2:])
+            except ValueError:
+                return None
+        return None
+
+    async def set_dnr(self, value: int) -> bool:
+        """DNR level set is NOT supported on the FT-710.
+
+        The "DN" command is the active-VFO step-DOWN command, not DNR.
+        Sending "DN0XX;" is rejected by the radio (returns "?").  This
+        method is a no-op kept only for API compatibility.
+        """
+        logger.warning("set_dnr ignored: 'DN' is step-down on FT-710, not DNR")
+        return False
+
+    async def get_dnr(self) -> Optional[int]:
+        """DNR level query is NOT supported on the FT-710.
+
+        NEVER send "DN;" to query — it steps the active VFO down ~20 Hz.
+        """
+        return None
+
+    async def set_contour(self, value: int) -> bool:
+        """Set Contour level 0-255 (CO)."""
+        return await self.set(f"CO{value:03d}")
+
+    async def get_contour(self) -> Optional[int]:
+        resp = await self.query("CO")
+        if resp and len(resp) >= 5:
+            try:
+                return int(resp[2:5])
+            except ValueError:
+                return None
+        return None
+
+    async def set_drive(self, value: int) -> bool:
+        """Set drive level — maps to RF Power (PC) on FT-710. 5-100W."""
+        return await self.set_rf_power(value)
 
     # ── Scope/Spectrum Commands ────────────────────────────────────
 
@@ -461,6 +606,7 @@ class CatController:
         queries = [
             ("vfo_a_freq", "FA"),
             ("vfo_b_freq", "FB"),
+            ("active_vfo", "VS"),
             ("mode", "MD0"),
             ("tx_status", "TX"),
             ("s_meter", "SM0"),
@@ -474,6 +620,12 @@ class CatController:
             ("auto_notch", "BC"),
             ("tuner_status", "AC"),
             ("power_on", "PS"),
+            ("scope_on", "SS01"),
+            ("antenna", "AN"),
+            ("agc", "GT"),
+            # "DN" intentionally omitted — on the FT-710 "DN;" is the
+            # active-VFO step-DOWN command, not a DNR query.
+            ("contour_level", "CO"),
         ]
         for field, cmd in queries:
             resp = await self.query(cmd)

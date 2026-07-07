@@ -70,6 +70,7 @@ class ScopeHandler:
         self.spectrum_rx2: list[int] = [0] * WF_SIZE
         self.s_meter: int = 0
         self.vfoa_freq: int = 0
+        self.vfoa_freq_bin: int = 0
         self.vfob_freq: int = 0
         self.mode: int = 0
         self.scope_mode: int = 0
@@ -395,6 +396,7 @@ class ScopeHandler:
             self.scope_span = parsed.scope_span
             self.mode = parsed.mode
             self.vfoa_freq = parsed.vfoa_freq
+            self.vfoa_freq_bin = parsed.vfoa_freq_bin
             self.s_meter = parsed.s_meter
             self.scope_start_freq = parsed.scope_start_freq
 

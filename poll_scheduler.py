@@ -113,6 +113,8 @@ class PollScheduler:
         parse reliably across firmware versions.
         """
         failures = 0
+        _loop_count = 0
+        _last_logged_freq = None
         while self._running:
             try:
                 if await self._polling_paused():
@@ -121,10 +123,29 @@ class PollScheduler:
                 if self.cat.connected:
                     changes = {}
                     if not await self._should_skip("if"):
-                        # Frequency
+                        # Active VFO (VS) — must be queried so the server
+                        # knows which VFO the radio is actually receiving on.
+                        active = await self.cat.get_active_vfo()
+                        if active is not None:
+                            changes["active_vfo"] = active
+                        # VFO-A frequency
                         freq = await self.cat.get_frequency("A")
                         if freq is not None and 30000 <= freq <= 75000000:
                             changes["vfo_a_freq"] = freq
+                            # Log every ~10 s (100 iterations) or on any change
+                            if (freq != _last_logged_freq
+                                    or _loop_count % 100 == 0):
+                                _delta = ""
+                                if _last_logged_freq is not None:
+                                    _delta = f" ({freq - _last_logged_freq:+d} Hz)"
+                                logger.info(
+                                    "IF poll: vfo_a=%d Hz active=%s%s (loop=%d)",
+                                    freq, active or "?", _delta, _loop_count)
+                                _last_logged_freq = freq
+                        # VFO-B frequency (the radio may be listening on B)
+                        freq_b = await self.cat.get_frequency("B")
+                        if freq_b is not None and 30000 <= freq_b <= 75000000:
+                            changes["vfo_b_freq"] = freq_b
                         # Mode
                         mode = await self.cat.get_mode()
                         if mode is not None:
@@ -153,6 +174,7 @@ class PollScheduler:
                 if self._on_state_changed:
                     await self._on_state_changed()
 
+            _loop_count += 1
             await asyncio.sleep(POLL_IF_INTERVAL)
 
     # ── Tier 2B: TX status ────────────────────────────────────────
@@ -237,7 +259,19 @@ class PollScheduler:
             ("noise_blanker", "NB0", lambda r: r.endswith("1") if r else False),
             ("noise_reduction", "NR0", lambda r: r.endswith("1") if r else False),
             ("auto_notch", "BC", lambda r: r.endswith("1") if r else False),
-            ("tuner_status", "AC", lambda r: int(r[2:]) if len(r) > 2 else None),
+            # AC returns P1P2P3 (e.g. "010"=ATU on). Map to state: 0=off, 1=on, 2=tuning
+            ("tuner_status", "AC", lambda r: (
+                2 if len(r) > 4 and r[4] == '1' else  # P3==1 → tuning
+                1 if len(r) > 3 and r[3] == '1' else  # P2==1 → on
+                0  # P2==0 → off
+            ) if r and len(r) > 2 else None),
+            ("scope_on", "SS01", lambda r: int(r[4:]) == 1 if r and len(r) >= 5 else None),
+            ("antenna", "AN", lambda r: int(r[2:]) if r and len(r) >= 3 else None),
+            ("agc", "GT", lambda r: int(r[2:]) if r and len(r) >= 4 else None),
+            # DO NOT poll "DN" — on the FT-710, "DN;" is NOT a DNR query;
+            # it is the "step active VFO DOWN one tuning step" command (~20 Hz).
+            # Polling it every 2 s was slowly walking the active VFO frequency
+            # downward.  DNR level is not polled (the DN command is unsafe).
         ]
 
         while self._running:
@@ -291,6 +325,15 @@ class PollScheduler:
                         resp = await self.cat.query("PR")
                         if resp and isinstance(resp, str):
                             changes["compressor"] = resp.endswith("1")
+                    if not await self._should_skip("contour_level"):
+                        resp = await self.cat.query("CO")
+                        if resp and len(resp) >= 5:
+                            try:
+                                v = int(resp[2:5])
+                                if v is not None:
+                                    changes["contour_level"] = v
+                            except ValueError:
+                                pass
                     if changes:
                         changed = self.state.update(**changes)
                         if changed and self._on_state_changed:

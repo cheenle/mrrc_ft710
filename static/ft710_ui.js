@@ -124,31 +124,35 @@ function renderSMeter() {
 
 // ── Meter Rendering ─────────────────────────────────────────────────
 function renderMeters() {
-    // Power meter (0-255 raw maps approx)
-    const pwrPct = radioState.power_meter / 255 * 100;
-    setMeter('meter-pwr-bar', 'meter-pwr-val', pwrPct, radioState.power_meter);
+    // Power meter — watts (calibrated in backend from RM5 raw 0-255).
+    // FT-710 is a 100W radio (110W max on the scale).
+    const pwrW = radioState.power_watts || 0;
+    const pwrPct = Math.min(100, pwrW / 110 * 100);
+    setMeterBar('meter-pwr-bar', pwrPct);
+    setText('meter-pwr-val', pwrW.toFixed(1));
 
-    // ALC meter
-    const alcPct = radioState.alc_meter / 255 * 100;
-    setMeter('meter-alc-bar', 'meter-alc-val', alcPct, radioState.alc_meter);
+    // ALC meter — 0-100% deflection (RM4 raw 0-255).
+    const alcPct = radioState.alc_pct || 0;
+    setMeterBar('meter-alc-bar', alcPct);
+    setText('meter-alc-val', alcPct.toFixed(0));
 
-    // SWR meter (1.0-5.0 range roughly from 0-255)
-    const swrVal = radioState.swr_meter > 0 ? (1 + (radioState.swr_meter / 255) * 4).toFixed(1) : '1.0';
-    const swrPct = radioState.swr_meter / 255 * 100;
+    // SWR meter — ratio 1.0..9.9 (calibrated in backend from RM6 raw).
+    const swrVal = radioState.swr_ratio || 1.0;
+    const swrPct = Math.min(100, (swrVal - 1) / 4 * 100);  // 1.0->0%, 5.0->100%
     setMeterBar('meter-swr-bar', swrPct);
-    setText('meter-swr-val', swrVal);
+    setText('meter-swr-val', swrVal.toFixed(1));
 
-    // Id (drain current) — 0-255 raw maps to 0-26A from FT-710.rig
-    const idVal = radioState.id_meter > 0 ? (radioState.id_meter / 255 * 26).toFixed(1) : '0';
-    const idPct = radioState.id_meter / 255 * 100;
+    // Id (drain current) — amps (calibrated from RM7 raw).
+    const idA = radioState.id_amps || 0;
+    const idPct = Math.min(100, idA / 26 * 100);
     setMeterBar('meter-id-bar', idPct);
-    setText('meter-id-val', idVal);
+    setText('meter-id-val', idA.toFixed(1));
 
-    // Vd (drain voltage) — 0-255 raw maps to 0-15V
-    const vdVal = radioState.vd_meter > 0 ? (radioState.vd_meter / 255 * 15).toFixed(1) : '0';
-    const vdPct = radioState.vd_meter / 255 * 100;
+    // Vd (drain/supply voltage) — volts (calibrated from RM8 raw).
+    const vdV = radioState.vd_volts || 0;
+    const vdPct = Math.min(100, vdV / 16 * 100);
     setMeterBar('meter-vd-bar', vdPct);
-    setText('meter-vd-val', vdVal);
+    setText('meter-vd-val', vdV.toFixed(1));
 }
 
 function setMeter(barId, valId, pct, raw) {

@@ -204,6 +204,62 @@ def raw_to_s_unit(raw: int) -> str:
 ATTENUATOR_LABELS: dict[int, str] = {0: "OFF", 1: "6dB", 2: "12dB", 3: "18dB"}
 PREAMP_LABELS: dict[int, str] = {0: "OFF", 1: "AMP1", 2: "AMP2"}
 
+
+# ── TX Meter Calibration (from FT-710.rig Meters section) ───────────
+# Raw 0-255 values returned by RM3..RM8 map non-linearly to actual
+# engineering units.  These tables are piecewise-linear interpolations
+# of the rig file's calibration points.
+POWER_CAL: list[tuple[int, float]] = [        # RM5 -> watts
+    (0, 0.0), (27, 0.0), (94, 25.0), (147, 50.0),
+    (176, 75.0), (205, 100.0), (255, 110.0),
+]
+SWR_CAL: list[tuple[int, float]] = [          # RM6 -> SWR ratio
+    (0, 1.0), (26, 1.2), (52, 1.5), (89, 2.0),
+    (126, 3.0), (173, 4.0), (236, 5.0), (255, 9.9),
+]
+VOLTAGE_CAL: list[tuple[int, float]] = [      # RM8 -> volts (13.8V rail)
+    (0, 0.0), (192, 13.8), (255, 15.0),
+]
+CURRENT_CAL: list[tuple[int, float]] = [      # RM7 -> amps
+    (0, 0.0), (53, 5.0), (65, 6.0), (78, 7.0),
+    (86, 8.0), (98, 9.0), (107, 10.0), (255, 26.0),
+]
+
+
+def _interp(raw: int, table: list[tuple[int, float]]) -> float:
+    """Piecewise-linear interpolation over a (raw, value) calibration table."""
+    if raw <= table[0][0]:
+        return table[0][1]
+    if raw >= table[-1][0]:
+        return table[-1][1]
+    for i in range(len(table) - 1):
+        r1, v1 = table[i]
+        r2, v2 = table[i + 1]
+        if r1 <= raw <= r2:
+            frac = (raw - r1) / (r2 - r1)
+            return v1 + frac * (v2 - v1)
+    return table[-1][1]
+
+
+def raw_to_power(raw: int) -> float:
+    """RM5 raw 0-255 -> watts (FT-710, 100W radio)."""
+    return _interp(raw, POWER_CAL)
+
+
+def raw_to_swr(raw: int) -> float:
+    """RM6 raw 0-255 -> SWR ratio (1.0 .. ~9.9)."""
+    return _interp(raw, SWR_CAL)
+
+
+def raw_to_voltage(raw: int) -> float:
+    """RM8 raw 0-255 -> drain/supply volts."""
+    return _interp(raw, VOLTAGE_CAL)
+
+
+def raw_to_current(raw: int) -> float:
+    """RM7 raw 0-255 -> drain current amps."""
+    return _interp(raw, CURRENT_CAL)
+
 # ── Polling Intervals (seconds) ──────────────────────────────────────
 POLL_IF_INTERVAL = 0.1          # Tier 1: freq+mode+S-meter via IF;
 POLL_TX_STATUS_INTERVAL = 0.5   # Tier 2B: PTT status
