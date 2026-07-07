@@ -1,5 +1,5 @@
 // FT-710 Service Worker — basic offline cache
-const CACHE = 'ft710-v4';
+const CACHE = 'ft710-v5';
 const ASSETS = [
     '/',
     '/index.html',

@@ -970,55 +970,93 @@ window.TXDebug = {
 })();
 
 // ── Screen Wake Lock + Fullscreen (mobile keep-foreground) ────────────
-// Wake Lock holds the screen on while the page is visible, preventing the
-// auto-lock that would interrupt a remote-control session. Fullscreen hides
-// browser chrome for a dedicated control surface. Both need a secure context
-// (HTTPS) and a user gesture; both degrade gracefully where the platform
-// doesn't support them (notably iOS Safari's non-video fullscreen).
+// Wake Lock API (primary) + silent-audio loop (fallback for iOS Safari /
+// older Android) keeps the screen on while the page is visible. Fullscreen
+// hides browser chrome. Both need a secure context (HTTPS) and a user
+// gesture; the operator must explicitly tap the ☀ / ⛶ buttons.
 
 var WakeLockMgr = (function () {
-    var sentinel = null;     // active WakeLockSentinel, or null
-    var requested = false;   // user wants wake-lock on
+    var sentinel = null;       // WakeLockSentinel (null = not acquired)
+    var requested = false;     // user wants wake-lock active
+    var audioEl = null;        // silent <audio> fallback element
     var btn = null;
 
-    function available() { return 'wakeLock' in navigator; }
+    // ── helpers ──────────────────────────────────────────────
 
-    function setBtn(active) {
+    function wakeLockAvailable() { return 'wakeLock' in navigator; }
+    function supported() { return wakeLockAvailable() || true; }  // audio fallback always works
+
+    function setBtn(active, unsupported) {
         if (!btn) return;
-        btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+        btn.setAttribute('aria-pressed', String(active));
         btn.classList.toggle('active', active);
-        btn.title = active ? '屏幕常亮中（点击关闭）' : '保持屏幕常亮';
+        if (unsupported) {
+            btn.title = '防锁屏（当前浏览器不支持 Wake Lock，使用音频保活）';
+            btn.style.opacity = '0.55';
+        } else {
+            btn.title = active ? '屏幕常亮中（点击关闭）' : '保持屏幕常亮';
+            btn.style.opacity = '';
+        }
     }
 
-    async function acquire() {
-        if (!available()) return false;
+    // ── fallback: silent audio loop ─────────────────────────
+    // Keeps iOS Safari and older Chrome from sleeping by holding an active
+    // audio session. The WAV data URI is 44 bytes of PCM silence at 8 kHz
+    // mono — zero CPU cost and no audible output (volume=0).
+    // Must be called from a user-gesture handler (click/touchstart).
+    function startAudioFallback() {
+        if (audioEl) return true;
         try {
-            sentinel = await navigator.wakeLock.request('screen');
-            sentinel.addEventListener('release', function () {
-                sentinel = null;
-                // Auto-released (tab switch / screen lock). Re-acquire if the
-                // user still wants it and the page is back in front.
-                if (requested && document.visibilityState === 'visible') {
-                    setTimeout(acquire, 200);
-                } else {
-                    setBtn(false);
-                }
-            });
+            audioEl = new Audio(
+                'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');
+            audioEl.loop = true;
+            audioEl.volume = 0;
+            audioEl.play().catch(function () {});  // ignore AbortError / NotAllowed
             return true;
         } catch (e) {
-            // AbortError is normal (user gesture / visibility); others are real.
-            console.warn('wakeLock.request failed:', e && e.name);
             return false;
         }
     }
 
+    function stopAudioFallback() {
+        if (!audioEl) return;
+        try { audioEl.pause(); audioEl.removeAttribute('src'); audioEl.load(); } catch (e) {}
+        audioEl = null;
+    }
+
+    // ── acquire / release ───────────────────────────────────
+
+    async function acquire() {
+        // Primary: Wake Lock API (Chrome, Edge, Safari≥16.4 PWA).
+        if (wakeLockAvailable()) {
+            try {
+                sentinel = await navigator.wakeLock.request('screen');
+                sentinel.addEventListener('release', function () {
+                    sentinel = null;
+                    if (requested && document.visibilityState === 'visible') {
+                        setTimeout(acquire, 500);
+                    } else if (requested) {
+                        setBtn(true, false);
+                    } else {
+                        setBtn(false, false);
+                    }
+                });
+                return true;   // acquired
+            } catch (e) {
+                console.warn('Wake Lock request failed, trying audio fallback:', e && e.name);
+            }
+        }
+        // Fallback: silent audio loop.
+        return startAudioFallback();
+    }
+
+    // ── public API ──────────────────────────────────────────
+
     async function enable() {
         requested = true;
         var ok = await acquire();
-        setBtn(ok);
-        if (!available()) {
-            console.warn('Wake Lock API unavailable; screen may still auto-lock.');
-        }
+        setBtn(ok, !wakeLockAvailable());
+        if (!ok) console.warn('Wake lock: all methods failed.');
     }
 
     function disable() {
@@ -1027,23 +1065,33 @@ var WakeLockMgr = (function () {
             try { sentinel.release(); } catch (e) {}
             sentinel = null;
         }
-        setBtn(false);
+        stopAudioFallback();
+        setBtn(false, false);
     }
 
-    function toggle() { requested ? disable() : enable(); }
+    async function toggle() {
+        if (requested) { disable(); } else { await enable(); }
+    }
 
     function init() {
         btn = document.getElementById('btn-wakelock');
-        if (btn) btn.addEventListener('click', toggle);
-        // Wake lock is auto-released while hidden; re-acquire on return.
+        if (!btn) return;
+        // Use pointerdown/touchstart for 0-latency feel on mobile; click as
+        // the reliable fallback. Only fire once per gesture.
+        btn.addEventListener('click', toggle);
+        btn.addEventListener('touchstart', function (e) {
+            // Let the button's click handler run; this just makes it snappy.
+        }, { passive: true });
+        // Re-acquire when the page returns to foreground after a tab switch
+        // (Wake Lock is auto-released while hidden).
         document.addEventListener('visibilitychange', function () {
             if (requested && document.visibilityState === 'visible' && !sentinel) {
-                acquire().then(setBtn);
+                acquire().then(function (ok) { setBtn(ok, !wakeLockAvailable()); });
             }
         });
     }
 
-    return { init: init, enable: enable, disable: disable, toggle: toggle };
+    return { init: init, enable: enable, disable: disable, toggle: toggle, requested: function(){return requested;} };
 })();
 
 var FullscreenMgr = (function () {
@@ -1094,14 +1142,5 @@ var FullscreenMgr = (function () {
 document.addEventListener('DOMContentLoaded', function () {
     WakeLockMgr.init();
     FullscreenMgr.init();
-    // Wake Lock requires a user gesture, so auto-enable on the first
-    // interaction (the operator's first tap is usually the connect button).
-    function firstGesture() {
-        WakeLockMgr.enable();
-        document.removeEventListener('pointerdown', firstGesture);
-        document.removeEventListener('keydown', firstGesture);
-    }
-    document.addEventListener('pointerdown', firstGesture);
-    document.addEventListener('keydown', firstGesture);
 });
 
