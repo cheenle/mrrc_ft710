@@ -14,7 +14,7 @@ from typing import Optional, Callable, Awaitable
 from cat_controller import CatController
 from radio_state import RadioState
 from config import (
-    POLL_IF_INTERVAL, POLL_TX_STATUS_INTERVAL, POLL_TX_METERS_INTERVAL,
+    POLL_IF_INTERVAL, POLL_VFO_INTERVAL, POLL_TX_STATUS_INTERVAL, POLL_TX_METERS_INTERVAL,
     POLL_SETTINGS_INTERVAL, POLL_SLOW_INTERVAL,
 )
 
@@ -49,6 +49,7 @@ class PollScheduler:
         self._running = True
         self._tasks = [
             asyncio.create_task(self._poll_if(), name="poll_if"),
+            asyncio.create_task(self._poll_vfo(), name="poll_vfo"),
             asyncio.create_task(self._poll_tx_status(), name="poll_tx"),
             asyncio.create_task(self._poll_tx_meters(), name="poll_tx_meters"),
             asyncio.create_task(self._poll_settings(), name="poll_settings"),
@@ -123,43 +124,30 @@ class PollScheduler:
                 if self.cat.connected:
                     changes = {}
                     if not await self._should_skip("if"):
-                        # Each query releases the serial lock briefly, but
-                        # without an inter-query pause check a user command
-                        # (e.g. PTT) can stall behind the whole 5-query
-                        # cycle (~200 ms).  Re-checking _polling_paused()
-                        # before every query lets PTT preempt the cycle
-                        # after the in-flight query (~50 ms) instead.
-                        # Active VFO (VS) — which VFO the radio receives on.
-                        active = await self.cat.get_active_vfo()
-                        if active is not None:
-                            changes["active_vfo"] = active
+                        # 3 queries only (FA/MD0/SM0) to keep this cycle
+                        # short (~120 ms) so PTT/sets aren't blocked on the
+                        # serial lock.  VS (active VFO) and FB (VFO-B freq)
+                        # change rarely and are polled at 0.5 s in _poll_vfo.
+                        # Inter-query pause checks let a user command preempt
+                        # after the in-flight query (~40 ms).
                         if not await self._polling_paused():
-                            # VFO-A frequency
                             freq = await self.cat.get_frequency("A")
                             if freq is not None and 30000 <= freq <= 75000000:
                                 changes["vfo_a_freq"] = freq
-                                # Log every ~10 s (100 iterations) or on change
                                 if (freq != _last_logged_freq
                                         or _loop_count % 100 == 0):
                                     _delta = ""
                                     if _last_logged_freq is not None:
                                         _delta = f" ({freq - _last_logged_freq:+d} Hz)"
                                     logger.info(
-                                        "IF poll: vfo_a=%d Hz active=%s%s (loop=%d)",
-                                        freq, active or "?", _delta, _loop_count)
+                                        "IF poll: vfo_a=%d Hz%s (loop=%d)",
+                                        freq, _delta, _loop_count)
                                     _last_logged_freq = freq
                         if not await self._polling_paused():
-                            # VFO-B frequency (the radio may be listening on B)
-                            freq_b = await self.cat.get_frequency("B")
-                            if freq_b is not None and 30000 <= freq_b <= 75000000:
-                                changes["vfo_b_freq"] = freq_b
-                        if not await self._polling_paused():
-                            # Mode
                             mode = await self.cat.get_mode()
                             if mode is not None:
                                 changes["mode"] = mode
                         if not await self._polling_paused():
-                            # S-meter
                             sm = await self.cat.get_s_meter()
                             if sm is not None:
                                 changes["s_meter"] = sm
@@ -185,6 +173,39 @@ class PollScheduler:
 
             _loop_count += 1
             await asyncio.sleep(POLL_IF_INTERVAL)
+
+    # ── Tier 1b: Active VFO + VFO-B freq (medium cadence) ──────────
+
+    async def _poll_vfo(self):
+        """Poll VS (active VFO) and FB (VFO-B freq) at medium cadence.
+
+        These change rarely (only on user VFO switch / VFO-B tuning) so
+        they don't need the 0.1 s fast-poll cadence — keeping them out
+        of _poll_if shortens the fast cycle and keeps PTT/sets snappy.
+        """
+        while self._running:
+            try:
+                if await self._polling_paused():
+                    await asyncio.sleep(0.05)
+                    continue
+                if self.cat.connected and not await self._should_skip("vfo"):
+                    changes = {}
+                    active = await self.cat.get_active_vfo()
+                    if active is not None:
+                        changes["active_vfo"] = active
+                    if not await self._polling_paused():
+                        freq_b = await self.cat.get_frequency("B")
+                        if freq_b is not None and 30000 <= freq_b <= 75000000:
+                            changes["vfo_b_freq"] = freq_b
+                    if changes:
+                        changed = self.state.update(**changes)
+                        if changed and self._on_state_changed:
+                            await self._on_state_changed()
+            except asyncio.CancelledError:
+                return
+            except Exception as e:
+                logger.debug("VFO poll error: %s", e)
+            await asyncio.sleep(POLL_VFO_INTERVAL)
 
     # ── Tier 2B: TX status ────────────────────────────────────────
 

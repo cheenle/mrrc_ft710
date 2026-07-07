@@ -489,6 +489,10 @@ async def _handle_ws_message(ws: WebSocket, msg_str: str):
                 }))
 
     elif msg_type == "set":
+        if field == "ptt":
+            import time as _time
+            logger.info("[PTT-ARRIVE] ws msg field=ptt value=%s t=%.3f",
+                        value, _time.monotonic())
         await _execute_set_command(field, value, ws)
 
     elif msg_type == "memLoadAll":
@@ -571,7 +575,11 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                 # starts immediately; open the audio output stream in the
                 # background so pa.open() latency (~100 ms) doesn't delay
                 # the keyup.
+                import time as _time
+                _t0 = _time.monotonic()
                 await cat.set_ptt(True)
+                _t1 = _time.monotonic()
+                logger.info("[PTT-PRESS] set_ptt lock+write = %.0f ms", (_t1 - _t0) * 1000)
                 radio.update(tx_status=1)
                 if audio:
                     # Open the TX audio stream in the background so pa.open()
@@ -587,17 +595,11 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                 # event loop — the blocking drain can take up to TX_DRAIN_MS.
                 if audio:
                     await asyncio.to_thread(audio.stop_tx, True)
-                # Drop PTT immediately after the drain.
+                # Drop PTT immediately after the drain.  No verify loop:
+                # the radio obeys TX0 on the first write, and the TX-status
+                # poll (plus the client PTT watchdog) catches a stuck keyup.
+                # The previous 3×200 ms verify loop added ~600 ms to release.
                 await cat.set_ptt(False)
-                # Lightweight verify: the radio obeys TX0; almost always
-                # released on the first check.  Short retries (was 3×200 ms)
-                # keep release snappy while still catching a stuck keyup.
-                for _ in range(3):
-                    await asyncio.sleep(0.05)
-                    ptt = await cat.get_ptt()
-                    if ptt == 0:
-                        break
-                    await cat.set_ptt(False)
                 radio.update(tx_status=0, power_meter=0, alc_meter=0,
                              swr_meter=0, comp_meter=0)
             scheduler and scheduler.skip_next_poll("tx_status", 1.0)

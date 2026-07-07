@@ -262,6 +262,7 @@ def raw_to_current(raw: int) -> float:
 
 # ── Polling Intervals (seconds) ──────────────────────────────────────
 POLL_IF_INTERVAL = 0.1          # Tier 1: freq+mode+S-meter via IF;
+POLL_VFO_INTERVAL = 0.5         # Tier 1b: active VFO (VS) + VFO-B freq
 POLL_TX_STATUS_INTERVAL = 0.5   # Tier 2B: PTT status
 POLL_TX_METERS_INTERVAL = 0.5   # Tier 2A: ALC/Power/SWR (TX only)
 POLL_SETTINGS_INTERVAL = 2.0    # Tier 3: filter, gains, preamp, att, NR, NB, AN, tuner
