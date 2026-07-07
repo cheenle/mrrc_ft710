@@ -86,13 +86,21 @@ FT-710 USB Audio → PyAudio capture (48kHz Int16) → Opus encode (64kbps)
 **TX Audio:**
 ```
 Microphone → getUserMedia (48kHz) → ScriptProcessor (512buf, ~10.7ms)
-  → Float32→Int16 → Opus Worker encode (48kHz, 960-sample frames, 28kbps CBR)
+  → Float32→Int16 → Opus Worker encode (48kHz, 960-sample frames, 64kbps CBR)
     → /WSaudioTX tagged frames (1B tag 0x01 + Opus packet)
       → Server TxOpusDecoder (48kHz) → Int16 PCM (960 samples/20ms)
-        → PyAudio playback (48kHz, mono) → FT-710 USB Audio Input
+        → Resample 48k→44.1k (linear interp, 160:147 exact ratio, phase-continuous)
+          → _tx_queue (jitter buffer: 60ms pre-buffer, 400ms hard cap)
+            → PyAudio playback (44.1kHz, mono) → FT-710 USB Audio Input
 ```
 
-TX chain runs entirely at 48 kHz — browser capture, Opus encode/decode, and PyAudio playback all match. This avoids the sample-rate mismatch that caused crackling at v1.0.
+TX chain resamples from Opus 48kHz to the FT-710's native 44.1kHz USB audio rate using linear interpolation at an exact 160:147 ratio — frame boundaries stay phase-continuous so no periodic clicks.
+
+**TX audio stability (v1.1):**
+- **Jitter buffer**: Pre-buffers 60ms before first DAC write to absorb WebSocket jitter; hard cap at 400ms with oldest-first drop bounds latency under Wi-Fi stalls.
+- **Graceful PTT release**: On PTT off, queued audio is written to the device buffer and `Pa_StopStream` blocks until the DAC finishes playing — word-endings survive before RF drops. Previous versions chopped the tail because `set_ptt(False)` fired before the buffer drained.
+- **Dual write-lock**: `_tx_write_lock` serializes the periodic drain-loop and the graceful stop so only one thread writes the PortAudio stream at a time (PortAudio blocking I/O is not thread-safe per stream).
+- **Single-owner TX**: Only the first connected `/WSaudioTX` client's audio reaches the radio; subsequent clients' frames are ignored until the owner disconnects.
 
 Opus falls back to Int16 PCM when libopus is unavailable (server or browser).
 
@@ -151,8 +159,10 @@ FT710/
 | VFO | A/B toggle, A=B copy, Split toggle |
 | Filter | Cycle through 23 voice or 21 narrow filter widths (mode-aware) |
 | ATT / PRE | Cycle: OFF→6dB→12dB→18dB / OFF→AMP1→AMP2 |
-| PTT | Touch-and-hold TX, release RX; triple TX0 verify; dead-man switch |
+| PTT | Touch-and-hold TX, release RX; triple TX0 verify; dead-man switch; graceful audio drain before RF drop |
 | TUNE | Toggle button for antenna tuner activation |
+| Wake Lock | ☀ toggle: screen stays on during operation (Wake Lock API + video/audio fallback for iOS) |
+| Fullscreen | ⛶ toggle: hides browser chrome for a dedicated control surface |
 | NR / NB / AN | Independent toggle switches |
 | Compressor / ATU | Toggle switches |
 | RF Power | Slider 5–100W |
@@ -174,9 +184,9 @@ FT710/
 | Feature | Implementation |
 |---------|---------------|
 | RX Audio | PyAudio capture → Opus 64kbps → AudioWorklet playback |
-| TX Audio | Browser mic (48kHz) → Opus 28kbps CBR → server TxOpusDecoder → PyAudio 48kHz → radio |
-| Codec | Tagged dual-codec: Opus (28kbps CBR TX, 64kbps RX) with Int16 PCM fallback |
-| Bandwidth | Opus ~28-64kbps (12-27× smaller than 768kbps PCM) |
+| TX Audio | Browser mic (48kHz) → Opus 64kbps CBR → server TxOpusDecoder → resample 48→44.1k → PyAudio 44.1kHz → radio. Jitter buffer (60ms pre-buffer / 400ms cap) + graceful PTT drain (Pa_StopStream blocks until DAC finishes) |
+| Codec | Tagged dual-codec: Opus (64kbps CBR TX, 64kbps RX) with Int16 PCM fallback |
+| Bandwidth | Opus ~64kbps (12× smaller than 768kbps PCM) |
 
 ## Polling Strategy
 
@@ -185,8 +195,8 @@ FT710/
 | Tier | Rate | Commands | Fields |
 |------|------|----------|--------|
 | 1 | 100ms | `FA;` `MD0;` `SM0;` | VFO freq, mode, S-meter |
-| 2A | 500ms (TX only) | `RM4;` `RM5;` `RM6;` | ALC, Power, SWR |
-| 2B | 500ms | `TX;` | PTT status |
+| 2A | 500ms (TX only) | `RM4;` `RM5;` `RM6;` | ALC, Power, SWR (zeroed on RX transition) |
+| 2B | 500ms | `TX;` | PTT status (also triggers TX-meter zero-reset on TX→RX transition) |
 | 3 | 2s | `SH0;` `AG;` `PC;` `PA0;` `RA0;` `NB0;` `NR0;` `BC;` `AC;` | Filter, gains, preamp, att, NR, NB, AN, tuner |
 | 4 | 5s | `RM7;` `RM8;` `PR;` | Drain current, voltage, compressor |
 

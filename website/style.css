@@ -1,0 +1,122 @@
+/* ── Reset & Base ─────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; font-size: 16px; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans SC", sans-serif;
+    background: #121212; color: #e0d8c8; line-height: 1.7;
+}
+a { color: #f0a030; text-decoration: none; }
+a:hover { color: #ffbb44; }
+img { max-width: 100%; display: block; }
+.container { max-width: 1024px; margin: 0 auto; padding: 0 24px; }
+h2 { font-size: 2rem; font-weight: 700; margin-bottom: 1.5rem; color: #f0a030; }
+h3 { font-size: 1.15rem; font-weight: 700; margin-bottom: 0.5rem; color: #e8dcc0; }
+
+/* ── Navbar ───────────────────────────────────────────────────────── */
+.navbar {
+    background: rgba(18,18,18,0.92);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid #2a2a2a;
+    position: sticky; top: 0; z-index: 100;
+}
+.nav-row { display: flex; align-items: center; justify-content: space-between; height: 56px; }
+.logo { font-size: 1.2rem; font-weight: 700; color: #f0a030; }
+.navbar nav { display: flex; gap: 20px; align-items: center; }
+.navbar nav a { font-size: 0.9rem; color: #b0a090; }
+.navbar nav a:hover { color: #f0a030; }
+.btn-ghost { padding: 6px 16px; border: 1px solid #f0a030; border-radius: 6px; color: #f0a030 !important; }
+.btn-ghost:hover { background: #f0a030; color: #121212 !important; }
+
+/* ── Hero ─────────────────────────────────────────────────────────── */
+.hero { padding: 100px 0 80px; text-align: center; }
+.hero h1 { font-size: 2.6rem; line-height: 1.3; font-weight: 800; margin-bottom: 1rem; color: #fff; }
+.subtitle { font-size: 1.15rem; color: #a09080; max-width: 600px; margin: 0 auto 2rem; }
+.hero-actions { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+.btn-primary {
+    padding: 14px 32px; background: #f0a030; color: #121212;
+    border-radius: 8px; font-weight: 700; font-size: 1rem;
+    display: inline-block; transition: background 0.2s;
+}
+.btn-primary:hover { background: #ffbb44; color: #121212; }
+.btn-secondary {
+    padding: 14px 32px; border: 1px solid #555;
+    border-radius: 8px; font-weight: 700; font-size: 1rem;
+    display: inline-block; color: #c0b090; transition: border-color 0.2s;
+}
+.btn-secondary:hover { border-color: #f0a030; color: #f0a030; }
+
+/* ── Features ─────────────────────────────────────────────────────── */
+.features { padding: 80px 0; background: #1a1a1a; }
+.feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; }
+.card {
+    background: #222; border: 1px solid #333; border-radius: 12px; padding: 28px 24px;
+    transition: border-color 0.2s, transform 0.2s;
+}
+.card:hover { border-color: #f0a03044; transform: translateY(-2px); }
+.card-icon { font-size: 2rem; margin-bottom: 12px; }
+.card p { font-size: 0.92rem; color: #a09080; line-height: 1.6; }
+
+/* ── Tech Highlights ──────────────────────────────────────────────── */
+.tech-highlights { padding: 80px 0; }
+.highlight-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 20px; text-align: center; }
+.highlight { padding: 24px 16px; background: #1a1a1a; border-radius: 10px; border: 1px solid #2a2a2a; }
+.highlight-num { display: block; font-size: 2.4rem; font-weight: 800; color: #f0a030; line-height: 1.2; }
+.highlight-label { display: block; font-size: 0.85rem; font-weight: 600; color: #c0b090; margin: 4px 0; }
+.highlight-desc { display: block; font-size: 0.78rem; color: #706860; }
+
+/* ── Architecture ─────────────────────────────────────────────────── */
+.architecture { padding: 80px 0; background: #1a1a1a; }
+.arch-diagram {
+    background: #111; border: 1px solid #333; border-radius: 10px;
+    padding: 32px 28px; overflow-x: auto; margin-bottom: 1.5rem;
+}
+.arch-diagram pre {
+    font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+    font-size: 0.9rem; color: #b0a090; line-height: 1.8; white-space: pre;
+}
+.arch-diagram pre strong { color: #f0a030; }
+.arch-note { font-size: 0.9rem; color: #706860; text-align: center; max-width: 650px; margin: 0 auto; }
+
+/* ── Quickstart ───────────────────────────────────────────────────── */
+.quickstart { padding: 80px 0; }
+.code-block {
+    background: #111; border: 1px solid #333; border-radius: 10px;
+    padding: 24px 28px; overflow-x: auto; margin-bottom: 2rem;
+}
+.code-block pre { margin: 0; }
+.code-block code {
+    font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+    font-size: 0.85rem; color: #c0c0a0; line-height: 1.9;
+}
+.code-block code .c { color: #5a7a5a; }
+.env-table-wrap { overflow-x: auto; margin-bottom: 1.5rem; }
+table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid #2a2a2a; }
+th { color: #f0a030; font-weight: 600; }
+td code { background: #232323; padding: 2px 6px; border-radius: 3px; font-size: 0.85rem; color: #d0c080; }
+.qs-note { font-size: 0.9rem; color: #706860; }
+
+/* ── Safety ───────────────────────────────────────────────────────── */
+.safety { padding: 80px 0; background: #1a1a1a; }
+.safety ol { padding-left: 20px; color: #a09080; line-height: 1.9; font-size: 0.95rem; }
+.safety ol li { margin-bottom: 8px; }
+.safety ol li strong { color: #e8dcc0; }
+.safety ol li code { background: #232323; padding: 1px 5px; border-radius: 3px; font-size: 0.9rem; color: #d0c080; }
+
+/* ── Footer ───────────────────────────────────────────────────────── */
+footer { padding: 40px 0; text-align: center; border-top: 1px solid #2a2a2a; }
+footer p { font-size: 0.85rem; color: #5a5040; margin-bottom: 4px; }
+footer a { color: #706860; }
+footer a:hover { color: #f0a030; }
+
+/* ── Mobile ───────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+    .hero h1 { font-size: 1.8rem; }
+    .subtitle { font-size: 1rem; }
+    .navbar nav { gap: 12px; }
+    .navbar nav a { font-size: 0.8rem; }
+    .btn-primary, .btn-secondary { padding: 12px 24px; font-size: 0.9rem; }
+    h2 { font-size: 1.5rem; }
+    .arch-diagram pre { font-size: 0.72rem; }
+    .code-block code { font-size: 0.72rem; }
+}

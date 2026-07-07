@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="MRRC FT-710 — 基于浏览器的 Yaesu FT-710 远程控制系统。全功能电台遥控、实时频谱瀑布图、双向 Opus 音频、iPhone 优化的移动端 UI。">
+    <title>MRRC FT-710 — 浏览器电台远程控制</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>📻</text></svg>">
+</head>
+<body>
+    <header class="navbar">
+        <div class="container nav-row">
+            <a href="#" class="logo">📻 MRRC FT&#8209;710</a>
+            <nav>
+                <a href="#features">功能</a>
+                <a href="#architecture">架构</a>
+                <a href="#quickstart">快速开始</a>
+                <a href="https://github.com/cheenle/mrrc_ft710" class="btn-ghost">GitHub</a>
+            </nav>
+        </div>
+    </header>
+
+    <section class="hero">
+        <div class="container">
+            <h1>任何设备，完全掌控您的电台</h1>
+            <p class="subtitle">
+                基于浏览器的 Yaesu FT-710 HF/50MHz 远程控制系统。<br>
+                实时频谱瀑布、双向 Opus 音频、iPhone 优化的移动端 UI —— 一部手机完成全部操作。
+            </p>
+            <div class="hero-actions">
+                <a href="https://github.com/cheenle/mrrc_ft710" class="btn-primary">GitHub 仓库</a>
+                <a href="#quickstart" class="btn-secondary">快速开始</a>
+            </div>
+        </div>
+    </section>
+
+    <section id="features" class="features">
+        <div class="container">
+            <h2>核心功能</h2>
+            <div class="feature-grid">
+                <div class="card">
+                    <div class="card-icon">🎛️</div>
+                    <h3>全功能电台控制</h3>
+                    <p>频率、模式、波段、VFO、滤波器、前置放大、衰减器、NR/NB/AN —— 所有 CAT 命令通过 WebSocket 实时下发，38400 baud 下延迟 &lt;20ms。</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon">📊</div>
+                    <h3>实时频谱瀑布图</h3>
+                    <p>850 点 FFT 频谱 + 120 行历史瀑布，~30fps。FT4222 SPI 真实频谱模式 + S-meter 合成回退模式双模自动切换。</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon">🎤</div>
+                    <h3>双向 Opus 音频</h3>
+                    <p>RX: 电台 → Opus 64kbps → 浏览器 AudioWorklet 播放。TX: 手机麦克风 → Opus 编码 → 电台发射。抖动缓冲 + 优雅 PTT 释放，话尾不被切。</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon">📱</div>
+                    <h3>移动优先 UI</h3>
+                    <p>专为 iPhone Safari 优化：safe-area 适配、PWA manifest、Service Worker 离线缓存。触控 PTT 握持发射、松手即停。</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon">🔐</div>
+                    <h3>安全可靠</h3>
+                    <p>TLS/HTTPS 加密、Token 鉴权、PTT 三重 TX0 验证、松手死守开关、客户端断开自动强制 RX。</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon">⚡</div>
+                    <h3>极简部署</h3>
+                    <p>单个 Python 进程：FastAPI + Uvicorn async server。macOS / Linux / Raspberry Pi 均可。pip install 即可运行。</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="tech" class="tech-highlights">
+        <div class="container">
+            <h2>技术亮点</h2>
+            <div class="highlight-grid">
+                <div class="highlight">
+                    <span class="highlight-num">5</span>
+                    <span class="highlight-label">层后台轮询</span>
+                    <span class="highlight-desc">100ms→5s 分频策略，~296 字节/秒串口占用</span>
+                </div>
+                <div class="highlight">
+                    <span class="highlight-num">4</span>
+                    <span class="highlight-label">条 WebSocket 通道</span>
+                    <span class="highlight-desc">Control · Audio RX · Audio TX · Spectrum</span>
+                </div>
+                <div class="highlight">
+                    <span class="highlight-num">48</span>
+                    <span class="highlight-label">kHz Opus 编码</span>
+                    <span class="highlight-desc">64kbps CBR，比 PCM 省 12× 带宽</span>
+                </div>
+                <div class="highlight">
+                    <span class="highlight-num">60</span>
+                    <span class="highlight-label">ms 抖动缓冲</span>
+                    <span class="highlight-desc">TX 预缓冲抗 WiFi 抖动，400ms 硬上限</span>
+                </div>
+                <div class="highlight">
+                    <span class="highlight-num">40+</span>
+                    <span class="highlight-label">CAT 命令</span>
+                    <span class="highlight-desc">全系列 FT-710 CAT 指令集直驱，无需 Hamlib</span>
+                </div>
+                <div class="highlight">
+                    <span class="highlight-num">180</span>
+                    <span class="highlight-label">自动化测试</span>
+                    <span class="highlight-desc">unittest 全覆盖：CAT、轮询、音频帧、前端契约</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="architecture" class="architecture">
+        <div class="container">
+            <h2>系统架构</h2>
+            <div class="arch-diagram">
+<pre>  📱 浏览器 (iPhone / Desktop / Tablet)
+   │  ↕ HTTPS + WebSocket × 4
+  🖥️  <strong>MRRC FT-710 Server</strong> (Python FastAPI + Uvicorn)
+   │
+   ├── 📡 Serial CAT (USB Enhanced COM Port, 38400 baud)
+   ├── 🔬 FT4222 SPI → scope_pipe 子进程 → 真实 FFT 频谱
+   ├── 🎙️  PyAudio USB Audio (RX 录音 / TX 播放)
+   └── 🗜️  libopus (ctypes): RxOpusEncoder + TxOpusDecoder
+  📻  <strong>Yaesu FT-710</strong> HF/50MHz Transceiver</pre>
+            </div>
+            <p class="arch-note">不依赖 wfview / Hamlib / 任何外部电台中间件。CAT 指令直接走串口，频谱数据从 FTDI FT4222 SPI 芯片读取，音频通过电台内置 USB 声卡捕获/播放。</p>
+        </div>
+    </section>
+
+    <section id="quickstart" class="quickstart">
+        <div class="container">
+            <h2>快速开始</h2>
+            <div class="code-block">
+                <pre><code><span class="c"># 1. 安装依赖</span>
+cd FT710
+pip install -r requirements.txt
+
+<span class="c"># 2. 启动服务 (macOS)</span>
+FT710_SERIAL_PORT=/dev/cu.usbserial-0121DB3A0 python server.py
+
+<span class="c"># 2. 启动服务 (Linux / Raspberry Pi)</span>
+FT710_SERIAL_PORT=/dev/ttyUSB0 python server.py
+
+<span class="c"># 3. 打开浏览器</span>
+<span class="c">#    访问 https://&lt;服务器IP&gt;:8888</span>
+<span class="c">#    默认密码: ft710</span></code></pre>
+            </div>
+            <div class="env-table-wrap">
+                <table>
+                    <thead><tr><th>环境变量</th><th>默认值</th><th>说明</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>FT710_SERIAL_PORT</code></td><td><code>/dev/cu.SLAB_USBtoUART</code></td><td>CAT 串口 (Enhanced COM Port)</td></tr>
+                        <tr><td><code>FT710_WEB_PORT</code></td><td><code>8888</code></td><td>Web 服务端口</td></tr>
+                        <tr><td><code>FT710_WEB_PASSWORD</code></td><td><code>ft710</code></td><td>登录密码</td></tr>
+                        <tr><td><code>FT710_AUDIO_RX_DEVICE</code></td><td>自动检测 FT-710</td><td>音频输入设备 (index 或名称子串)</td></tr>
+                        <tr><td><code>FT710_AUDIO_TX_DEVICE</code></td><td>自动检测 FT-710</td><td>音频输出设备</td></tr>
+                        <tr><td><code>FT710_SCOPE_PORT</code></td><td>(可选)</td><td>Scope 串口 (SCU-LAN10 型号)</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <p class="qs-note">
+                📋 完整文档见 <a href="https://github.com/cheenle/mrrc_ft710">GitHub 仓库</a>，
+                包括 CLI 参数、架构设计、SDD 规范、WebSocket 协议、安全策略等。
+            </p>
+        </div>
+    </section>
+
+    <section class="safety">
+        <div class="container">
+            <h2>PTT 安全架构</h2>
+            <p>电台发射安全是最高设计要求。MRRC FT-710 实现了多层防护：</p>
+            <ol>
+                <li><strong>触控握持 → 松手即断</strong>：PTT 采用 touch-and-hold 交互，鼠标离开/触摸取消立刻释放。</li>
+                <li><strong>三重 TX0 验证</strong>：PTT 释放后 3 次 CAT <code>TX;</code> 查询（200ms 间隔），确认电台确实回到 RX。</li>
+                <li><strong>服务端强制 RX</strong>：当最后一个客户端断开时如果电台仍在 TX，服务器自动发送 <code>TX0;</code>。</li>
+                <li><strong>浏览器卸载信标</strong>：<code>beforeunload</code> + <code>pagehide</code> 事件在页面关闭时强制 <code>TX0;</code>。</li>
+                <li><strong>TX 音频优雅释放</strong>：PTT 松开后先写入剩余音频到 DAC 等待播完，再断开 RF，避免话尾被切。</li>
+            </ol>
+        </div>
+    </section>
+
+    <footer>
+        <div class="container">
+            <p>MRRC FT-710 &mdash; 开源项目，GPLv3 协议</p>
+            <p><a href="https://github.com/cheenle/mrrc_ft710">GitHub</a> · <a href="mailto:cheenle@gmail.com">联系作者</a></p>
+        </div>
+    </footer>
+</body>
+</html>
