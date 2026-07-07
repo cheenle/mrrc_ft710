@@ -137,19 +137,24 @@ class CatController:
         await asyncio.sleep(0.02)
 
     async def _read_until(self, terminator: bytes = b";",
-                          expected_prefix: str = "") -> bytes:
+                          expected_prefix: str = "",
+                          timeout: Optional[float] = None) -> bytes:
         """Read bytes from serial port until a matching response is found.
 
         If expected_prefix is given, skips any complete messages that don't
         start with the prefix (e.g. AI frames that arrived before the real
         response) and continues reading until a match or timeout.
+
+        If timeout is given, overrides self._timeout for this call (used
+        by pollers to bound lock occupancy so user commands like PTT
+        aren't blocked behind a query that never responds).
         """
         if self._ser is None or not self._ser.is_open:
             raise serial.SerialException("Port not open")
 
         def _r():
             buf = bytearray()
-            deadline = time.monotonic() + self._timeout
+            deadline = time.monotonic() + (timeout if timeout is not None else self._timeout)
             while time.monotonic() < deadline:
                 waiting = self._ser.in_waiting
                 if waiting > 0:
@@ -188,7 +193,7 @@ class CatController:
 
     # ── Command Interface ──────────────────────────────────────────
 
-    async def send_command(self, cmd: str) -> Optional[str]:
+    async def send_command(self, cmd: str, timeout: Optional[float] = None) -> Optional[str]:
         """Send a CAT command and return the response.
 
         All serial I/O is serialized through self._lock.
@@ -200,6 +205,10 @@ class CatController:
 
         Args:
             cmd: CAT command string WITHOUT trailing ';' (it's appended here).
+            timeout: optional per-call read timeout (seconds).  Pollers
+                pass a short value so a non-responding query releases the
+                lock quickly instead of blocking user commands (PTT) for
+                the full SERIAL_TIMEOUT.
         """
         async with self._lock:
             if not self._connected or self._ser is None:
@@ -217,7 +226,7 @@ class CatController:
             # expected command prefix.
             try:
                 response_bytes = await self._read_until(
-                    b";", expected_prefix=cmd)
+                    b";", expected_prefix=cmd, timeout=timeout)
                 if response_bytes is None:
                     logger.debug("Command timeout (no data): %s", cmd)
                     return None
@@ -254,12 +263,12 @@ class CatController:
                 self._connected = False
                 return False
 
-    async def query(self, cmd: str) -> Optional[str]:
+    async def query(self, cmd: str, timeout: Optional[float] = None) -> Optional[str]:
         """Send a query command (no value, just prefix + ';').
 
         Example: query("FA") -> "FA014200000"
         """
-        return await self.send_command(cmd)
+        return await self.send_command(cmd, timeout=timeout)
 
     async def set(self, cmd: str) -> bool:
         """Send a set command (prefix + value + ';').
@@ -277,19 +286,19 @@ class CatController:
         prefix = "FA" if vfo.upper() == "A" else "FB"
         return await self.set(f"{prefix}{freq_hz:09d}")
 
-    async def get_active_vfo(self) -> Optional[str]:
+    async def get_active_vfo(self, timeout: Optional[float] = None) -> Optional[str]:
         """Query which VFO is active.  Returns "A" or "B" (or None).
 
         FT-710 VS; response: "VS0" = VFO-A active, "VS1" = VFO-B active.
         """
-        resp = await self.query("VS")
+        resp = await self.query("VS", timeout=timeout)
         if resp and len(resp) >= 3:
             return "B" if resp.endswith("1") else "A"
         return None
 
-    async def get_frequency(self, vfo: str = "A") -> Optional[int]:
+    async def get_frequency(self, vfo: str = "A", timeout: Optional[float] = None) -> Optional[int]:
         prefix = "FA" if vfo.upper() == "A" else "FB"
-        resp = await self.query(prefix)
+        resp = await self.query(prefix, timeout=timeout)
         if resp and len(resp) >= len(prefix) + 1:
             try:
                 return int(resp[len(prefix):])
@@ -300,8 +309,8 @@ class CatController:
     async def set_mode(self, mode_num: int) -> bool:
         return await self.set(f"MD0{mode_num:X}")
 
-    async def get_mode(self) -> Optional[int]:
-        resp = await self.query("MD0")
+    async def get_mode(self, timeout: Optional[float] = None) -> Optional[int]:
+        resp = await self.query("MD0", timeout=timeout)
         if resp and len(resp) >= 4:
             try:
                 return int(resp[3:], 16)
@@ -315,8 +324,8 @@ class CatController:
     async def set_tune(self, tune: bool) -> bool:
         return await self.set("TX2" if tune else "TX0")
 
-    async def get_ptt(self) -> Optional[int]:
-        resp = await self.query("TX")
+    async def get_ptt(self, timeout: Optional[float] = None) -> Optional[int]:
+        resp = await self.query("TX", timeout=timeout)
         if resp and len(resp) >= 3:
             try:
                 return int(resp[2:])
@@ -324,8 +333,8 @@ class CatController:
                 return None
         return None
 
-    async def get_s_meter(self) -> Optional[int]:
-        resp = await self.query("SM0")
+    async def get_s_meter(self, timeout: Optional[float] = None) -> Optional[int]:
+        resp = await self.query("SM0", timeout=timeout)
         if resp and len(resp) >= 4:
             try:
                 return int(resp[3:])
@@ -376,7 +385,7 @@ class CatController:
             logger.debug("IF parse error: %s (raw: %s)", e, resp)
             return None
 
-    async def get_meter(self, meter: str) -> Optional[int]:
+    async def get_meter(self, meter: str, timeout: Optional[float] = None) -> Optional[int]:
         """Read a raw meter value (RM3..RM8).  Returns the raw 0-255 value.
 
         FT-710 RM response format is 9 chars: "RM" + meter_id + 6 digits,
@@ -387,7 +396,7 @@ class CatController:
         Previously this used resp[4:] which dropped the high digit and
         returned garbage for any value whose top digit was non-zero.
         """
-        resp = await self.query(meter)
+        resp = await self.query(meter, timeout=timeout)
         if resp and len(resp) >= 6:
             try:
                 return int(resp[3:6])

@@ -15,7 +15,7 @@ from cat_controller import CatController
 from radio_state import RadioState
 from config import (
     POLL_IF_INTERVAL, POLL_VFO_INTERVAL, POLL_TX_STATUS_INTERVAL, POLL_TX_METERS_INTERVAL,
-    POLL_SETTINGS_INTERVAL, POLL_SLOW_INTERVAL,
+    POLL_SETTINGS_INTERVAL, POLL_SLOW_INTERVAL, POLL_TIMEOUT,
 )
 
 logger = logging.getLogger("ft710.poll")
@@ -131,7 +131,7 @@ class PollScheduler:
                         # Inter-query pause checks let a user command preempt
                         # after the in-flight query (~40 ms).
                         if not await self._polling_paused():
-                            freq = await self.cat.get_frequency("A")
+                            freq = await self.cat.get_frequency("A", timeout=POLL_TIMEOUT)
                             if freq is not None and 30000 <= freq <= 75000000:
                                 changes["vfo_a_freq"] = freq
                                 if (freq != _last_logged_freq
@@ -144,11 +144,11 @@ class PollScheduler:
                                         freq, _delta, _loop_count)
                                     _last_logged_freq = freq
                         if not await self._polling_paused():
-                            mode = await self.cat.get_mode()
+                            mode = await self.cat.get_mode(timeout=POLL_TIMEOUT)
                             if mode is not None:
                                 changes["mode"] = mode
                         if not await self._polling_paused():
-                            sm = await self.cat.get_s_meter()
+                            sm = await self.cat.get_s_meter(timeout=POLL_TIMEOUT)
                             if sm is not None:
                                 changes["s_meter"] = sm
                     if changes:
@@ -190,11 +190,11 @@ class PollScheduler:
                     continue
                 if self.cat.connected and not await self._should_skip("vfo"):
                     changes = {}
-                    active = await self.cat.get_active_vfo()
+                    active = await self.cat.get_active_vfo(timeout=POLL_TIMEOUT)
                     if active is not None:
                         changes["active_vfo"] = active
                     if not await self._polling_paused():
-                        freq_b = await self.cat.get_frequency("B")
+                        freq_b = await self.cat.get_frequency("B", timeout=POLL_TIMEOUT)
                         if freq_b is not None and 30000 <= freq_b <= 75000000:
                             changes["vfo_b_freq"] = freq_b
                     if changes:
@@ -218,7 +218,7 @@ class PollScheduler:
                     await asyncio.sleep(0.05)
                     continue
                 if self.cat.connected and not await self._should_skip("tx_status"):
-                    ptt = await self.cat.get_ptt()
+                    ptt = await self.cat.get_ptt(timeout=POLL_TIMEOUT)
                     if ptt is not None:
                         was_tx = self.state.tx_status > 0
                         changed = self.state.update(tx_status=ptt)
@@ -255,15 +255,15 @@ class PollScheduler:
                 if self.cat.connected and self.state.is_transmitting:
                     changes = {}
                     if not await self._should_skip("alc_meter"):
-                        v = await self.cat.get_meter("RM4")
+                        v = await self.cat.get_meter("RM4", timeout=POLL_TIMEOUT)
                         if v is not None:
                             changes["alc_meter"] = v
                     if not await self._should_skip("power_meter"):
-                        v = await self.cat.get_meter("RM5")
+                        v = await self.cat.get_meter("RM5", timeout=POLL_TIMEOUT)
                         if v is not None:
                             changes["power_meter"] = v
                     if not await self._should_skip("swr_meter"):
-                        v = await self.cat.get_meter("RM6")
+                        v = await self.cat.get_meter("RM6", timeout=POLL_TIMEOUT)
                         if v is not None:
                             changes["swr_meter"] = v
                     if changes:
@@ -319,7 +319,7 @@ class PollScheduler:
                             break
                         if await self._should_skip(field):
                             continue
-                        resp = await self.cat.query(cmd)
+                        resp = await self.cat.query(cmd, timeout=POLL_TIMEOUT)
                         if resp:
                             try:
                                 value = parser(resp)
@@ -349,19 +349,19 @@ class PollScheduler:
                 if self.cat.connected:
                     changes = {}
                     if not await self._should_skip("id_meter"):
-                        v = await self.cat.get_meter("RM7")
+                        v = await self.cat.get_meter("RM7", timeout=POLL_TIMEOUT)
                         if v is not None:
                             changes["id_meter"] = v
                     if not await self._should_skip("vd_meter"):
-                        v = await self.cat.get_meter("RM8")
+                        v = await self.cat.get_meter("RM8", timeout=POLL_TIMEOUT)
                         if v is not None:
                             changes["vd_meter"] = v
                     if not await self._should_skip("compressor"):
-                        resp = await self.cat.query("PR")
+                        resp = await self.cat.query("PR", timeout=POLL_TIMEOUT)
                         if resp and isinstance(resp, str):
                             changes["compressor"] = resp.endswith("1")
                     if not await self._should_skip("contour_level"):
-                        resp = await self.cat.query("CO")
+                        resp = await self.cat.query("CO", timeout=POLL_TIMEOUT)
                         if resp and len(resp) >= 5:
                             try:
                                 v = int(resp[2:5])

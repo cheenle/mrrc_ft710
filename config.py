@@ -15,6 +15,11 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 SERIAL_PORT = os.environ.get("FT710_SERIAL_PORT", "/dev/cu.SLAB_USBtoUART")
 BAUD_RATE = int(os.environ.get("FT710_BAUD_RATE", "38400"))
 SERIAL_TIMEOUT = float(os.environ.get("FT710_SERIAL_TIMEOUT", "1.0"))
+# Short per-query timeout for background pollers.  Bounds how long a
+# non-responding poll query can hold the serial lock (and thus block a
+# user command like PTT).  Normal responses arrive in <50 ms; 0.25 s is
+# generous while keeping worst-case PTT latency bounded.
+POLL_TIMEOUT = 0.25
 
 # ── Audio Device ──────────────────────────────────────────────────────
 # Set a specific device index or substring to match in device name
