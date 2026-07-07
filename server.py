@@ -567,19 +567,15 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
         elif field == "ptt":
             tx = value is True or str(value).lower() == "true"
             if tx:
-                # Key the radio first (fire-and-forget CAT write) so TX
-                # starts immediately; open the audio output stream in the
-                # background so pa.open() latency (~100 ms) doesn't delay
-                # the keyup.
+                # Key radio first so the TX light comes on immediately,
+                # THEN open the audio output stream synchronously —
+                # awaiting start_tx here avoids a race where the drain
+                # loop queues mic frames before the PortAudio stream is
+                # open and start_tx's queue-clearing discards them.
                 await cat.set_ptt(True)
                 radio.update(tx_status=1)
                 if audio:
-                    # Open the TX audio stream in the background so pa.open()
-                    # latency doesn't delay the keyup.  Errors are logged via
-                    # the done-callback instead of propagating to the handler.
-                    _tx_start = asyncio.create_task(asyncio.to_thread(audio.start_tx))
-                    _tx_start.add_done_callback(
-                        lambda t: t.exception() and logger.warning("start_tx failed: %s", t.exception()))
+                    await asyncio.to_thread(audio.start_tx)
             else:
                 # Graceful TX stop: drain queued audio to the DAC and block
                 # until it has played (Pa_StopStream semantics), so word-
