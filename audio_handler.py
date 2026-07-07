@@ -362,6 +362,11 @@ class AudioHandler:
             self._tx_queue.clear()
             self._tx_queued_bytes = 0
             self._tx_primed = False
+        # Reset diagnostic one-shot flags for this TX session.
+        for _k in ('_dbg_no_pcm', '_dbg_no_resample', '_dbg_no_stream',
+                    '_dbg_no_stream_w', '_dbg_not_primed',
+                    '_dbg_first_feed', '_dbg_first_write'):
+            setattr(self, _k, False)
 
         if old is not None:
             # Wait for any in-flight write on the previous stream before
@@ -442,15 +447,27 @@ class AudioHandler:
         latency under network jitter bursts.
         """
         if not pcm or len(pcm) < 2:
+            if not getattr(self, '_dbg_no_pcm', False):
+                self._dbg_no_pcm = True
+                logger.debug("[TX-AUDIO] feed_tx_audio: empty/short pcm (len=%s)", len(pcm) if pcm else 0)
             return
         data = resample_48_to_441(pcm)
         if not data:
+            if not getattr(self, '_dbg_no_resample', False):
+                self._dbg_no_resample = True
+                logger.debug("[TX-AUDIO] feed_tx_audio: resample returned empty")
             return
         with self._tx_lock:
             if self._tx_stream is None:
-                return  # stream not open; drop stale frame
+                if not getattr(self, '_dbg_no_stream', False):
+                    self._dbg_no_stream = True
+                    logger.debug("[TX-AUDIO] feed_tx_audio: _tx_stream is None — dropping audio")
+                return
             self._tx_queue.append(data)
             self._tx_queued_bytes += len(data)
+            if not getattr(self, '_dbg_first_feed', False):
+                self._dbg_first_feed = True
+                logger.debug("[TX-AUDIO] feed_tx_audio: first frame queued (%d bytes)", len(data))
             # Cap: drop oldest frames until under the limit (keep at least one
             # so a single oversized frame still plays).
             while (self._tx_queued_bytes > TX_MAX_BUFFER_BYTES
@@ -474,13 +491,20 @@ class AudioHandler:
             with self._tx_lock:
                 stream = self._tx_stream
                 if stream is None or not stream.is_active():
+                    if not getattr(self, '_dbg_no_stream_w', False):
+                        self._dbg_no_stream_w = True
+                        logger.debug("[TX-AUDIO] write_tx_chunk: _tx_stream=%s active=%s — bailing",
+                                    stream is not None, stream.is_active() if stream else 'N/A')
                     return
                 if not self._tx_primed:
                     if self._tx_queued_bytes < TX_PREBUFFER_BYTES:
+                        if not getattr(self, '_dbg_not_primed', False):
+                            self._dbg_not_primed = True
+                            logger.debug("[TX-AUDIO] write_tx_chunk: not primed (%d/%d bytes)",
+                                        self._tx_queued_bytes, TX_PREBUFFER_BYTES)
                         return  # build cushion before first write
                     self._tx_primed = True
-                    logger.debug("TX pre-buffer reached (%dms); playback starting",
-                                 TX_PREBUFFER_MS)
+                    logger.debug("[TX-AUDIO] write_tx_chunk: pre-buffer reached; playback starting")
                 if not self._tx_queue:
                     return
                 data = self._tx_queue.popleft()
@@ -494,8 +518,11 @@ class AudioHandler:
                     return
                 try:
                     stream.write(data)
+                    if not getattr(self, '_dbg_first_write', False):
+                        self._dbg_first_write = True
+                        logger.debug("[TX-AUDIO] write_tx_chunk: first write succeeded (%d bytes)", len(data))
                 except Exception as e:
-                    logger.debug("TX write error: %s", e)
+                    logger.debug("[TX-AUDIO] write_tx_chunk: write error: %s", e)
                     return
 
     # ── Cleanup ─────────────────────────────────────────────────────
