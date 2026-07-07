@@ -77,10 +77,10 @@ Yaesu FT-710 Radio
 
 **RX Audio:**
 ```
-FT-710 USB Audio → PyAudio capture (48kHz Int16) → Opus encode (64kbps)
-  → /WSaudioRX tagged frames → Browser WASM OpusDecoder
-    → AudioWorklet 'rx-player' (jitter buffer: 220ms prebuffer, 90ms recovery)
-      → Speakers
+FT-710 USB Audio → PyAudio capture (44.1kHz Int16) → Resample 44.1k→48k
+  → Opus encode (64kbps) → /WSaudioRX tagged frames (parallel send via asyncio.gather)
+    → Browser WASM OpusDecoder → AudioWorklet 'rx-player'
+      (jitter buffer: 220ms prebuffer, 90ms recovery) → Speakers
 ```
 
 **TX Audio:**
@@ -96,9 +96,10 @@ Microphone → getUserMedia (48kHz) → ScriptProcessor (512buf, ~10.7ms)
 
 TX chain resamples from Opus 48kHz to the FT-710's native 44.1kHz USB audio rate using linear interpolation at an exact 160:147 ratio — frame boundaries stay phase-continuous so no periodic clicks.
 
-**TX audio stability (v1.1):**
+**TX audio stability (v1.2):**
 - **Jitter buffer**: Pre-buffers 60ms before first DAC write to absorb WebSocket jitter; hard cap at 400ms with oldest-first drop bounds latency under Wi-Fi stalls.
-- **Graceful PTT release**: On PTT off, queued audio is written to the device buffer and `Pa_StopStream` blocks until the DAC finishes playing — word-endings survive before RF drops. Previous versions chopped the tail because `set_ptt(False)` fired before the buffer drained.
+- **Graceful PTT release**: On PTT off, queued audio is written to the device buffer and `Pa_StopStream` blocks until the DAC finishes playing — word-endings survive before RF drops (TX_DRAIN=50ms).
+- **`start_tx` is awaited** (not background): avoids a race where the drain loop queues mic frames before the PortAudio stream opens and `start_tx` clears the queue, which would cause SSB zero-power (no modulation).
 - **Dual write-lock**: `_tx_write_lock` serializes the periodic drain-loop and the graceful stop so only one thread writes the PortAudio stream at a time (PortAudio blocking I/O is not thread-safe per stream).
 - **Single-owner TX**: Only the first connected `/WSaudioTX` client's audio reaches the radio; subsequent clients' frames are ignored until the owner disconnects.
 
@@ -111,7 +112,7 @@ FT710/
 ├── server.py              # FastAPI app: lifespan, auth, 4 WebSockets, REST, CLI
 ├── cat_controller.py      # Serial CAT protocol (pyserial + asyncio thread pool)
 ├── radio_state.py         # RadioState dataclass with dirty-field change tracking
-├── poll_scheduler.py      # 5-tier background polling (100ms → 5s intervals)
+├── poll_scheduler.py      # 7-tier background polling (100ms → 5s, bounded lock)
 ├── audio_handler.py       # PyAudio capture/playback + Opus encode + device detection
 ├── opus_rx.py             # libopus ctypes wrapper (RxOpusEncoder + TxOpusDecoder)
 ├── scope_handler.py       # FT4222 SPI scope reader + S-meter fallback generator

@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="style.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>📻</text></svg>">
 </head>
-<body>
+<body data-site="mrrc_ft710">
     <header class="navbar">
         <div class="container nav-row">
             <a href="#" class="logo">📻 MRRC FT&#8209;710</a>
@@ -17,6 +17,7 @@
                 <a href="#architecture">架构</a>
                 <a href="#quickstart">快速开始</a>
                 <a href="https://github.com/cheenle/mrrc_ft710" class="btn-ghost">GitHub</a>
+                <a href="zh/" style="font-size:0.8rem;color:#a09080;margin-left:8px;">EN</a>
             </nav>
         </div>
     </header>
@@ -62,7 +63,7 @@
                 <div class="card">
                     <div class="card-icon">🔐</div>
                     <h3>安全可靠</h3>
-                    <p>TLS/HTTPS 加密、Token 鉴权、PTT 三重 TX0 验证、松手死守开关、客户端断开自动强制 RX。</p>
+                    <p>TLS/HTTPS 加密、Token 鉴权、PTT 看门狗 (500ms)、松手即断、客户端断开自动强制 RX。</p>
                 </div>
                 <div class="card">
                     <div class="card-icon">⚡</div>
@@ -78,9 +79,9 @@
             <h2>技术亮点</h2>
             <div class="highlight-grid">
                 <div class="highlight">
-                    <span class="highlight-num">5</span>
+                    <span class="highlight-num">7</span>
                     <span class="highlight-label">层后台轮询</span>
-                    <span class="highlight-desc">100ms→5s 分频策略，~296 字节/秒串口占用</span>
+                    <span class="highlight-desc">100ms→5s 分频，0.25s 超时上限，主动让步 PTT</span>
                 </div>
                 <div class="highlight">
                     <span class="highlight-num">4</span>
@@ -173,10 +174,11 @@ FT710_SERIAL_PORT=/dev/ttyUSB0 python server.py
             <p>电台发射安全是最高设计要求。MRRC FT-710 实现了多层防护：</p>
             <ol>
                 <li><strong>触控握持 → 松手即断</strong>：PTT 采用 touch-and-hold 交互，鼠标离开/触摸取消立刻释放。</li>
-                <li><strong>三重 TX0 验证</strong>：PTT 释放后 3 次 CAT <code>TX;</code> 查询（200ms 间隔），确认电台确实回到 RX。</li>
+                <li><strong>服务端 TX 状态轮询</strong>：0.5s 间隔查询 <code>TX;</code>，TX→RX 转换时立刻广播并清零 TX 表头。</li>
+                <li><strong>PTT 看门狗</strong>：客户端 500ms 定时器验证 RX 状态，异常时重发 <code>TX0;</code>（最多 3 次）。</li>
                 <li><strong>服务端强制 RX</strong>：当最后一个客户端断开时如果电台仍在 TX，服务器自动发送 <code>TX0;</code>。</li>
                 <li><strong>浏览器卸载信标</strong>：<code>beforeunload</code> + <code>pagehide</code> 事件在页面关闭时强制 <code>TX0;</code>。</li>
-                <li><strong>TX 音频优雅释放</strong>：PTT 松开后先写入剩余音频到 DAC 等待播完，再断开 RF，避免话尾被切。</li>
+                <li><strong>TX 音频优雅释放</strong>：PTT 松开后先写入剩余音频到 DAC 等待播完（50ms），再断开 RF，避免话尾被切。</li>
             </ol>
         </div>
     </section>
@@ -187,5 +189,6 @@ FT710_SERIAL_PORT=/dev/ttyUSB0 python server.py
             <p><a href="https://github.com/cheenle/mrrc_ft710">GitHub</a> · <a href="mailto:cheenle@gmail.com">联系作者</a></p>
         </div>
     </footer>
+    <script src="js/global-nav.js?v=2" defer data-gn="1"></script>
 </body>
 </html>

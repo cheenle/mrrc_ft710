@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="MRRC FT-710 — Browser-based remote control for the Yaesu FT-710. Full rig control, real-time waterfall spectrum, bidirectional Opus audio, iPhone-optimized mobile UI.">
+    <title>MRRC FT-710 — Browser-Based Remote Control</title>
+    <link rel="stylesheet" href="../style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='28' font-size='28'>📻</text></svg>">
+</head>
+<body data-site="mrrc_ft710">
+    <header class="navbar">
+        <div class="container nav-row">
+            <a href="../index.html" class="logo">📻 MRRC FT&#8209;710</a>
+            <nav>
+                <a href="#features">Features</a>
+                <a href="#architecture">Architecture</a>
+                <a href="#quickstart">Quickstart</a>
+                <a href="https://github.com/cheenle/mrrc_ft710" class="btn-ghost">GitHub</a>
+                <a href="../index.html" style="font-size:0.8rem;color:#a09080;margin-left:8px;">中文</a>
+            </nav>
+        </div>
+    </header>
+
+    <section class="hero">
+        <div class="container">
+            <h1>Full Control. Any Device.</h1>
+            <p class="subtitle">
+                Browser-based remote control for the Yaesu FT-710 HF/50MHz transceiver.<br>
+                Real-time waterfall spectrum, bidirectional Opus audio, iPhone-optimized mobile UI — complete operation from a single phone.
+            </p>
+            <div class="hero-actions">
+                <a href="https://github.com/cheenle/mrrc_ft710" class="btn-primary">GitHub Repository</a>
+                <a href="#quickstart" class="btn-secondary">Quickstart</a>
+            </div>
+        </div>
+    </section>
+
+    <section id="features" class="features">
+        <div class="container">
+            <h2>Core Features</h2>
+            <div class="feature-grid">
+                <div class="card">
+                    <div class="card-icon">🎛️</div>
+                    <h3>Full Rig Control</h3>
+                    <p>Frequency, mode, band, VFO, filters, preamp, attenuator, NR/NB/AN — all CAT commands over WebSocket in real time, &lt;20ms latency at 38400 baud.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon">📊</div>
+                    <h3>Real-Time Waterfall</h3>
+                    <p>850-point FFT spectrum + 120-line history waterfall, ~30fps. Dual-mode: FT4222 SPI real spectrum + S-meter synthetic fallback.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon">🎤</div>
+                    <h3>Bidirectional Opus Audio</h3>
+                    <p>RX: Radio → Opus 64kbps → browser AudioWorklet. TX: Phone mic → Opus encode → radio TX. Jitter buffer + graceful PTT release preserves word endings.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon">📱</div>
+                    <h3>Mobile-First UI</h3>
+                    <p>Optimized for iPhone Safari: safe-area, PWA manifest, Service Worker offline cache. Touch-and-hold PTT — release to stop TX instantly.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon">🔐</div>
+                    <h3>Safety First</h3>
+                    <p>TLS/HTTPS encryption, token auth, PTT watchdog (500ms), dead-man switch, client disconnect auto-forces RX.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon">⚡</div>
+                    <h3>Dead Simple Deployment</h3>
+                    <p>Single Python process: FastAPI + Uvicorn async server. macOS / Linux / Raspberry Pi. pip install and run.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="tech" class="tech-highlights">
+        <div class="container">
+            <h2>Tech Highlights</h2>
+            <div class="highlight-grid">
+                <div class="highlight">
+                    <span class="highlight-num">7</span>
+                    <span class="highlight-label">Poll Tiers</span>
+                    <span class="highlight-desc">100ms→5s smart intervals, ~296 bytes/sec serial</span>
+                </div>
+                <div class="highlight">
+                    <span class="highlight-num">4</span>
+                    <span class="highlight-label">WebSocket Channels</span>
+                    <span class="highlight-desc">Control · Audio RX · Audio TX · Spectrum</span>
+                </div>
+                <div class="highlight">
+                    <span class="highlight-num">48</span>
+                    <span class="highlight-label">kHz Opus</span>
+                    <span class="highlight-desc">64kbps CBR, 12× smaller than PCM</span>
+                </div>
+                <div class="highlight">
+                    <span class="highlight-num">60</span>
+                    <span class="highlight-label">ms Jitter Buffer</span>
+                    <span class="highlight-desc">TX pre-buffer anti-WiFi-jitter, 400ms hard cap</span>
+                </div>
+                <div class="highlight">
+                    <span class="highlight-num">40+</span>
+                    <span class="highlight-label">CAT Commands</span>
+                    <span class="highlight-desc">Direct FT-710 CAT set — no Hamlib needed</span>
+                </div>
+                <div class="highlight">
+                    <span class="highlight-num">180</span>
+                    <span class="highlight-label">Automated Tests</span>
+                    <span class="highlight-desc">unittest: CAT, polling, audio frames, frontend contract</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="architecture" class="architecture">
+        <div class="container">
+            <h2>System Architecture</h2>
+            <div class="arch-diagram">
+<pre>  📱 Browser (iPhone / Desktop / Tablet)
+    │  ↕ HTTPS + WebSocket × 4
+  🖥️  <strong>MRRC FT-710 Server</strong> (Python FastAPI + Uvicorn)
+    │
+    ├── 📡 Serial CAT (USB Enhanced COM Port, 38400 baud)
+    ├── 🔬 FT4222 SPI → scope_pipe subprocess → real FFT spectrum
+    ├── 🎙️  PyAudio USB Audio (RX capture / TX playback)
+    └── 🗜️  libopus (ctypes): RxOpusEncoder + TxOpusDecoder
+  📻  <strong>Yaesu FT-710</strong> HF/50MHz Transceiver</pre>
+            </div>
+            <p class="arch-note">No wfview / Hamlib / any external radio middleware. CAT commands go direct over serial. Spectrum reads from the FTDI FT4222 SPI chip. Audio via the radio's built-in USB sound card.</p>
+        </div>
+    </section>
+
+    <section id="quickstart" class="quickstart">
+        <div class="container">
+            <h2>Quickstart</h2>
+            <div class="code-block">
+                <pre><code><span class="c"># 1. Install dependencies</span>
+cd FT710
+pip install -r requirements.txt
+
+<span class="c"># 2. Start (macOS)</span>
+FT710_SERIAL_PORT=/dev/cu.usbserial-0121DB3A0 python server.py
+
+<span class="c"># 2. Start (Linux / Raspberry Pi)</span>
+FT710_SERIAL_PORT=/dev/ttyUSB0 python server.py
+
+<span class="c"># 3. Open browser</span>
+<span class="c">#    Go to https://&lt;server-IP&gt;:8888</span>
+<span class="c">#    Default password: ft710</span></code></pre>
+            </div>
+            <div class="env-table-wrap">
+                <table>
+                    <thead><tr><th>Env Variable</th><th>Default</th><th>Description</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>FT710_SERIAL_PORT</code></td><td><code>/dev/cu.SLAB_USBtoUART</code></td><td>CAT serial port (Enhanced COM Port)</td></tr>
+                        <tr><td><code>FT710_WEB_PORT</code></td><td><code>8888</code></td><td>Web server port</td></tr>
+                        <tr><td><code>FT710_WEB_PASSWORD</code></td><td><code>ft710</code></td><td>Login password</td></tr>
+                        <tr><td><code>FT710_AUDIO_RX_DEVICE</code></td><td>Auto-detect FT-710</td><td>Audio input device (index or name substring)</td></tr>
+                        <tr><td><code>FT710_AUDIO_TX_DEVICE</code></td><td>Auto-detect FT-710</td><td>Audio output device</td></tr>
+                        <tr><td><code>FT710_SCOPE_PORT</code></td><td>(optional)</td><td>Scope serial port (SCU-LAN10 model)</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <p class="qs-note">
+                📋 Full docs on <a href="https://github.com/cheenle/mrrc_ft710">GitHub</a>,
+                including CLI args, architecture design, SDD spec, WebSocket protocol, security policy, etc.
+            </p>
+        </div>
+    </section>
+
+    <section class="safety">
+        <div class="container">
+            <h2>PTT Safety Architecture</h2>
+            <p>Transmit safety is the highest design priority. MRRC FT-710 implements multiple defense layers:</p>
+            <ol>
+                <li><strong>Touch-and-hold → instant release.</strong> PTT uses touch-and-hold interaction. Mouse leave / touch cancel releases immediately.</li>
+                <li><strong>Server-side TX status poll.</strong> 0.5s <code>TX;</code> query detects TX→RX transitions and zeroes meters immediately.</li>
+                <li><strong>PTT watchdog.</strong> Client-side 500ms timer verifies RX state; retries <code>TX0;</code> up to 3× on anomaly.</li>
+                <li><strong>Server-side forced RX.</strong> When the last client disconnects during TX, server auto-sends <code>TX0;</code>.</li>
+                <li><strong>Browser unload beacon.</strong> <code>beforeunload</code> + <code>pagehide</code> events force <code>TX0;</code> on tab close.</li>
+                <li><strong>Graceful TX audio drain.</strong> On PTT off, queued audio is written to DAC (50ms) before RF drops — word endings preserved.</li>
+            </ol>
+        </div>
+    </section>
+
+    <footer>
+        <div class="container">
+            <p>MRRC FT-710 &mdash; Open Source, GPLv3 Licensed</p>
+            <p><a href="https://github.com/cheenle/mrrc_ft710">GitHub</a> · <a href="mailto:cheenle@gmail.com">Contact</a></p>
+        </div>
+    </footer>
+
+    <script src="../js/global-nav.js?v=2" defer data-gn="1"></script>
+</body>
+</html>
