@@ -138,11 +138,6 @@ async def _broadcast_state():
         "fields": radio.to_dirty_dict(dirty),
         "dirty": list(dirty),
     }
-    # DIAGNOSTIC: log any broadcast that touches frequency
-    if "vfo_a_freq" in update["fields"] or "vfo_b_freq" in update["fields"]:
-        import sys
-        print(f"[BROADCAST] freq={update['fields'].get('vfo_a_freq')} "
-              f"dirty={list(dirty)}", file=sys.stderr, flush=True)
     data = json.dumps(update)
     dead: set[WebSocket] = set()
     for ws in ctrl_clients:
@@ -189,14 +184,6 @@ async def _on_scope_frame(_scope: ScopeHandler):
         if _scope.scope_start_freq >= 0:
             changes["scope_start_freq"] = _scope.scope_start_freq
         if changes:
-            # DIAGNOSTIC: log every scope-triggered state write to stderr.
-            # vfoa_freq (BCD @64) vs vfoa_freq_bin (binary @132): the binary
-            # one should match the CAT FA; query; the BCD one is the scope's
-            # own center/cursor field and may lag or drift.
-            import sys
-            print(f"[SCOPE->STATE] writing keys={list(changes.keys())} "
-                  f"vfoa_bcd={_scope.vfoa_freq} vfoa_bin={_scope.vfoa_freq_bin}",
-                  file=sys.stderr, flush=True)
             radio.update(**changes)
             await _broadcast_state()
 
@@ -404,14 +391,20 @@ async def _audio_rx_loop():
                                         logger.warning("RX audio is near-silent (peak=%.1f%%) — "
                                                      "check radio AF gain / USB audio connection", _peak)
                                 _first = False
-                            # Send to all clients
+                            # Send to all clients in parallel — a slow client
+                            # (WiFi jitter / TCP backpressure) shouldn't
+                            # stall the rest or delay the next audio chunk.
+                            async def _send_one(ws):
+                                for frame in frames:
+                                    await ws.send_bytes(frame)
+                            results = await asyncio.gather(
+                                *[_send_one(ws) for ws in audio_rx_clients],
+                                return_exceptions=True,
+                            )
                             dead: set[WebSocket] = set()
-                            for ws in list(audio_rx_clients):
-                                try:
-                                    for frame in frames:
-                                        await ws.send_bytes(frame)
-                                except Exception as _se:
-                                    logger.warning("Audio send error (removing client): %s", _se)
+                            for ws, res in zip(list(audio_rx_clients), results):
+                                if isinstance(res, Exception):
+                                    logger.warning("Audio send error (removing client): %s", res)
                                     dead.add(ws)
                             if dead:
                                 logger.warning("Removed %d dead audio clients", len(dead))
@@ -511,11 +504,6 @@ async def _handle_ws_message(ws: WebSocket, msg_str: str):
 async def _execute_set_command(field: str, value, ws: WebSocket):
     """Execute a set command against the radio."""
     global cat, radio, scheduler
-
-    # DIAGNOSTIC: log every frequency/mode-affecting command
-    if field in ("freq", "vfo_a_freq", "vfo_b_freq", "mode", "band"):
-        import sys as _sys
-        print(f"[WS-SET] field={field} value={value}", file=_sys.stderr, flush=True)
 
     if cat is None or not cat.connected:
         await ws.send_text(json.dumps({
@@ -933,11 +921,6 @@ async def lifespan(app: FastAPI):
     cat = CatController(SERIAL_PORT, BAUD_RATE)
     connected = await cat.connect()
     radio.serial_connected = connected
-
-    # DIAGNOSTIC: always print CAT connection status
-    import sys as _sys
-    print(f"\n[STARTUP] CAT connected={connected} poll_will_run={connected} "
-          f"port={SERIAL_PORT}", file=_sys.stderr, flush=True)
 
     if connected:
         await _initial_state_sync()
