@@ -1,6 +1,38 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# MRRC FT-710 Web Control — Core Python Dependencies
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Install: pip install -r requirements.txt
+#
+# For development/testing also install:
+#   pip install -r requirements-dev.txt
+#
+# See DEPENDENCIES.md for complete cross-platform system/SDK requirements
+# (PortAudio C library, libopus, FTDI D2XX drivers, CP210x USB driver, etc.)
+
+# ── Web Server ────────────────────────────────────────────────────────────
 fastapi>=0.100.0
 uvicorn[standard]>=0.23.0
-pyserial>=3.5
 websockets>=12.0
+
+# ── Serial CAT Protocol ───────────────────────────────────────────────────
+# Requires Silicon Labs CP210x USB-UART driver on the host OS.
+# macOS: built-in (AppleUSBCDC); Linux: built-in (cp210x kernel module);
+# Windows: download from silabs.com/developers/usb-to-uart-bridge-vcp-drivers
+pyserial>=3.5
+
+# ── Audio I/O (RX capture + TX playback, 44.1 kHz mono) ───────────────────
+# Requires the PortAudio C library on the host OS:
+#   macOS:  brew install portaudio
+#   Linux:  apt install portaudio19-dev  (or portaudio-devel on Fedora)
+#   Windows: bundled with PyAudio wheel (no separate install)
 pyaudio>=0.2.11
+
+# ── Numeric Processing ─────────────────────────────────────────────────────
+# Used for: audio resampling (44.1k ↔ 48k linear interpolation),
+#           S-meter-based synthetic spectrum fallback (Gaussian peaks).
 numpy>=1.24.0
+
+# ── Optional: TLS/SSL (for HTTPS) ─────────────────────────────────────────
+# Uncomment if you need SSL certificate support (HTTPS):
+# cryptography>=41.0.0

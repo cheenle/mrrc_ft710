@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="MRRC FT-710 软件设计说明书（SDD）总览：架构决策、服务模型、组件模型与版本演进。">
+    <meta name="author" content="BG1SB">
+    <meta name="theme-color" content="#0a0a0a">
+    <title>MRRC FT-710 SDD</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="../css/octen.css?v=4">
+    <link rel="stylesheet" href="../css/sunsdrmobile.css?v=1">
+    <link rel="stylesheet" href="../css/ft710.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body data-site="mrrc_ft710">
+
+<nav class="navbar">
+    <div class="container navbar-content">
+        <a href="index.html" class="logo">
+            <span class="logo-icon"><i class="fas fa-file-lines"></i></span>
+            <span>FT-710 <span style="color: var(--accent);">SDD</span></span>
+        </a>
+        <ul class="nav-links">
+            <li><a href="#overview">总览</a></li>
+            <li><a href="#updates">V1.3 更新</a></li>
+            <li><a href="#chapters">章节目录</a></li>
+            <li><a href="#decisions">AD 索引</a></li>
+            <li><a href="https://github.com/cheenle/mrrc_ft710/tree/main/SDD" target="_blank" rel="noopener">GitHub</a></li>
+        </ul>
+        <div class="nav-actions">
+            <a href="../sdd.html" class="lang-btn">English</a>
+            <button class="mobile-menu-toggle" onclick="toggleMobileMenu()"><i class="fas fa-bars"></i></button>
+        </div>
+    </div>
+</nav>
+
+<section class="hero">
+    <div class="hero-content">
+        <div class="hero-badge">
+            <i class="fas fa-book"></i>
+            <span>SDD V1.3 · 2026-07-08</span>
+        </div>
+        <h1 class="hero-title">MRRC FT-710<br><span class="gradient">软件设计说明书</span></h1>
+        <p class="hero-subtitle">
+            用于记录 FT-710 网页控制系统的架构、接口、运行模型与版本演进，
+            作为实现与设计的一致性基线文档。
+        </p>
+        <div class="hero-actions">
+            <a href="https://github.com/cheenle/mrrc_ft710/tree/main/SDD" class="btn btn-primary btn-large" target="_blank" rel="noopener">
+                <i class="fab fa-github"></i> 打开 SDD 源文件
+            </a>
+            <a href="index.html" class="btn btn-secondary btn-large">
+                <i class="fas fa-arrow-left"></i> 返回产品页面
+            </a>
+        </div>
+    </div>
+</section>
+
+<section class="section" id="overview" style="background: var(--bg-secondary);">
+    <div class="container">
+        <div class="section-header">
+            <span class="section-label">总览</span>
+            <h2 class="section-title">SDD 范围</h2>
+            <p class="section-subtitle">IBM TeamSD 对齐，15 章，内容基于实际代码状态。</p>
+        </div>
+        <table>
+            <thead>
+            <tr><th>属性</th><th>值</th></tr>
+            </thead>
+            <tbody>
+            <tr><td>文档 ID</td><td>SDD-MRRC-FT710-2026-001</td></tr>
+            <tr><td>版本</td><td>V1.3</td></tr>
+            <tr><td>基线日期</td><td>2026-07-08</td></tr>
+            <tr><td>后端运行时</td><td>Python 3.12+, FastAPI, Uvicorn, PyAudio, NumPy</td></tr>
+            <tr><td>前端技术</td><td>HTML5, CSS3, 原生 JavaScript, Web Audio API</td></tr>
+            <tr><td>核心接口</td><td>4 路 WebSocket + 串口 CAT + FT4222 SPI + USB 音频</td></tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="section" id="updates" style="background: var(--bg-primary);">
+    <div class="container">
+        <div class="section-header">
+            <span class="section-label">最新更新</span>
+            <h2 class="section-title">V1.3 变更重点</h2>
+        </div>
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="icon"><i class="fas fa-bolt"></i></div>
+                <h3>高优先级 CAT 指令通道</h3>
+                <p>新增 `send_priority_set_command()` 与 `_cancel_polls`，PTT/TUNE 指令可抢占轮询查询，降低控制延迟。</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon"><i class="fas fa-satellite-dish"></i></div>
+                <h3>TUNE 与天调联动</h3>
+                <p>`tune=true` 时执行 `TX2` 后 `AC003`；`tune=false` 时执行 `AC000` 后退出 TX，状态更一致。</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon"><i class="fas fa-gauge-high"></i></div>
+                <h3>遥测状态模型扩展</h3>
+                <p>新增 `MS`/`AO`/`RG0` 字段，并纳入 `RI0` 状态（高驻波、录放状态、收发状态、扫描、静噪开闭）。</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon"><i class="fas fa-arrows-rotate"></i></div>
+                <h3>7 任务轮询调度</h3>
+                <p>轮询拆分为 IF、VFO、TX 状态、TX 表头、设置、慢速遥测、连接看门狗，更易维护与抢占。</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section" id="chapters" style="background: var(--bg-secondary);">
+    <div class="container">
+        <div class="section-header">
+            <span class="section-label">章节目录</span>
+            <h2 class="section-title">SDD 15 章</h2>
+        </div>
+        <div class="steps">
+            <div class="step"><h4><a href="https://github.com/cheenle/mrrc_ft710/blob/main/SDD/01-executive-summary.md" target="_blank" rel="noopener">01 执行摘要</a></h4></div>
+            <div class="step"><h4><a href="https://github.com/cheenle/mrrc_ft710/blob/main/SDD/02-business-direction.md" target="_blank" rel="noopener">02 业务方向</a></h4></div>
+            <div class="step"><h4><a href="https://github.com/cheenle/mrrc_ft710/blob/main/SDD/03-project-definition.md" target="_blank" rel="noopener">03 项目定义</a></h4></div>
+            <div class="step"><h4><a href="https://github.com/cheenle/mrrc_ft710/blob/main/SDD/04-system-context.md" target="_blank" rel="noopener">04 系统上下文</a></h4></div>
+            <div class="step"><h4><a href="https://github.com/cheenle/mrrc_ft710/blob/main/SDD/05-non-functional-requirements.md" target="_blank" rel="noopener">05 非功能需求</a></h4></div>
+            <div class="step"><h4><a href="https://github.com/cheenle/mrrc_ft710/blob/main/SDD/06-use-case-model.md" target="_blank" rel="noopener">06 用例模型</a></h4></div>
+            <div class="step"><h4><a href="https://github.com/cheenle/mrrc_ft710/blob/main/SDD/07-subject-area-model.md" target="_blank" rel="noopener">07 领域模型</a></h4></div>
+            <div class="step"><h4><a href="https://github.com/cheenle/mrrc_ft710/blob/main/SDD/08-architecture-decisions.md" target="_blank" rel="noopener">08 架构决策</a></h4></div>
+            <div class="step"><h4><a href="https://github.com/cheenle/mrrc_ft710/blob/main/SDD/09-architecture-overview.md" target="_blank" rel="noopener">09 架构总览</a></h4></div>
+            <div class="step"><h4><a href="https://github.com/cheenle/mrrc_ft710/blob/main/SDD/10-service-model.md" target="_blank" rel="noopener">10 服务模型</a></h4></div>
+            <div class="step"><h4><a href="https://github.com/cheenle/mrrc_ft710/blob/main/SDD/11-component-model.md" target="_blank" rel="noopener">11 组件模型</a></h4></div>
+            <div class="step"><h4><a href="https://github.com/cheenle/mrrc_ft710/blob/main/SDD/12-operational-model.md" target="_blank" rel="noopener">12 运行模型</a></h4></div>
+            <div class="step"><h4><a href="https://github.com/cheenle/mrrc_ft710/blob/main/SDD/13-feasibility-assessment.md" target="_blank" rel="noopener">13 可行性评估</a></h4></div>
+            <div class="step"><h4><a href="https://github.com/cheenle/mrrc_ft710/blob/main/SDD/14-version-history.md" target="_blank" rel="noopener">14 版本历史</a></h4></div>
+            <div class="step"><h4><a href="https://github.com/cheenle/mrrc_ft710/blob/main/SDD/15-ptt-safety-architecture.md" target="_blank" rel="noopener">15 PTT 安全架构</a></h4></div>
+        </div>
+    </div>
+</section>
+
+<section class="section" id="decisions" style="background: var(--bg-primary);">
+    <div class="container">
+        <div class="section-header">
+            <span class="section-label">架构决策</span>
+            <h2 class="section-title">AD-001 ... AD-015</h2>
+        </div>
+        <div class="tech-stack">
+            <span class="tech-tag">AD-001 FastAPI/Uvicorn</span>
+            <span class="tech-tag">AD-002 直连 CAT</span>
+            <span class="tech-tag">AD-003 脏字段广播</span>
+            <span class="tech-tag">AD-004 Opus/PCM 标签流</span>
+            <span class="tech-tag">AD-005 scope_pipe 隔离</span>
+            <span class="tech-tag">AD-006 双模式频谱</span>
+            <span class="tech-tag">AD-007 PTT 安全流程</span>
+            <span class="tech-tag">AD-008 音频设备自动检测</span>
+            <span class="tech-tag">AD-009 7 任务轮询</span>
+            <span class="tech-tag">AD-010 JSON 记忆信道</span>
+            <span class="tech-tag">AD-011 48kHz TX 音频统一</span>
+            <span class="tech-tag">AD-012 Active-VFO 跟踪</span>
+            <span class="tech-tag">AD-013 表头校准</span>
+            <span class="tech-tag">AD-014 CAT 勘误处理</span>
+            <span class="tech-tag">AD-015 优先级 CAT 抢占</span>
+        </div>
+    </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div class="footer-grid">
+            <div class="footer-section">
+                <h4>MRRC FT-710 SDD</h4>
+                <p>与实际实现状态同步的设计文档入口页。</p>
+            </div>
+            <div class="footer-section">
+                <h4>链接</h4>
+                <ul>
+                    <li><a href="index.html">FT-710 网站</a></li>
+                    <li><a href="https://github.com/cheenle/mrrc_ft710/tree/main/SDD" target="_blank" rel="noopener">SDD 目录</a></li>
+                    <li><a href="https://github.com/cheenle/mrrc_ft710/blob/main/SDD/README.md" target="_blank" rel="noopener">SDD README</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; 2026 MRRC FT-710 项目 · 基于 GPLv3 开源协议。</p>
+        </div>
+    </div>
+</footer>
+
+<script>
+function toggleMobileMenu() {
+    document.querySelector('.nav-links').classList.toggle('active');
+}
+document.querySelectorAll('a[href^="#"]').forEach((a) => {
+    a.addEventListener('click', function (e) {
+        e.preventDefault();
+        const t = document.querySelector(this.getAttribute('href'));
+        if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+});
+</script>
+<script src="../js/global-nav.js?v=2" defer data-gn="1"></script>
+</body>
+</html>

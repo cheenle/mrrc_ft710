@@ -268,7 +268,26 @@ class TXReleaseOrderTests(unittest.TestCase):
         self.assertNotIn("_tx_queue.clear()", s_branch[:400])
 
 
+class RXBackpressureTests(unittest.TestCase):
+    """RX path should not let a slow audio client stall the whole broadcast loop."""
 
+    def test_rx_loop_uses_timeout_guard_for_ws_send(self):
+        source = (REPO_ROOT / "server.py").read_text()
+        self.assertIn("asyncio.wait_for(ws.send_bytes(frame)", source)
+
+    def test_rx_loop_uses_shared_send_helper(self):
+        source = (REPO_ROOT / "server.py").read_text()
+        self.assertIn("async def _send_audio_frames_to_clients(", source)
+        self.assertIn("await _send_audio_frames_to_clients(", source)
+
+    def test_rx_loop_skips_encode_when_no_clients(self):
+        source = (REPO_ROOT / "server.py").read_text()
+        self.assertIn("if audio_rx_clients:", source)
+        self.assertIn("frames = []", source)
+
+
+
+class AudioFrameFormatTests(unittest.TestCase):
     """SDD §9.3, §9.4: Audio frame format (1-byte tag + payload)."""
 
     def test_tagged_pcm_frame_starts_with_zero(self):

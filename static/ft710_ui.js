@@ -785,6 +785,10 @@ function initUI() {
                 sendCommand('freq', ch.freq);
                 radioState.vfo_a_freq = ch.freq;
                 radioState.active_vfo = 'A';
+                if (ch.mode) {
+                    sendCommand('mode', ch.mode);
+                    radioState.mode_name = ch.mode;
+                }
                 renderFrequency();
                 renderVFOButtons();
             }

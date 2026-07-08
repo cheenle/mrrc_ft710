@@ -88,6 +88,7 @@ while [ $# -gt 0 ]; do
     --no-audio) INSTALL_AUDIO=false ;;
     --no-scope) INSTALL_SCOPE=false ;;
     --install-service) START_SERVICE=true ;;
+    --dev) INSTALL_DEV=true ;;
     --help|-h) usage ;;
     *) echo -e "${RED}Unknown option: $1${NC}"; usage ;;
   esac
@@ -294,6 +295,67 @@ install_system_deps() {
       esac
       ;;
   esac
+
+  # Verify libopus path (ctypes discovery)
+  if $OPUS_LIB_OK; then
+    if "$PYTHON" -c "
+import ctypes; from ctypes.util import find_library
+lib = find_library('opus')
+print(lib if lib else 'NOT_FOUND')
+" 2>/dev/null | grep -qv "NOT_FOUND"; then
+      log_ok "libopus: ctypes discovery OK"
+    else
+      log_warn "libopus: installed but ctypes can't find it"
+      case "$OS" in
+        macos)
+          log_msg "  Fix: export DYLD_LIBRARY_PATH=/opt/homebrew/lib:\$DYLD_LIBRARY_PATH"
+          ;;
+        linux)
+          log_msg "  Fix: sudo ldconfig (or set LD_LIBRARY_PATH)"
+          ;;
+      esac
+    fi
+  fi
+
+  # ── Linux: ALSA check (required by PortAudio/PyAudio) ───────────
+  if [ "$OS" = "linux" ] && $INSTALL_AUDIO; then
+    if ! ldconfig -p 2>/dev/null | grep -q libasound; then
+      log_warn "libasound (ALSA) not found in ldconfig — PortAudio needs it"
+      case "$PKG_MANAGER" in
+        apt) log_msg "  Fix: sudo apt install libasound2-dev" ;;
+        dnf) log_msg "  Fix: sudo dnf install alsa-lib-devel" ;;
+        *)   log_msg "  Fix: install ALSA development libraries" ;;
+      esac
+    else
+      log_ok "ALSA library: found"
+    fi
+  fi
+
+  # ── Linux: CP210x kernel module check ───────────────────────────
+  if [ "$OS" = "linux" ]; then
+    if lsmod 2>/dev/null | grep -q cp210x; then
+      log_ok "CP210x kernel module: loaded"
+    else
+      log_warn "CP210x kernel module not loaded — FT-710 serial may not work"
+      log_msg "  Fix: sudo modprobe cp210x"
+    fi
+  fi
+
+  # ── Raspberry Pi: performance advisory ──────────────────────────
+  if [ "$OS" = "linux" ] && [ -f /proc/device-tree/model ]; then
+    pi_model=$(tr -d '''\0''' < /proc/device-tree/model 2>/dev/null || true)
+    if echo "$pi_model" | grep -qi "raspberry pi"; then
+      log_ok "Detected: $pi_model"
+      if echo "$pi_model" | grep -qiE "zero|1 model|2 model"; then
+        log_warn "Pi Zero/1/2: audio resampling (numpy) may strain CPU"
+        log_msg "  Consider using a Pi 4 or better for audio features"
+      fi
+      if ! ls lib/libft4222.so lib/libftd2xx.so &>/dev/null 2>&1; then
+        log_msg "  ARM FTDI libs not found — scope will use S-meter fallback"
+        log_msg "  (FTDI does not provide ARM Linux D2XX binaries)"
+      fi
+    fi
+  fi
 }
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -367,6 +429,26 @@ print('Core imports OK')
 }
 
 # ═══════════════════════════════════════════════════════════════════════
+# STEP 4b: Dev Dependencies (optional)
+# ═══════════════════════════════════════════════════════════════════════
+install_dev_deps() {
+  if ! $INSTALL_DEV; then
+    log_msg "Dev dependencies skipped (use --dev to install)"
+    return 0
+  fi
+
+  local dev_file="$SCRIPT_DIR/requirements-dev.txt"
+  if [ ! -f "$dev_file" ]; then
+    log_warn "requirements-dev.txt not found — skipping dev deps"
+    return 0
+  fi
+
+  log_msg "Installing dev dependencies (pytest, mypy, cryptography)..."
+  run_cmd "$PIP" install -r "$dev_file" -q
+  log_ok "Dev dependencies installed"
+}
+
+# ═══════════════════════════════════════════════════════════════════════
 # STEP 5: Hardware Detection
 # ═══════════════════════════════════════════════════════════════════════
 detect_hardware() {
@@ -411,6 +493,38 @@ detect_hardware() {
       case "$OS" in
         macos) log_msg "  All /dev/cu.*: $(ls /dev/cu.* 2>/dev/null | tr '\n' ' ')" ;;
         linux) log_msg "  All serial: $(ls /dev/tty* 2>/dev/null | tr '\n' ' ')" ;;
+      esac
+    fi
+  fi
+
+  # ── Serial permission check ───────────────────────────────────────
+  if [ -n "$DETECTED_CAT_PORT" ] && [ -e "$DETECTED_CAT_PORT" ]; then
+    if [ -w "$DETECTED_CAT_PORT" ]; then
+      log_ok "Serial port writable: $DETECTED_CAT_PORT"
+    else
+      log_warn "Serial port exists but NOT writable: $DETECTED_CAT_PORT"
+      case "$OS" in
+        linux)
+          local port_group=$(stat -c '%G' "$DETECTED_CAT_PORT" 2>/dev/null || echo "unknown")
+          local port_perms=$(stat -c '%a' "$DETECTED_CAT_PORT" 2>/dev/null || echo "???")
+          log_msg "  Port group: $port_group, permissions: $port_perms"
+          log_msg "  Fix: sudo usermod -a -G $port_group \$USER"
+          log_msg "  Then: log out and back in (or: newgrp $port_group)"
+          if [ "$port_group" = "dialout" ] || [ "$port_group" = "uucp" ]; then
+            if ! groups "$USER" 2>/dev/null | grep -q "$port_group"; then
+              if confirm "Add user to $port_group group? (requires sudo)"; then
+                run_cmd sudo usermod -a -G "$port_group" "$USER"
+                log_ok "User added to $port_group — log out and back in to apply"
+                log_msg "  Alternatively: newgrp $port_group"
+              fi
+            else
+              log_msg "  User is in $port_group but port is not writable — try: newgrp $port_group"
+            fi
+          fi
+          ;;
+        macos)
+          log_msg "  Fix: Close any other app using this port (wfview, ExpertSDR, etc.)"
+          ;;
       esac
     fi
   fi
@@ -996,6 +1110,7 @@ main() {
   setup_python      || { log_err "FATAL: Python setup failed"; exit 1; }
   install_system_deps
   install_python_deps || log_warn "Some Python packages may be missing"
+  install_dev_deps
   detect_hardware
   setup_ft4222
   generate_config

@@ -34,9 +34,9 @@ Runtime facts are derived from `server.py`, `cat_controller.py`, `audio_handler.
 | Attribute | Value |
 |-----------|-------|
 | Document ID | SDD-MRRC-FT710-2026-001 |
-| SDD Version | V1.0 |
-| Baseline Date | 2026-07-06 |
-| Status | Production release |
+| SDD Version | V1.3 |
+| Baseline Date | 2026-07-08 |
+| Status | Production release (documentation synchronized with runtime) |
 | Project | MRRC FT-710 |
 | Primary Radio | Yaesu FT-710 (HF/50MHz Transceiver) |
 | Runtime | Python 3.12+, FastAPI, Uvicorn, NumPy, PyAudio |
@@ -69,6 +69,8 @@ Yaesu FT-710 Radio
 | RX audio | Implemented | PyAudio capture → Opus/PCM → /WSaudioRX → browser playback |
 | TX audio | Implemented | Browser mic → /WSaudioTX → Opus decode → PyAudio → radio |
 | S-meter + Multi-meter | Implemented | PWR, ALC, SWR, Id, Vd from CAT RM3-RM8 polling |
+| Radio telemetry (RI) | Implemented | Hi-SWR, recorder, RX/TX, tuner, scan, squelch-open status from `RI0;` |
+| Meter display + AMC | Implemented | `MS`/`AO` commands exposed in state and control path |
 | Memory channels | Implemented | `/api/mem_channels` GET/POST with JSON persistence |
 | Session authentication | Implemented | Shared-password login; `_auth_tokens` + `ft710_auth` cookie; all WS gated |
 | PTT safety | Implemented | Touch-and-hold, triple TX0 verify, dead-man switch, unload beacon |

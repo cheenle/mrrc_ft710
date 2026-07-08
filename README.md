@@ -255,7 +255,7 @@ python -m unittest discover -s tests -v
 
 ## Requirements
 
-- **Python 3.12** with: `fastapi`, `uvicorn[standard]`, `pyserial`, `websockets`, `pyaudio`, `numpy`
+- **Python 3.11+** with: `fastapi`, `uvicorn[standard]`, `pyserial`, `websockets`, `pyaudio`, `numpy`
 - **libopus** (optional, for compressed audio): `brew install opus` (macOS) or `apt install libopus0` (Linux)
 - **FT-710** connected via USB
   - Enhanced COM Port for CAT (38400 baud)
@@ -266,6 +266,10 @@ python -m unittest discover -s tests -v
   - `libftd2xx.dylib` in `FT710/lib/`
   - `ftd2xx.cfg` installed to `/usr/local/lib/` with `DetachKernelDriver=1`
 - **Browser**: Safari 15+ (iOS), Chrome, Firefox (WebSocket + Web Audio + Canvas)
+
+📦 **Complete cross-platform dependency guide:** See [`DEPENDENCIES.md`](DEPENDENCIES.md) for per-platform
+installation steps, driver setup, audio configuration, FTDI scope setup,
+troubleshooting, and a full dependency graph.
 
 ## SDD Documentation
 

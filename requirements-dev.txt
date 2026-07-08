@@ -1,0 +1,18 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# MRRC FT-710 Web Control — Development & Test Dependencies
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Install: pip install -r requirements-dev.txt
+#
+# These are NOT required for production deployment.
+
+# ── Testing ────────────────────────────────────────────────────────────────
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.0.0
+
+# ── Static Analysis ────────────────────────────────────────────────────────
+mypy>=1.0.0
+
+# ── Optional: TLS/SSL for HTTPS testing ────────────────────────────────────
+cryptography>=41.0.0

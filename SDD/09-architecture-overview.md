@@ -24,7 +24,7 @@ FastAPI MRRC FT-710 Server (`server.py`)
 Backend Modules
   cat_controller.py — serial CAT protocol (pyserial + asyncio threads)
   radio_state.py — shared state with dirty-field tracking
-  poll_scheduler.py — 5-tier adaptive polling
+  poll_scheduler.py — 7-task adaptive polling with priority-command preemption
   audio_handler.py — PyAudio capture/playback + Opus codec
   opus_rx.py — libopus ctypes wrapper
   scope_handler.py — spectrum data + S-meter fallback
@@ -149,17 +149,20 @@ CAT SM0; poll (100ms)
 ## 9.6 CAT Polling Architecture
 
 ```text
-PollScheduler (asyncio)
-  Tier 1 (100ms):  FA; MD0; SM0;       → vfo_a_freq, mode, s_meter
-  Tier 2A (500ms, TX only): RM4; RM5; RM6; → alc, power, swr
-  Tier 2B (500ms): TX;                  → tx_status (radio-originated)
-  Tier 3 (2s):    SH0; AG; PC; PA0; RA0; NB0; NR0; BC; AC;
-                  → filter, af_gain, rf_power, preamp, att, nb, nr, an, tuner
-  Tier 4 (5s):    RM7; RM8; PR;         → id, vd, compressor
+PollScheduler (asyncio, 7 cooperative tasks)
+  Tier 1  (100ms):      FA; MD0; SM0;                     → vfo_a_freq, mode, s_meter
+  Tier 1b (500ms):      VS; FB;                           → active_vfo, vfo_b_freq
+  Tier 2A (500ms, TX):  RM3; RM4; RM5; RM6;              → comp, alc, power, swr
+  Tier 2B (500ms):      TX;                               → tx_status
+  Tier 3  (2s):         SH0; AG0; RG0; PC; PA0; RA0; NB0; NR0; BC; AC; SS01; AN; GT; MS;
+                        → filter/gains/preamp/att/NR/NB/AN/tuner/scope/antenna/agc/meter_display
+  Tier 4  (5s):         RM7; RM8; PR; CO; AO; RI0;       → id, vd, compressor, contour, amc, radio-info telemetry
+  Tier 5  (1s):         connection watchdog               → reconnect + full-state re-sync
 
-User commands skip next poll for the affected field (skip_next_poll).
-CAT I/O serialized through CatController._lock (asyncio.Lock).
-All serial I/O offloaded to thread pool via asyncio.to_thread().
+User commands skip next poll for affected fields (`skip_next_poll`).
+PTT/TUNE commands use priority writes (`send_priority_set_command`) and set `_cancel_polls`,
+which poll loops and read threads observe to release the serial lock quickly.
+CAT I/O remains serialized through `CatController._lock`; blocking serial work is offloaded via `asyncio.to_thread()`.
 ```
 
 ## 9.7 State Broadcasting

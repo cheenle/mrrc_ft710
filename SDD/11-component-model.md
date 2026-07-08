@@ -5,9 +5,9 @@
 | Component | Type | File | Responsibility |
 |-----------|------|------|----------------|
 | FastAPIApp | Backend core | `server.py` | Route registration, lifespan, auth middleware, static serving, all WebSockets |
-| CatController | Backend core | `cat_controller.py` | Serial CAT protocol: connect, disconnect, send_command, query, set; all high-level command helpers (40+ methods) |
+| CatController | Backend core | `cat_controller.py` | Serial CAT protocol: connect, disconnect, send/query/set, priority set path for PTT/TUNE preemption; high-level FT-710 command helpers |
 | RadioState | Backend core | `radio_state.py` | Dataclass with dirty-field change tracking; to_dict/to_dirty_dict serialization; from_sync_result deserialization; derived properties (mode_name, s_unit, band_name, filter_hz) |
-| PollScheduler | Backend core | `poll_scheduler.py` | 5-tier asyncio timer-based polling; skip_on_command; CAT query → response → state update pipeline |
+| PollScheduler | Backend core | `poll_scheduler.py` | 7-task asyncio polling (IF/VFO/TX-status/TX-meters/settings/slow/watchdog), skip-on-command, cancel-aware preemption for priority CAT writes |
 | AudioHandler | Backend core | `audio_handler.py` | PyAudio device enumeration, RX capture stream (48kHz), TX playback stream (48kHz), Opus encode (via RxOpusEncoder), multi-layer audio device auto-detection (name + mono heuristic + full-duplex) |
 | OpusCodec | Backend support | `opus_rx.py` | RxOpusEncoder (48kHz mono, 64kbps), TxOpusDecoder (48kHz mono); direct ctypes libopus bindings; bitrate via max_data_bytes cap |
 | ScopeHandler | Backend core | `scope_handler.py` | Spectrum data container; update_from_scope_frame (real) and update_from_radio_state (synthetic); get_spectrum_binary for WS broadcast |
@@ -44,7 +44,7 @@
 ```text
 FastAPIApp lifespan startup:
   1. CatController.connect() → open serial port → send ID; → verify FT-710
-  2. If connected: initial_state_sync() → 15 CAT queries → RadioState.from_sync_result()
+  2. If connected: initial_state_sync() → 24+ CAT queries (incl. VS/FB/RG0/MS/AO/RI0) → RadioState.from_sync_result()
   3. _init_scope_cat() → send scope-init extended CAT commands
   4. PollScheduler(cat, radio, on_state_changed=_broadcast_state).start()
   5. AudioHandler() → init PyAudio → scan devices → start_rx() → open capture stream

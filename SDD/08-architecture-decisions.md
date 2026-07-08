@@ -112,19 +112,19 @@
 
 **Consequences**: Audio may still use wrong device if multiple mono USB audio devices are present. Configurable device override via env vars is the recommended approach for such setups.
 
-## AD-009: 5-Tier Adaptive Polling
+## AD-009: 7-Task Adaptive Polling with Bounded Lock Time
 
 | Attribute | Value |
 |-----------|-------|
 | Type | Design |
 | Status | Implemented |
-| Decision | Background CAT polling organized into 5 tiers at 100ms/500ms/2s/5s intervals, with adaptive skip-on-command |
+| Decision | Background CAT polling split into 7 cooperative tasks (IF, VFO, TX status, TX meters, settings, slow telemetry, connection watchdog), with skip-on-command and short per-query timeout |
 
 **Problem**: Polling too fast floods the serial port; too slow makes the UI feel unresponsive. Some fields (S-meter) change rapidly; others (filter width) rarely.
 
-**Rationale**: Tier 1 (100ms): freq + mode + S-meter — high churn. Tier 2 (500ms): TX meters (ALC/PWR/SWR) + PTT status. Tier 3 (2s): gains, filter, NR, NB, etc. Tier 4 (5s): Id, Vd, compressor. User commands skip the next poll for that field to avoid redundant queries. Total throughput ~296 bytes/sec at 38400 baud.
+**Rationale**: Fast path keeps only `FA/MD0/SM0` at 100ms. `VS/FB` run separately at 500ms, so active-VFO tracking does not bloat the IF loop. TX status and TX meters are independent 500ms tasks; TX meter polling includes `RM3/RM4/RM5/RM6` and is TX-only. Settings (2s) include `RG0`, `MS`, and tuner state; slow telemetry (5s) includes `RM7/RM8`, `PR`, `AO`, and `RI0`. Poll query timeout is 0.25s to cap lock occupancy.
 
-**Consequences**: `PollScheduler` manages complex timer state. `skip_next_poll()` called after each user command. CAT errors (timeout, ? response) handled per-command.
+**Consequences**: `PollScheduler` owns task-level cadence and backpressure controls (`skip_next_poll()`, short pause after user command, and `_cancel_polls` awareness). CAT errors remain per-command and non-fatal.
 
 ## AD-010: Memory Channels as Server-Side JSON
 
@@ -154,7 +154,63 @@
 
 **Consequences**: Browser mic capture at 48 kHz uses slightly more CPU than 16 kHz (3× sample count), but the encoding cost is dominated by Opus frame processing, not sample count. Opus frames are 960 samples (still 20ms), matching the RX encoder's frame size. PCM fallback path also unified at 48 kHz. `TX_RATE` and `TX_SAMPLE_RATE` are now identical — no future mismatch possible.
 
-## 8.12 Decision Summary
+## AD-012: Active-VFO-Aware Frequency Model
+
+| Attribute | Value |
+|-----------|-------|
+| Type | Design |
+| Status | Implemented |
+| Decision | Poll `VS` + `FB` at 0.5s and treat `freq` set command as "apply to currently active VFO" |
+
+**Problem**: Using `freq` as VFO-A-only could update the wrong oscillator when VFO-B is active.
+
+**Rationale**: Active-VFO tracking keeps UI and CAT semantics aligned with front-panel behavior.
+
+**Consequences**: State now carries `active_vfo`, `vfo_a_freq`, and `vfo_b_freq` continuously.
+
+## AD-013: FT-710 Meter Calibration Tables
+
+| Attribute | Value |
+|-----------|-------|
+| Type | Design |
+| Status | Implemented |
+| Decision | Convert raw RM meter values (0–255) into engineering units via piecewise-linear calibration tables in `config.py` |
+
+**Problem**: Raw meter values are not user-meaningful and are non-linear.
+
+**Rationale**: Calibration points from FT-710 rig data provide practical watt/SWR/volt/amp displays without firmware changes.
+
+**Consequences**: UI meters show engineering units; calibration can be tuned independently of polling logic.
+
+## AD-014: FT-710 CAT Errata Handling
+
+| Attribute | Value |
+|-----------|-------|
+| Type | Design |
+| Status | Implemented |
+| Decision | Apply FT-710-specific command corrections: treat `DN` as step-down (never poll), use `PR00/PR01` for compressor, and map tuner control to `AC000/AC001/AC003` |
+
+**Problem**: Yaesu CAT documentation ambiguities can cause unintended RF behavior (frequency drift, invalid tuner command forms).
+
+**Rationale**: Runtime behavior is grounded in observed FT-710 responses and cross-command consistency.
+
+**Consequences**: Safer default control path; ambiguous commands are either corrected or intentionally omitted.
+
+## AD-015: Priority CAT Command Preemption
+
+| Attribute | Value |
+|-----------|-------|
+| Type | Safety / Responsiveness |
+| Status | Implemented |
+| Decision | Introduce `send_priority_set_command()` and `_cancel_polls` cooperative abort so latency-sensitive commands (PTT/TUNE) preempt poll queries |
+
+**Problem**: User TX/RX transitions can stall behind in-flight poll cycles if every query holds the serial lock to timeout.
+
+**Rationale**: Priority commands set a cancel flag observed by poll loops, queued query waiters, and `_read_until()` threads, reducing worst-case handoff delay.
+
+**Consequences**: Poll loops must be cancel-aware; UX is significantly more responsive during fast PTT/tune transitions.
+
+## 8.16 Decision Summary
 
 | ID | Topic | Status |
 |----|-------|--------|
@@ -166,6 +222,10 @@
 | AD-006 | Dual-mode spectrum (FT4222 + fallback) | Implemented |
 | AD-007 | PTT release safety flow | Implemented |
 | AD-008 | PyAudio FT-710 auto-detection | Implemented |
-| AD-009 | 5-tier adaptive polling | Implemented |
+| AD-009 | 7-task adaptive polling with bounded lock time | Implemented |
 | AD-010 | Memory channels as server-side JSON | Implemented |
 | AD-011 | Unified 48kHz TX audio pipeline | Implemented |
+| AD-012 | Active-VFO-aware frequency model | Implemented |
+| AD-013 | FT-710 meter calibration tables | Implemented |
+| AD-014 | FT-710 CAT errata handling | Implemented |
+| AD-015 | Priority CAT command preemption | Implemented |

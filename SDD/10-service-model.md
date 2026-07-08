@@ -10,7 +10,7 @@
 | TXAudioService | Core | Implemented | Receive `/WSaudioTX` tagged frames → Opus decode → PyAudio → radio |
 | SpectrumService | Core | Implemented | FT4222 scope data + S-meter fallback → `/WSspectrum` binary broadcast |
 | CATSerialService | Core | Implemented | Serial CAT protocol over USB Enhanced COM Port (38400, 8N1) |
-| PollingService | Core | Implemented | 5-tier adaptive background state polling |
+| PollingService | Core | Implemented | 7-task adaptive background polling with priority-command yield |
 | ScopePipeService | Core | Implemented | Manage scope_pipe subprocess lifecycle; read stdout/stderr |
 | MemoryChannelService | Core | Implemented | `/api/mem_channels` GET/POST with JSON persistence |
 | AuthService | Support | Implemented | Password login, session tokens, cookie management, WS gating |
@@ -57,7 +57,7 @@ AuthService
 | CATSerialService | Command strings | Response strings | Serial (38400,8N1) |
 | MemoryChannelService | JSON array | JSON array + broadcast | HTTP `/api/mem_channels` |
 | AuthService | Password + request | Cookie + token + redirect | HTTP `/api/auth/*` |
-| StatusService | GET request | Full radio state JSON (44+ fields) | HTTP `/api/status` |
+| StatusService | GET request | Full radio state JSON (50+ fields) | HTTP `/api/status` |
 
 ## 10.4 Control Service Command Contract
 
@@ -68,11 +68,13 @@ Key commands (see `_execute_set_command` in `server.py` for complete list):
 | `freq` / `vfo_a_freq` | Hz int | `FA<9d>;` | Set VFO-A frequency |
 | `vfo_b_freq` | Hz int | `FB<9d>;` | Set VFO-B frequency |
 | `mode` | "USB","LSB",... | `MD0<X>;` | Set operating mode |
-| `ptt` | true/false | `TX1;` / `TX0;` | PTT with triple verify on release |
-| `tune` | true/false | `TX2;` / `TX0;` | Antenna tuner activation |
+| `ptt` | true/false | `TX1;` / `TX0;` | Priority command path; preempts poll queries |
+| `tune` | true/false | `TX2;` + `AC003;` / `AC000;` + `TX0;` | Tune carrier + tuner start/stop sequence |
 | `filter` / `filter_width` | 0–22 | `SH0<NN>;` | Filter width index |
 | `af_gain` | 0–255 | `AG0<NNN>;` | AF gain |
 | `rf_gain` | 0–255 | `RG0<NNN>;` | RF gain |
+| `meter_display` | 0–5 | `MS<P1>0;` | Radio front-panel meter selection |
+| `amc_level` | 1–100 | `AO<NNN>;` | AMC output level |
 | `rf_power` | 5–100 | `PC<NNN>;` | RF power |
 | `preamp` | 0,1,2 | `PA0<N>;` | OFF/AMP1/AMP2 |
 | `att` / `attenuator` | 0,1,2,3 | `RA0<N>;` | OFF/6dB/12dB/18dB |
@@ -80,7 +82,7 @@ Key commands (see `_execute_set_command` in `server.py` for complete list):
 | `nb` / `noise_blanker` | true/false | `NB0<0/1>;` | Noise blanker toggle |
 | `an` / `auto_notch` | true/false | `BC0<0/1>;` | Auto notch toggle |
 | `comp` / `compressor` | true/false | `PR0<0/1>;` | Compressor toggle |
-| `tuner` | 0,1,2 | `AC<NNN>;` | ATU OFF/ON/TUNE |
+| `tuner` | 0,1,2 | `AC000;` / `AC001;` / `AC003;` | ATU OFF/ON/TUNE start |
 | `vfo` | "A","B" | `VS0;` / `VS1;` | Active VFO switch |
 | `split` | true/false | `ST<0/1>;` | Split operation |
 | `band` | "20m","40m",... | `BS<NN>;` | Band stacking register |
@@ -92,7 +94,7 @@ Key commands (see `_execute_set_command` in `server.py` for complete list):
 
 | Service | Quality Target |
 |---------|----------------|
-| ControlService | Never silently ignore PTT release; respond within 200ms |
+| ControlService | PTT/TUNE commands bypass queued polls and execute with low latency |
 | RXAudioService | Continuous playback under LAN jitter; Opus 64kbps default |
 | TXAudioService | Low-latency mic → radio path (< 500ms) |
 | SpectrumService | ~30fps FT4222; ~10fps fallback; identical binary format |

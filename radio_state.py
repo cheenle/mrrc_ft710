@@ -76,6 +76,20 @@ class RadioState:
     dnr_level: int = 0                 # DN; DNR level 0(OFF)-15
     contour_level: int = 0             # CO; Contour level 0-255
 
+    # ── Radio Information (RI command) ────────────────────────────
+    hi_swr: bool = False               # RI P2: 0=Normal / 1=Hi-SWR
+    recording_status: int = 0          # RI P3: 0=Stop / 1=Recording / 2=Playing
+    rx_tx_status: int = 0              # RI P4: 0=RX / 1=TX / 2=TX INHIBIT
+    tuner_tuning: bool = False         # RI P6: 0=Stopped / 1=Tuning
+    scan_status: int = 0               # RI P7: 0=Stop / 1=Scanning / 2=Pause
+    squelch_open: bool = False         # RI P8: 0=Closed / 1=Open (BUSY)
+
+    # ── Meter Display Selection (MS command) ──────────────────────
+    meter_display: int = 0             # MS P1: 0=PO/1=COMP/2=ALC/3=VDD/4=ID/5=SWR
+
+    # ── AMC Output Level ──────────────────────────────────────────
+    amc_level: int = 50                # AO; 1-100
+
     # ── Connection State ──────────────────────────────────────────
     serial_connected: bool = False
     last_update: float = 0.0
@@ -260,6 +274,17 @@ class RadioState:
             "agc": self.agc,
             "dnr_level": self.dnr_level,
             "contour_level": self.contour_level,
+            # Radio Information (RI)
+            "hi_swr": self.hi_swr,
+            "recording_status": self.recording_status,
+            "rx_tx_status": self.rx_tx_status,
+            "tuner_tuning": self.tuner_tuning,
+            "scan_status": self.scan_status,
+            "squelch_open": self.squelch_open,
+            # Meter Display (MS)
+            "meter_display": self.meter_display,
+            # AMC Level
+            "amc_level": self.amc_level,
             # Connection
             "serial_connected": self.serial_connected,
             "last_update": self.last_update,
@@ -311,20 +336,43 @@ class RadioState:
             "noise_blanker": lambda r: r.endswith("1"),
             "noise_reduction": lambda r: r.endswith("1"),
             "auto_notch": lambda r: r.endswith("1"),
-            # AC P1P2P3: "010"→ATU on, "011"→tuning. Map P3==1→tuning(2), P2==1→on(1), else off(0)
+            # AC P1P2P3. Standard tuner: P2=0, P3=0=OFF, P3=1=ON, P3=3=Tuning
             "tuner_status": lambda r: (
-                2 if len(r) > 4 and r[4] == '1' else
-                1 if len(r) > 3 and r[3] == '1' else 0
-            ) if r and len(r) > 2 else 0,
+                2 if len(r) > 4 and r[4] == '3' else  # P3==3 → tuning start
+                1 if len(r) > 4 and r[4] == '1' else  # P3==1 → on
+                0  # P3==0 → off
+            ) if r and len(r) > 4 else 0,
             "power_on": lambda r: r.endswith("1"),
             "scope_on": lambda r: int(r[4:]) == 1 if r and len(r) >= 5 else True,
             "antenna": lambda r: int(r[2:]) if r and len(r) >= 3 else 1,
             "agc": lambda r: int(r[2:]) if r and len(r) >= 4 else 1,
             "dnr_level": lambda r: int(r[2:5]) if r and len(r) >= 5 else 0,
             "contour_level": lambda r: int(r[2:5]) if r and len(r) >= 5 else 0,
+            "meter_display": lambda r: int(r[2]) if r and len(r) >= 3 else 0,
+            "amc_level": lambda r: int(r[2:5]) if r and len(r) >= 5 else 50,
+            "rf_gain": lambda r: int(r[2:]) if r and len(r) > 2 else 255,
+            "ri": lambda r: (  # RI0 + 7 single-char fields
+                # Parse into individual fields below
+                r
+            ),
         }
 
         for field, raw in sync_data.items():
+            if field == "ri":
+                # RI0 response: "RI0" + 7 single-char fields
+                # Parse into individual RI fields
+                try:
+                    tail = raw[3:] if raw.startswith("RI0") else raw
+                    if len(tail) >= 7:
+                        state.hi_swr = tail[0] == '1'
+                        state.recording_status = int(tail[1]) if tail[1].isdigit() else 0
+                        state.rx_tx_status = int(tail[2]) if tail[2].isdigit() else 0
+                        state.tuner_tuning = tail[4] == '1'
+                        state.scan_status = int(tail[5]) if tail[5].isdigit() else 0
+                        state.squelch_open = tail[6] == '1'
+                except (ValueError, IndexError):
+                    pass
+                continue
             if field in _parsers and raw:
                 try:
                     value = _parsers[field](raw)

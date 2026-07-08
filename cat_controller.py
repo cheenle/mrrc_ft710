@@ -36,6 +36,10 @@ class CatController:
         self._timeout = SERIAL_TIMEOUT
         self._connected = False
         self._model = "Unknown"
+        # Set by send_priority_set_command() to signal poll queries
+        # (both in-progress _read_until threads and queued send_command
+        # waiters) to abort so PTT/tune can grab the serial lock quickly.
+        self._cancel_polls: bool = False
 
     # ── Connection Management ──────────────────────────────────────
 
@@ -156,6 +160,10 @@ class CatController:
             buf = bytearray()
             deadline = time.monotonic() + (timeout if timeout is not None else self._timeout)
             while time.monotonic() < deadline:
+                # Priority command (PTT/tune) pending — abort early so
+                # the serial lock is released for it as soon as possible.
+                if self._cancel_polls:
+                    return None
                 waiting = self._ser.in_waiting
                 if waiting > 0:
                     chunk = self._ser.read(waiting)
@@ -210,9 +218,22 @@ class CatController:
                 lock quickly instead of blocking user commands (PTT) for
                 the full SERIAL_TIMEOUT.
         """
-        async with self._lock:
+        # If a priority command (PTT/tune) has signalled polls to cancel,
+        # don't even try to acquire the lock — let the priority command
+        # grab it with minimal delay.
+        if self._cancel_polls:
+            return None
+
+        await self._lock.acquire()
+        result: Optional[str] = None
+        try:
+            # Double-check after acquiring the lock: a priority command
+            # may have set _cancel_polls while we were queued waiting.
+            if self._cancel_polls:
+                return result
+
             if not self._connected or self._ser is None:
-                return None
+                return result
 
             raw = (cmd + ";").encode("ascii")
             try:
@@ -220,7 +241,7 @@ class CatController:
             except Exception as e:
                 logger.error("Serial write error for '%s': %s", cmd, e)
                 self._connected = False
-                return None
+                return result
 
             # Read response — skip any AI frames that don't match the
             # expected command prefix.
@@ -229,15 +250,17 @@ class CatController:
                     b";", expected_prefix=cmd, timeout=timeout)
                 if response_bytes is None:
                     logger.debug("Command timeout (no data): %s", cmd)
-                    return None
+                    return result
                 if not response_bytes:
                     logger.debug("Command timeout (empty): %s", cmd)
-                    return None
-                return response_bytes.decode("ascii", errors="replace").rstrip(";")
+                    return result
+                result = response_bytes.decode("ascii", errors="replace").rstrip(";")
             except Exception as e:
                 logger.error("Serial read error for '%s': %s", cmd, e)
                 self._connected = False
-                return None
+            return result
+        finally:
+            self._lock.release()
 
     async def send_set_command(self, cmd: str) -> bool:
         """Send a set command WITHOUT waiting for a response.
@@ -262,6 +285,42 @@ class CatController:
                 logger.error("Serial write error for '%s': %s", cmd, e)
                 self._connected = False
                 return False
+
+    async def send_priority_set_command(self, cmd: str) -> bool:
+        """Send a high-priority set command that preempts poll queries.
+
+        Used for latency-sensitive commands like PTT and TUNE.  Sets
+        _cancel_polls to signal in-progress poll reads (in _read_until
+        threads) and queued poll send_command waiters to abort, so this
+        command can grab the serial lock with minimal delay.
+
+        Write-only (no response read) for speed — same fire-and-forget
+        semantics as send_set_command.
+        """
+        self._cancel_polls = True
+        try:
+            # Brief yield so any in-progress _read_until thread can see
+            # the cancel flag and bail out, releasing the lock sooner.
+            await asyncio.sleep(0.005)
+
+            async with self._lock:
+                # Clear the cancel flag now that we hold the lock.
+                # Poll queries will resume once we release it.
+                self._cancel_polls = False
+
+                if not self._connected or self._ser is None:
+                    return False
+
+                raw = (cmd + ";").encode("ascii")
+                try:
+                    await self._write(raw)
+                    return True
+                except Exception as e:
+                    logger.error("Serial write error for '%s': %s", cmd, e)
+                    self._connected = False
+                    return False
+        finally:
+            self._cancel_polls = False
 
     async def query(self, cmd: str, timeout: Optional[float] = None) -> Optional[str]:
         """Send a query command (no value, just prefix + ';').
@@ -319,10 +378,10 @@ class CatController:
         return None
 
     async def set_ptt(self, tx: bool) -> bool:
-        return await self.set("TX1" if tx else "TX0")
+        return await self.send_priority_set_command("TX1" if tx else "TX0")
 
     async def set_tune(self, tune: bool) -> bool:
-        return await self.set("TX2" if tune else "TX0")
+        return await self.send_priority_set_command("TX2" if tune else "TX0")
 
     async def get_ptt(self, timeout: Optional[float] = None) -> Optional[int]:
         resp = await self.query("TX", timeout=timeout)
@@ -399,9 +458,13 @@ class CatController:
         resp = await self.query(meter, timeout=timeout)
         if resp and len(resp) >= 6:
             try:
-                return int(resp[3:6])
+                val = int(resp[3:6])
+                logger.debug("get_meter(%s): raw=%r → val=%d", meter, resp, val)
+                return val
             except ValueError:
+                logger.warning("get_meter(%s): unparseable response %r", meter, resp)
                 return None
+        logger.debug("get_meter(%s): no/bad response %r", meter, resp)
         return None
 
     async def set_filter_width(self, index: int) -> bool:
@@ -444,11 +507,17 @@ class CatController:
         return await self.set(f"BC0{1 if on else 0}")
 
     async def set_compressor(self, on: bool) -> bool:
+        # FT-710 PR command: P1=0 (Speech Processor), P2=0=OFF, P2=1=ON.
+        # NOTE: The Yaesu CAT PDF says P2=1=OFF/2=ON, but this contradicts
+        # every other binary command (NB/NR/BC/NA/BI/VX all use 0=OFF/1=ON)
+        # AND empirical testing confirms the radio uses 0=OFF, 1=ON.
+        # The PDF is a known errata — sending PR02 kills TX audio.
         return await self.set(f"PR0{1 if on else 0}")
 
     async def set_tuner(self, value: int) -> bool:
-        # AC P1P2P3;  P1=0, P2=type(0=off/1=std/2=ATAS), P3=tuning(0/1)
-        tuner_map = {0: "000", 1: "010", 2: "011"}
+        # AC P1P2P3; P1=0, P2=0(standard tuner), P3=0(OFF)/1(ON)/3(Tuning)
+        # P2=1 is invalid for standard tuner per the CAT spec.
+        tuner_map = {0: "000", 1: "001", 2: "003"}
         v = tuner_map.get(value, "000")
         return await self.set(f"AC{v}")
 
@@ -544,6 +613,72 @@ class CatController:
         """Set drive level — maps to RF Power (PC) on FT-710. 5-100W."""
         return await self.set_rf_power(value)
 
+    # ── Meter & Radio Info Commands ─────────────────────────────────
+
+    async def set_meter_display(self, meter: int) -> bool:
+        """Set which meter is displayed on the radio (MS command).
+
+        Args:
+            meter: 0=PO, 1=COMP, 2=ALC, 3=VDD, 4=ID, 5=SWR
+        """
+        if meter < 0 or meter > 5:
+            return False
+        return await self.set(f"MS{meter}0")
+
+    async def get_meter_display(self, timeout: Optional[float] = None) -> Optional[int]:
+        """Query which meter is displayed (MS;)."""
+        resp = await self.query("MS", timeout=timeout)
+        if resp and len(resp) >= 4:
+            try:
+                return int(resp[2])
+            except ValueError:
+                return None
+        return None
+
+    async def set_amc_level(self, level: int) -> bool:
+        """Set AMC output level (AO command).  Range: 1-100."""
+        if level < 1 or level > 100:
+            return False
+        return await self.set(f"AO{level:03d}")
+
+    async def get_amc_level(self, timeout: Optional[float] = None) -> Optional[int]:
+        """Query AMC output level (AO;)."""
+        resp = await self.query("AO", timeout=timeout)
+        if resp and len(resp) >= 5:
+            try:
+                return int(resp[2:5])
+            except ValueError:
+                return None
+        return None
+
+    async def get_radio_info(self, timeout: Optional[float] = None) -> Optional[dict]:
+        """Read radio information via RI; command.
+
+        Returns dict with keys: hi_swr, recording_status, rx_tx_status,
+        tuner_tuning, scan_status, squelch_open.
+        """
+        resp = await self.query("RI0", timeout=timeout)
+        if not resp or len(resp) < 10:
+            return None
+        try:
+            # RI0 + P2 + P3 + P4 + P5 + P6 + P7 + P8 (each 1 char)
+            # resp format: "RI0" + 7 single-char fields
+            tail = resp[3:]  # Skip "RI0"
+            if len(tail) < 7:
+                return None
+            return {
+                "hi_swr": tail[0] == '1',          # P2
+                "recording_status": int(tail[1]) if tail[1].isdigit() else 0,  # P3
+                "rx_tx_status": int(tail[2]) if tail[2].isdigit() else 0,      # P4
+                # P5 is fixed 0, skip
+                "tuner_tuning": tail[4] == '1',     # P6
+                "scan_status": int(tail[5]) if tail[5].isdigit() else 0,       # P7
+                "squelch_open": tail[6] == '1',     # P8
+            }
+        except (ValueError, IndexError) as e:
+            logger.debug("RI parse error: %s (raw: %s)", e, resp)
+            return None
+
     # ── Scope/Spectrum Commands ────────────────────────────────────
 
     async def set_scope_span(self, span: int) -> bool:
@@ -635,6 +770,10 @@ class CatController:
             # "DN" intentionally omitted — on the FT-710 "DN;" is the
             # active-VFO step-DOWN command, not a DNR query.
             ("contour_level", "CO"),
+            ("meter_display", "MS"),
+            ("amc_level", "AO"),
+            ("ri", "RI0"),       # Radio Information (Hi-SWR, etc.)
+            ("rf_gain", "RG0"),  # RF Gain (was missing from initial sync)
         ]
         for field, cmd in queries:
             resp = await self.query(cmd)

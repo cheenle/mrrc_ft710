@@ -1,0 +1,32 @@
+/* MRRC FT-710 — Amber brand colour overrides for octen.css */
+
+:root {
+  --bg-primary: #0a0a0a;
+  --bg-secondary: #0d1117;
+  --bg-tertiary: #10161e;
+  --bg-card: rgba(255,255,255,0.025);
+  --accent: #f0a030;
+  --accent-dim: #d48828;
+  --accent-glow: rgba(240,160,48,0.12);
+  --text-secondary: #8899aa;
+  --text-muted: #5c6370;
+  --border: rgba(255,255,255,0.06);
+  --border-hover: rgba(240,160,48,0.25);
+  --nav-h: 56px;
+}
+
+.logo span { color: var(--accent); }
+
+.gradient {
+  background: linear-gradient(135deg, #f0a030, #d48828);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+}
+
+.btn-primary { background: var(--accent); color: #0a0a0a; }
+.btn-primary:hover { background: #d48828; box-shadow: 0 8px 24px rgba(240,160,48,0.3); }
+.btn-secondary { color: var(--text-secondary); }
+
+.section-label { text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.875rem; font-weight: 600; color: var(--accent); margin-bottom: 0.75rem; }
+
+.feature-card:hover { border-color: rgba(240,160,48,0.25); }
+.tech-tag:hover { border-color: var(--accent); color: var(--accent); }

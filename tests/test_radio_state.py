@@ -257,21 +257,22 @@ class RadioStateFromSyncResultTests(unittest.TestCase):
         self.assertEqual(state.attenuator, 3)
 
     def test_from_sync_result_parses_tuner(self):
-        # AC P1P2P3 format: P1=0, P2=type(0=off/1=std/2=ATAS), P3=tuning(0/1)
-        # "AC010" → P2=1(std ATU), P3=0(not tuning) → state=1 (on)
-        sync_data_on = {"tuner_status": "AC010"}
+        # AC P1P2P3 format per FT-710 CAT spec:
+        # P1=0, P2=0 (standard tuner), P3=0=OFF, P3=1=ON, P3=3=Tuning
+        # "AC001" → P2=0, P3=1 → state=1 (on)
+        sync_data_on = {"tuner_status": "AC001"}
         state_on = RadioState.from_sync_result(sync_data_on)
         self.assertEqual(state_on.tuner_status, 1)
 
-        # "AC000" → fully bypassed → state=0 (off)
+        # "AC003" → P2=0, P3=3 → state=2 (tuning)
+        sync_data_tuning = {"tuner_status": "AC003"}
+        state_tuning = RadioState.from_sync_result(sync_data_tuning)
+        self.assertEqual(state_tuning.tuner_status, 2)
+
+        # "AC000" → P2=0, P3=0 → state=0 (off)
         sync_data_off = {"tuner_status": "AC000"}
         state_off = RadioState.from_sync_result(sync_data_off)
         self.assertEqual(state_off.tuner_status, 0)
-
-        # "AC011" → P2=1(std ATU), P3=1(tuning) → state=2 (tuning)
-        sync_data_tune = {"tuner_status": "AC011"}
-        state_tune = RadioState.from_sync_result(sync_data_tune)
-        self.assertEqual(state_tune.tuner_status, 2)
 
 
 if __name__ == "__main__":

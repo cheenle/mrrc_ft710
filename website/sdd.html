@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="MRRC FT-710 Software Design Description (SDD) overview: architecture decisions, service model, component model, and version history.">
+    <meta name="author" content="BG1SB">
+    <meta name="theme-color" content="#0a0a0a">
+    <title>MRRC FT-710 SDD</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="css/octen.css?v=4">
+    <link rel="stylesheet" href="css/sunsdrmobile.css?v=1">
+    <link rel="stylesheet" href="css/ft710.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body data-site="mrrc_ft710">
+
+<nav class="navbar">
+    <div class="container navbar-content">
+        <a href="index.html" class="logo">
+            <span class="logo-icon"><i class="fas fa-file-lines"></i></span>
+            <span>FT-710 <span style="color: var(--accent);">SDD</span></span>
+        </a>
+        <ul class="nav-links">
+            <li><a href="#overview">Overview</a></li>
+            <li><a href="#updates">V1.3</a></li>
+            <li><a href="#chapters">Chapters</a></li>
+            <li><a href="#decisions">AD Index</a></li>
+            <li><a href="https://github.com/cheenle/mrrc_ft710/tree/main/SDD" target="_blank" rel="noopener">GitHub</a></li>
+        </ul>
+        <div class="nav-actions">
+            <a href="zh/sdd.html" class="lang-btn">中文</a>
+            <button class="mobile-menu-toggle" onclick="toggleMobileMenu()"><i class="fas fa-bars"></i></button>
+        </div>
+    </div>
+</nav>
+
+<section class="hero">
+    <div class="hero-content">
+        <div class="hero-badge">
+            <i class="fas fa-book"></i>
+            <span>SDD V1.3 · 2026-07-08</span>
+        </div>
+        <h1 class="hero-title">MRRC FT-710<br><span class="gradient">Software Design Description</span></h1>
+        <p class="hero-subtitle">
+            Canonical design record for architecture, interfaces, operational model,
+            and runtime evolution of the FT-710 web control system.
+        </p>
+        <div class="hero-actions">
+            <a href="https://github.com/cheenle/mrrc_ft710/tree/main/SDD" class="btn btn-primary btn-large" target="_blank" rel="noopener">
+                <i class="fab fa-github"></i> Open SDD Source
+            </a>
+            <a href="index.html" class="btn btn-secondary btn-large">
+                <i class="fas fa-arrow-left"></i> Back to Product Page
+            </a>
+        </div>
+    </div>
+</section>
+
+<section class="section" id="overview" style="background: var(--bg-secondary);">
+    <div class="container">
+        <div class="section-header">
+            <span class="section-label">Overview</span>
+            <h2 class="section-title">SDD Scope</h2>
+            <p class="section-subtitle">IBM TeamSD aligned, 15 chapters, implementation-grounded content.</p>
+        </div>
+        <table>
+            <thead>
+            <tr><th>Attribute</th><th>Value</th></tr>
+            </thead>
+            <tbody>
+            <tr><td>Document ID</td><td>SDD-MRRC-FT710-2026-001</td></tr>
+            <tr><td>Version</td><td>V1.3</td></tr>
+            <tr><td>Baseline Date</td><td>2026-07-08</td></tr>
+            <tr><td>Runtime</td><td>Python 3.12+, FastAPI, Uvicorn, PyAudio, NumPy</td></tr>
+            <tr><td>Frontend</td><td>HTML5, CSS3, vanilla JavaScript, Web Audio API</td></tr>
+            <tr><td>Core Interfaces</td><td>4 WebSockets + Serial CAT + FT4222 SPI + USB Audio</td></tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="section" id="updates" style="background: var(--bg-primary);">
+    <div class="container">
+        <div class="section-header">
+            <span class="section-label">Latest Update</span>
+            <h2 class="section-title">What Changed In V1.3</h2>
+        </div>
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="icon"><i class="fas fa-bolt"></i></div>
+                <h3>Priority CAT Command Path</h3>
+                <p>`send_priority_set_command()` + `_cancel_polls` allow PTT/TUNE commands to preempt poll queries and reduce control latency.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon"><i class="fas fa-satellite-dish"></i></div>
+                <h3>Tune + Tuner Sequence</h3>
+                <p>Tune flow now uses `TX2` with `AC003` (start tuning) and exits with `AC000` + `TX0` for clean tuner state transitions.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon"><i class="fas fa-gauge-high"></i></div>
+                <h3>Expanded Telemetry Model</h3>
+                <p>Added `MS`/`AO`/`RG0` fields and `RI0` status mapping (Hi-SWR, recorder, RX/TX state, scan, squelch-open).</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon"><i class="fas fa-arrows-rotate"></i></div>
+                <h3>7-Task Poll Scheduler</h3>
+                <p>Polling now explicitly separates IF, VFO, TX status, TX meters, settings, slow telemetry, and connection watchdog tasks.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section" id="chapters" style="background: var(--bg-secondary);">
+    <div class="container">
+        <div class="section-header">
+            <span class="section-label">Chapter Index</span>
+            <h2 class="section-title">15 SDD Chapters</h2>
+        </div>
+        <div class="steps">
+            <div class="step"><h4><a href="https://github.com/cheenle/mrrc_ft710/blob/main/SDD/01-executive-summary.md" target="_blank" rel="noopener">01 Executive Summary</a></h4></div>
+            <div class="step"><h4><a href="https://github.com/cheenle/mrrc_ft710/blob/main/SDD/02-business-direction.md" target="_blank" rel="noopener">02 Business Direction</a></h4></div>
+            <div class="step"><h4><a href="https://github.com/cheenle/mrrc_ft710/blob/main/SDD/03-project-definition.md" target="_blank" rel="noopener">03 Project Definition</a></h4></div>
+            <div class="step"><h4><a href="https://github.com/cheenle/mrrc_ft710/blob/main/SDD/04-system-context.md" target="_blank" rel="noopener">04 System Context</a></h4></div>
+            <div class="step"><h4><a href="https://github.com/cheenle/mrrc_ft710/blob/main/SDD/05-non-functional-requirements.md" target="_blank" rel="noopener">05 Non-Functional Requirements</a></h4></div>
+            <div class="step"><h4><a href="https://github.com/cheenle/mrrc_ft710/blob/main/SDD/06-use-case-model.md" target="_blank" rel="noopener">06 Use Case Model</a></h4></div>
+            <div class="step"><h4><a href="https://github.com/cheenle/mrrc_ft710/blob/main/SDD/07-subject-area-model.md" target="_blank" rel="noopener">07 Subject Area Model</a></h4></div>
+            <div class="step"><h4><a href="https://github.com/cheenle/mrrc_ft710/blob/main/SDD/08-architecture-decisions.md" target="_blank" rel="noopener">08 Architecture Decisions</a></h4></div>
+            <div class="step"><h4><a href="https://github.com/cheenle/mrrc_ft710/blob/main/SDD/09-architecture-overview.md" target="_blank" rel="noopener">09 Architecture Overview</a></h4></div>
+            <div class="step"><h4><a href="https://github.com/cheenle/mrrc_ft710/blob/main/SDD/10-service-model.md" target="_blank" rel="noopener">10 Service Model</a></h4></div>
+            <div class="step"><h4><a href="https://github.com/cheenle/mrrc_ft710/blob/main/SDD/11-component-model.md" target="_blank" rel="noopener">11 Component Model</a></h4></div>
+            <div class="step"><h4><a href="https://github.com/cheenle/mrrc_ft710/blob/main/SDD/12-operational-model.md" target="_blank" rel="noopener">12 Operational Model</a></h4></div>
+            <div class="step"><h4><a href="https://github.com/cheenle/mrrc_ft710/blob/main/SDD/13-feasibility-assessment.md" target="_blank" rel="noopener">13 Feasibility Assessment</a></h4></div>
+            <div class="step"><h4><a href="https://github.com/cheenle/mrrc_ft710/blob/main/SDD/14-version-history.md" target="_blank" rel="noopener">14 Version History</a></h4></div>
+            <div class="step"><h4><a href="https://github.com/cheenle/mrrc_ft710/blob/main/SDD/15-ptt-safety-architecture.md" target="_blank" rel="noopener">15 PTT Safety Architecture</a></h4></div>
+        </div>
+    </div>
+</section>
+
+<section class="section" id="decisions" style="background: var(--bg-primary);">
+    <div class="container">
+        <div class="section-header">
+            <span class="section-label">Architecture Decisions</span>
+            <h2 class="section-title">AD-001 ... AD-015</h2>
+        </div>
+        <div class="tech-stack">
+            <span class="tech-tag">AD-001 FastAPI/Uvicorn</span>
+            <span class="tech-tag">AD-002 Direct CAT</span>
+            <span class="tech-tag">AD-003 Dirty State Broadcast</span>
+            <span class="tech-tag">AD-004 Tagged Opus/PCM Audio</span>
+            <span class="tech-tag">AD-005 scope_pipe Isolation</span>
+            <span class="tech-tag">AD-006 Dual-Mode Spectrum</span>
+            <span class="tech-tag">AD-007 PTT Safety Flow</span>
+            <span class="tech-tag">AD-008 Audio Auto-Detection</span>
+            <span class="tech-tag">AD-009 7-Task Polling</span>
+            <span class="tech-tag">AD-010 JSON Memory Channels</span>
+            <span class="tech-tag">AD-011 Unified 48kHz TX Audio</span>
+            <span class="tech-tag">AD-012 Active-VFO Tracking</span>
+            <span class="tech-tag">AD-013 Meter Calibration</span>
+            <span class="tech-tag">AD-014 CAT Errata Handling</span>
+            <span class="tech-tag">AD-015 Priority CAT Preemption</span>
+        </div>
+    </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div class="footer-grid">
+            <div class="footer-section">
+                <h4>MRRC FT-710 SDD</h4>
+                <p>Design documentation aligned with implementation state.</p>
+            </div>
+            <div class="footer-section">
+                <h4>Links</h4>
+                <ul>
+                    <li><a href="index.html">FT-710 Website</a></li>
+                    <li><a href="https://github.com/cheenle/mrrc_ft710/tree/main/SDD" target="_blank" rel="noopener">SDD Folder</a></li>
+                    <li><a href="https://github.com/cheenle/mrrc_ft710/blob/main/SDD/README.md" target="_blank" rel="noopener">SDD README</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; 2026 MRRC FT-710 Project. Open Source under GPLv3 License.</p>
+        </div>
+    </div>
+</footer>
+
+<script>
+function toggleMobileMenu() {
+    document.querySelector('.nav-links').classList.toggle('active');
+}
+document.querySelectorAll('a[href^="#"]').forEach((a) => {
+    a.addEventListener('click', function (e) {
+        e.preventDefault();
+        const t = document.querySelector(this.getAttribute('href'));
+        if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+});
+</script>
+<script src="js/global-nav.js?v=2" defer data-gn="1"></script>
+</body>
+</html>

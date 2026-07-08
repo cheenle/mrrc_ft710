@@ -83,6 +83,10 @@ _audio_tx_task: asyncio.Task | None = None
 # TX Opus decoder (browser mic → server)
 _opus_tx_decoder: TxOpusDecoder | None = None
 
+# RX broadcast pacing/guard rails
+AUDIO_RX_SEND_TIMEOUT = 0.012          # per-frame per-client timeout (seconds)
+AUDIO_RX_MAX_FRAMES_PER_CYCLE = 2      # cap burst send when loop catches up
+
 # Auth: valid session tokens (server-side, cleared on restart)
 _auth_tokens: set[str] = set()
 
@@ -350,6 +354,36 @@ async def _read_scope_pipe(proc):
 
 # ── Audio Broadcast ────────────────────────────────────────────────────
 
+async def _send_audio_frames_to_clients(
+    frames: list[bytes],
+    clients: set[WebSocket],
+    per_frame_timeout: float = AUDIO_RX_SEND_TIMEOUT,
+) -> set[WebSocket]:
+    """Send encoded RX audio frames to clients with timeout isolation.
+
+    A single slow/backpressured client must not block the whole audio loop.
+    Returns the subset of clients that errored/timed out and should be removed.
+    """
+    if not frames or not clients:
+        return set()
+
+    # Snapshot to keep gather/zip pairing stable even if caller mutates set later.
+    clients_snapshot = list(clients)
+
+    async def _send_one(ws: WebSocket):
+        for frame in frames:
+            await asyncio.wait_for(ws.send_bytes(frame), timeout=per_frame_timeout)
+
+    results = await asyncio.gather(
+        *[_send_one(ws) for ws in clients_snapshot],
+        return_exceptions=True,
+    )
+    dead: set[WebSocket] = set()
+    for ws, res in zip(clients_snapshot, results):
+        if isinstance(res, Exception):
+            dead.add(ws)
+    return dead
+
 async def _audio_rx_loop():
     """Capture RX audio from the sound card and broadcast to clients.
 
@@ -365,6 +399,7 @@ async def _audio_rx_loop():
     _loop_count = 0
     _pcm_count = 0
     _send_count = 0
+    _trimmed_bursts = 0
     while True:
         try:
             _loop_count += 1
@@ -372,47 +407,45 @@ async def _audio_rx_loop():
                 pcm = audio.read_rx_chunk()
                 if pcm:
                     _pcm_count += 1
-                    frames = audio.encode_rx_audio(pcm)
+                    # No listeners: keep draining capture stream but skip
+                    # resample+encode to reduce CPU under server load.
+                    if audio_rx_clients:
+                        frames = audio.encode_rx_audio(pcm)
+                    else:
+                        frames = []
+
                     if frames:
+                        # If the loop fell behind and produced multiple Opus
+                        # packets at once, prioritize freshest audio to keep
+                        # end-to-end latency bounded.
+                        if len(frames) > AUDIO_RX_MAX_FRAMES_PER_CYCLE:
+                            _trimmed_bursts += 1
+                            frames = frames[-AUDIO_RX_MAX_FRAMES_PER_CYCLE:]
                         _send_count += 1
-                        if audio_rx_clients:
-                            if _first:
-                                tag_name = "Opus" if audio.opus_enabled else "Int16 PCM"
-                                # Check audio level (safely)
-                                _slice = pcm[:200]
-                                _sample_count = len(_slice) // 2
-                                if _sample_count > 0:
-                                    import struct as _struct
-                                    _samples = _struct.unpack(f"<{_sample_count}h", _slice[:_sample_count*2])
-                                    _peak = max(abs(s) for s in _samples) / 32767 * 100
-                                    logger.info("RX audio broadcast active: %s, %d clients, peak=%.1f%%",
-                                               tag_name, len(audio_rx_clients), _peak)
-                                    if _peak < 0.5:
-                                        logger.warning("RX audio is near-silent (peak=%.1f%%) — "
-                                                     "check radio AF gain / USB audio connection", _peak)
-                                _first = False
-                            # Send to all clients in parallel — a slow client
-                            # (WiFi jitter / TCP backpressure) shouldn't
-                            # stall the rest or delay the next audio chunk.
-                            async def _send_one(ws):
-                                for frame in frames:
-                                    await ws.send_bytes(frame)
-                            results = await asyncio.gather(
-                                *[_send_one(ws) for ws in audio_rx_clients],
-                                return_exceptions=True,
-                            )
-                            dead: set[WebSocket] = set()
-                            for ws, res in zip(list(audio_rx_clients), results):
-                                if isinstance(res, Exception):
-                                    logger.warning("Audio send error (removing client): %s", res)
-                                    dead.add(ws)
-                            if dead:
-                                logger.warning("Removed %d dead audio clients", len(dead))
+                        if _first:
+                            tag_name = "Opus" if audio.opus_enabled else "Int16 PCM"
+                            # Check audio level (safely)
+                            _slice = pcm[:200]
+                            _sample_count = len(_slice) // 2
+                            if _sample_count > 0:
+                                import struct as _struct
+                                _samples = _struct.unpack(f"<{_sample_count}h", _slice[:_sample_count*2])
+                                _peak = max(abs(s) for s in _samples) / 32767 * 100
+                                logger.info("RX audio broadcast active: %s, %d clients, peak=%.1f%%",
+                                           tag_name, len(audio_rx_clients), _peak)
+                                if _peak < 0.5:
+                                    logger.warning("RX audio is near-silent (peak=%.1f%%) — "
+                                                 "check radio AF gain / USB audio connection", _peak)
+                            _first = False
+                        dead = await _send_audio_frames_to_clients(frames, audio_rx_clients)
+                        if dead:
+                            logger.warning("Removed %d dead/slow audio clients", len(dead))
                             audio_rx_clients -= dead
             # Periodic health log
             if _loop_count % 250 == 0:  # Every 5 seconds
-                logger.info("Audio loop: loops=%d pcm_chunks=%d sends=%d clients=%d running=%s",
+                logger.info("Audio loop: loops=%d pcm_chunks=%d sends=%d trimmed=%d clients=%d running=%s",
                            _loop_count, _pcm_count, _send_count,
+                           _trimmed_bursts,
                            len(audio_rx_clients), audio._rx_running if audio else False)
         except asyncio.CancelledError:
             return
@@ -583,17 +616,19 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
         elif field == "tune":
             on = value is True or str(value).lower() == "true"
             if on:
+                # Start low-power carrier for tuning (TX2)
                 await cat.set_tune(True)
                 radio.update(tx_status=2)
+                # After carrier stabilises, trigger the antenna tuner.
+                # AC003 = P1=0,P2=0,P3=3 → Tuning Start (standard tuner).
+                await asyncio.sleep(0.3)
+                await cat.send_priority_set_command("AC003")
+                radio.update(tuner_status=2)
             else:
+                # Drop carrier — stop tuner if still running, then end TX.
+                await cat.send_priority_set_command("AC000")
                 await cat.set_tune(False)
-                for _ in range(3):
-                    await asyncio.sleep(0.2)
-                    ptt = await cat.get_ptt()
-                    if ptt == 0:
-                        break
-                    await cat.set_ptt(False)
-                radio.update(tx_status=0)
+                radio.update(tx_status=0, tuner_status=0)
             scheduler and scheduler.skip_next_poll("tx_status", 1.0)
 
         elif field == "filter" or field == "filter_width":
@@ -757,6 +792,25 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
         elif field == "xit":
             on = value is True or str(value).lower() in ("true", "1")
             await cat.set_xit(on)
+
+        elif field == "meter_display":
+            v = int(value)
+            if 0 <= v <= 5:
+                await cat.set_meter_display(v)
+                radio.update(meter_display=v)
+                scheduler and scheduler.skip_next_poll("meter_display", 3.0)
+
+        elif field == "amc_level":
+            v = max(1, min(100, int(value)))
+            await cat.set_amc_level(v)
+            radio.update(amc_level=v)
+            scheduler and scheduler.skip_next_poll("amc_level", 5.0)
+
+        elif field == "rf_gain":
+            v = max(0, min(255, int(value)))
+            await cat.set_rf_gain(v)
+            radio.update(rf_gain=v)
+            scheduler and scheduler.skip_next_poll("rf_gain", 3.0)
 
         elif field == "scope_on":
             on = value is True or str(value).lower() in ("true", "1")

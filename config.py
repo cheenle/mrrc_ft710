@@ -214,8 +214,12 @@ PREAMP_LABELS: dict[int, str] = {0: "OFF", 1: "AMP1", 2: "AMP2"}
 # Raw 0-255 values returned by RM3..RM8 map non-linearly to actual
 # engineering units.  These tables are piecewise-linear interpolations
 # of the rig file's calibration points.
-POWER_CAL: list[tuple[int, float]] = [        # RM5 -> watts
-    (0, 0.0), (27, 0.0), (94, 25.0), (147, 50.0),
+POWER_CAL: list[tuple[int, float]] = [        # RM5 -> watts (FT-710 100W HF)
+    # FT-710 power meter is non-linear: very gradual at low power,
+    # steeper at high power.  Points derived from FT-710.rig calibration
+    # with the dead-zone (0-27→0W) removed so even low modulation
+    # registers a small non-zero reading.
+    (0, 0.0), (94, 25.0), (147, 50.0),
     (176, 75.0), (205, 100.0), (255, 110.0),
 ]
 SWR_CAL: list[tuple[int, float]] = [          # RM6 -> SWR ratio

@@ -3,6 +3,7 @@ Tests for PollScheduler — SDD AD-009 (5-tier adaptive polling).
 Verifies: polling tier structure, skip logic, command priority.
 """
 import unittest
+import asyncio
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -118,6 +119,44 @@ class PollingOrderTests(unittest.TestCase):
         skip_until = 1.0
         should_poll = poll_due_at >= skip_until
         self.assertTrue(should_poll)
+
+
+class TXMeterPollingPreemptionTests(unittest.IsolatedAsyncioTestCase):
+    """PTT release should preempt a TX meter cycle between RM queries."""
+
+    async def test_tx_meter_poll_yields_between_meter_queries(self):
+        from poll_scheduler import PollScheduler
+        from radio_state import RadioState
+
+        scheduler = None
+
+        class FakeCat:
+            connected = True
+            _cancel_polls: bool = False
+
+            def __init__(self):
+                self.commands = []
+
+            async def get_meter(self, cmd, timeout=None):
+                self.commands.append(cmd)
+                if len(self.commands) == 1:
+                    scheduler.note_user_command()
+                return 0
+
+        fake_cat = FakeCat()
+        state = RadioState(tx_status=1)
+        scheduler = PollScheduler(fake_cat, state)
+        scheduler._running = True
+
+        task = asyncio.create_task(scheduler._poll_tx_meters())
+        try:
+            await asyncio.sleep(0.05)
+        finally:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+            scheduler._running = False
+
+        self.assertEqual(fake_cat.commands, ["RM3"])
 
 
 if __name__ == "__main__":
