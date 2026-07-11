@@ -3,7 +3,7 @@ import SwiftUI
 struct LoginView: View {
     let onLogin: (String, String) -> Void  // host, password
 
-    @AppStorage("serverHost") private var host: String = "radio.vlsc.net:8889"
+    @AppStorage("serverHost") private var host: String = "radio.vlsc.net:8888"
     @State private var password: String = ""
     @State private var showPassword = false
     @State private var isConnecting = false
@@ -27,7 +27,7 @@ struct LoginView: View {
                     .font(.largeTitle.weight(.bold))
                     .foregroundColor(.white)
 
-                Text("SunSDR2 DX Mobile Control")
+                Text("FT-710 Remote Control")
                     .font(.subheadline)
                     .foregroundColor(.gray)
 

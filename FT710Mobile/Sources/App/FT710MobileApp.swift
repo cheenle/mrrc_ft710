@@ -3,8 +3,8 @@ import Security
 import UIKit
 
 @main
-struct SunsdrMobileApp: App {
-    @AppStorage("serverHost") private var savedHost: String = "radio.vlsc.net:8889"
+struct FT710MobileApp: App {
+    @AppStorage("serverHost") private var savedHost: String = "radio.vlsc.net:8888"
     @State private var isLoggedIn: Bool = false
     @State private var viewModel: RadioViewModel?
 
@@ -14,13 +14,8 @@ struct SunsdrMobileApp: App {
                 ContentView()
                     .environmentObject(vm)
                     .preferredColorScheme(.dark)
-                    .onAppear {
-                        // Keep screen awake while connected to radio
-                        UIApplication.shared.isIdleTimerDisabled = true
-                    }
-                    .onDisappear {
-                        UIApplication.shared.isIdleTimerDisabled = false
-                    }
+                    .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
+                    .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
             } else {
                 LoginView { host, pass in
                     savedHost = host
@@ -30,9 +25,7 @@ struct SunsdrMobileApp: App {
                 }
                 .preferredColorScheme(.dark)
                 .onAppear {
-                    // Auto-login if credentials are saved
-                    if !savedHost.isEmpty,
-                       let pass = loadPassword(for: savedHost) {
+                    if !savedHost.isEmpty, let pass = loadPassword(for: savedHost) {
                         viewModel = RadioViewModel(serverHost: savedHost, password: pass)
                         isLoggedIn = true
                     }
@@ -43,7 +36,7 @@ struct SunsdrMobileApp: App {
 
     // MARK: - Keychain
 
-    private let keychainAccount = "sunsdr_mobile"
+    private let keychainAccount = "ft710_mobile"
 
     private func savePassword(_ pass: String, for host: String) {
         guard !pass.isEmpty else { return }
