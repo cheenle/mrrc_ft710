@@ -432,24 +432,26 @@ function renderWaterfallRow(wf1) {
         ctx.fillRect(x, h - 1, 1, 1);
     }
 
-    // VFO red line over the waterfall at the actual VFO frequency position.
+    // VFO red line — the server always runs CENTER mode (EX040200),
+    // so the VFO frequency is the scope centre.  Compute everything
+    // from the VFO and span alone — no dependency on the scope frame's
+    // scope_start_freq (which lags behind CAT after tuning).
     const spanHz = SCOPE_SPAN_HZ[radioState.scope_span] || 100000;
     const vfoFreq = radioState.active_freq ||
         (radioState.active_vfo === 'B' ? radioState.vfo_b_freq : radioState.vfo_a_freq) ||
         14200000;
-    const startFreq = _getStartFreq(vfoFreq, spanHz);
-    const vfoX = ((vfoFreq - startFreq) / spanHz) * w;
+    const range = _computeFreqRange(vfoFreq, spanHz);
+
+    // VFO is always at centre in CENTER mode → half the canvas width.
+    const vfoX = w / 2;
     if (vfoX >= 0 && vfoX <= w) {
         const vx = Math.round(vfoX) + 0.5;
-        // Semi-transparent red hairline — visible but doesn't block the
-        // waterfall data behind it.
         ctx.strokeStyle = 'rgba(239, 68, 68, 0.45)';
         ctx.lineWidth = 1.0;
         ctx.beginPath();
         ctx.moveTo(vx, 0);
         ctx.lineTo(vx, h);
         ctx.stroke();
-        // VFO frequency label pinned above the marker line.
         ctx.fillStyle = 'rgba(239, 68, 68, 0.9)';
         ctx.font = 'bold 8px monospace';
         ctx.textAlign = 'center';
@@ -457,10 +459,10 @@ function renderWaterfallRow(wf1) {
     }
 
     // Update frequency scale
-    renderFreqScale(w);
+    renderFreqScale(w, range);
 }
 
-function renderFreqScale(canvasWidth) {
+function renderFreqScale(canvasWidth, range) {
     const scaleCanvas = document.getElementById('freq-scale-canvas');
     if (!scaleCanvas) return;
     scaleCanvas.width = canvasWidth;
@@ -469,12 +471,9 @@ function renderFreqScale(canvasWidth) {
     ctx.fillStyle = '#1a1a1a';
     ctx.fillRect(0, 0, w, 20);
 
-    const spanHz = SCOPE_SPAN_HZ[radioState.scope_span] || 100000;
-    const vfoFreq = radioState.active_freq ||
-        (radioState.active_vfo === 'B' ? radioState.vfo_b_freq : radioState.vfo_a_freq) ||
-        14200000;
-
-    const startFreq = _getStartFreq(vfoFreq, spanHz);
+    const spanHz = range.rightEdge - range.leftEdge;
+    const vfoFreq = range.centerFreq;
+    const startFreq = range.leftEdge;
 
     // Adaptive step size — roughly 8-12 marks across the canvas width.
     const step = _freqStep(spanHz);
@@ -550,35 +549,21 @@ function _formatFreqLabel(freqHz, step) {
     }
 }
 
-// ── Start-frequency helper with stale-data guard ────────────────────
+// ── Frequency range helper (VFO‑centred) ─────────────────────────
 //
-// The FT-710 hardware stores the scope CENTER frequency (not the left
-// edge) at offset 144 of the scope frame.  We convert it to a left-edge
-// frequency for canvas rendering.
-//
-// scope_start_freq comes from scope frame metadata (~30 fps) while
-// vfoFreq comes from CAT polling (~10 fps).  When the user tunes the
-// radio, the CAT path updates immediately but the scope frame still
-// carries the old centre for several frames (hardware DSP latency).
-//
-// If the hardware centre places the VFO >15 % outside the displayed
-// span we discard it and fall back to the CENTER-mode assumption (the
-// server always sends EX040200 on init, so the VFO sits at the display
-// centre by default).
-function _getStartFreq(vfoFreq, spanHz) {
-    const rawCenter = radioState.scope_start_freq;  // actually the CENTER freq
-    if (!rawCenter || rawCenter <= 0) {
-        return vfoFreq - spanHz / 2;
-    }
-    // Sanity check: the VFO should be within ~±half-span of the scope centre.
+// The server always initialises the scope to CENTER mode (EX040200).
+// In CENTER mode the scope display is centred on VFO‑A, so the VFO
+// frequency *is* the scope centre.  Computing everything from the VFO
+// and span alone is simpler and more accurate than relying on the
+// scope frame's scope_start_freq, which arrives on a different async
+// path and lags behind the CAT‑polled VFO after tuning.
+function _computeFreqRange(vfoFreq, spanHz) {
     const halfSpan = spanHz / 2;
-    const slack = Math.round(spanHz * 0.15);
-    if (vfoFreq >= rawCenter - halfSpan - slack &&
-        vfoFreq <= rawCenter + halfSpan + slack) {
-        return rawCenter - halfSpan;
-    }
-    // Stale — the scope frame hasn't caught up with the new VFO yet.
-    return vfoFreq - halfSpan;
+    return {
+        leftEdge:  vfoFreq - halfSpan,
+        centerFreq: vfoFreq,
+        rightEdge: vfoFreq + halfSpan,
+    };
 }
 
 function renderScopeSettings() {
