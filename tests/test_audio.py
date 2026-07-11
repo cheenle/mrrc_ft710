@@ -260,9 +260,14 @@ class TXReleaseOrderTests(unittest.TestCase):
 
     def test_ptt_off_drains_before_rf_drop(self):
         source = (REPO_ROOT / "server.py").read_text()
-        # Graceful stop_tx (drain) must precede the first set_ptt(False).
+        # Graceful stop_tx (drain) must precede set_ptt(False) *in the PTT-off
+        # branch*.  There is also a set_ptt(False) in the start_tx error path
+        # (PTT-on branch) — skip past it.
         drain_idx = source.index("audio.stop_tx, True")
-        ptoff_idx = source.index("await cat.set_ptt(False)")
+        # The drain call is inside the PTT-off branch; the preceding
+        # set_ptt(False) belongs to the error path in the PTT-on branch.
+        # Search for the first set_ptt(False) *after* the drain call.
+        ptoff_idx = source.index("await cat.set_ptt(False)", drain_idx)
         self.assertLess(drain_idx, ptoff_idx)
 
     def test_tx_has_single_owner_guard(self):

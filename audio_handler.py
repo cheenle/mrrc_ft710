@@ -333,56 +333,107 @@ class AudioHandler:
         return None
 
     def start_tx(self) -> bool:
-        """Start TX audio playback stream."""
+        """Start TX audio playback stream.
+
+        On macOS CoreAudio, opening a second half-duplex stream on the same
+        USB Audio Device that already has an RX input stream can fail with
+        kAudioUnitErr_InvalidPropertyValue (-10851).  We retry up to
+        START_TX_RETRIES times with a staggered back-off between attempts.
+
+        Idempotent: if a TX stream is already active, returns True
+        immediately without clearing the queue or re-opening the device,
+        so duplicate PTT commands never discard in-flight voice audio.
+        """
         if self._pa is None:
             return False
+
+        # Already transmitting — don't tear down a working stream.
+        with self._tx_lock:
+            if self._tx_stream is not None:
+                try:
+                    if self._tx_stream.is_active():
+                        return True
+                except Exception:
+                    pass  # stream handle is stale; proceed to open a new one
 
         dev = self._find_tx_device()
         if dev is None:
             logger.warning("No audio output device found for TX")
             return False
 
-        try:
-            stream = self._pa.open(
-                format=pyaudio.paInt16,
-                channels=TX_CHANNELS,
-                rate=TX_SAMPLE_RATE,
-                output=True,
-                output_device_index=dev,
-                frames_per_buffer=RX_CHUNK_SIZE,
-            )
-        except Exception as e:
-            logger.error("Failed to start TX audio: %s", e)
-            return False
-
-        # Atomically swap in the new stream and reset buffer state.
+        # If a TX stream is already active, close it now so CoreAudio can
+        # release the device before we try to open a new one.  This also
+        # serializes rapid PTT toggles that otherwise race at the AUHAL level.
         with self._tx_lock:
-            old = self._tx_stream
-            self._tx_stream = stream
+            stale = self._tx_stream
+            self._tx_stream = None
             self._tx_queue.clear()
             self._tx_queued_bytes = 0
             self._tx_primed = False
-        # Reset diagnostic one-shot flags for this TX session.
-        for _k in ('_dbg_no_pcm', '_dbg_no_resample', '_dbg_no_stream',
-                    '_dbg_no_stream_w', '_dbg_not_primed',
-                    '_dbg_first_feed', '_dbg_first_write'):
-            setattr(self, _k, False)
-
-        if old is not None:
-            # Wait for any in-flight write on the previous stream before
-            # closing it (write_tx_chunk holds _tx_write_lock during write).
+        if stale is not None:
             with self._tx_write_lock:
                 try:
-                    old.stop_stream()
-                    old.close()
+                    stale.stop_stream()
+                    stale.close()
                 except Exception:
                     pass
+            # macOS CoreAudio may need a tick to fully release the device.
+            time.sleep(0.05)
 
-        dev_info = self._pa.get_device_info_by_index(dev)
-        logger.info("TX audio started: [%d] %s @ %d Hz (pre-buffer %dms, cap %dms)",
-                    dev, dev_info.get('name', ''), TX_SAMPLE_RATE,
-                    TX_PREBUFFER_MS, TX_MAX_BUFFER_MS)
-        return True
+        # Retry loop: PortAudio on macOS sometimes fails to open a second
+        # half-duplex stream on a full-duplex device when the RX stream is
+        # already running.  Staggered back-off (100/200/350 ms) gives the
+        # AUHAL time to settle between attempts.
+        START_TX_RETRIES = 3
+        _RETRY_DELAYS = (0.100, 0.200, 0.350)
+        last_error = None
+        for attempt in range(START_TX_RETRIES):
+            try:
+                stream = self._pa.open(
+                    format=pyaudio.paInt16,
+                    channels=TX_CHANNELS,
+                    rate=TX_SAMPLE_RATE,
+                    output=True,
+                    output_device_index=dev,
+                    frames_per_buffer=RX_CHUNK_SIZE,
+                )
+            except Exception as e:
+                last_error = e
+                if attempt < START_TX_RETRIES - 1:
+                    time.sleep(_RETRY_DELAYS[attempt])
+                continue
+
+            # Success — atomically install the new stream.
+            with self._tx_lock:
+                old = self._tx_stream
+                self._tx_stream = stream
+                self._tx_queue.clear()
+                self._tx_queued_bytes = 0
+                self._tx_primed = False
+            # Reset diagnostic one-shot flags for this TX session.
+            for _k in ('_dbg_no_pcm', '_dbg_no_resample', '_dbg_no_stream',
+                        '_dbg_no_stream_w', '_dbg_not_primed',
+                        '_dbg_first_feed', '_dbg_first_write'):
+                setattr(self, _k, False)
+
+            if old is not None:
+                with self._tx_write_lock:
+                    try:
+                        old.stop_stream()
+                        old.close()
+                    except Exception:
+                        pass
+
+            dev_info = self._pa.get_device_info_by_index(dev)
+            logger.info("TX audio started: [%d] %s @ %d Hz (pre-buffer %dms, cap %dms)%s",
+                        dev, dev_info.get('name', ''), TX_SAMPLE_RATE,
+                        TX_PREBUFFER_MS, TX_MAX_BUFFER_MS,
+                        f" (attempt {attempt + 1})" if attempt > 0 else "")
+            return True
+
+        logger.error("Failed to start TX audio after %d attempts: %s",
+                     START_TX_RETRIES, last_error)
+        return False
 
     def stop_tx(self, graceful: bool = False, drain_ms: int = TX_DRAIN_MS):
         """Stop TX audio playback.
@@ -439,6 +490,10 @@ class AudioHandler:
                 stream.close()
             except Exception:
                 pass
+            # Give macOS CoreAudio a tick to fully release the device before
+            # the next start_tx call can open a new stream on it (avoids
+            # kAudioUnitErr_InvalidPropertyValue on rapid PTT toggles).
+            time.sleep(0.02)
 
     def feed_tx_audio(self, pcm: bytes):
         """Queue TX audio for playback. Input is 48 kHz Int16 PCM (from Opus

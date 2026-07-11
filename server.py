@@ -790,10 +790,27 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                 # awaiting start_tx here avoids a race where the drain
                 # loop queues mic frames before the PortAudio stream is
                 # open and start_tx's queue-clearing discards them.
+                # start_tx() is idempotent — if a stream is already active
+                # it returns immediately without clearing the queue.
                 await cat.set_ptt(True)
                 radio.update(tx_status=1)
                 if audio:
-                    await asyncio.to_thread(audio.start_tx)
+                    ok = await asyncio.to_thread(audio.start_tx)
+                    if not ok:
+                        # Audio path failed to open — the radio is keyed but
+                        # has no modulation.  Drop PTT immediately so the
+                        # user sees the failure and can try again, rather
+                        # than silently transmitting a dead carrier.
+                        logger.error("PTT: TX audio stream failed — unkeying radio")
+                        await cat.set_ptt(False)
+                        radio.update(tx_status=0, power_meter=0, alc_meter=0,
+                                     swr_meter=0, comp_meter=0)
+                        await ws.send_text(json.dumps({
+                            "type": "error",
+                            "message": "TX audio device unavailable — PTT released. Try again.",
+                        }))
+                        scheduler and scheduler.skip_next_poll("tx_status", 1.0)
+                        return
             else:
                 # Graceful TX stop: drain queued audio to the DAC and block
                 # until it has played (Pa_StopStream semantics), so word-
