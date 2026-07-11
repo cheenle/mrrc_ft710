@@ -544,34 +544,33 @@ function _formatFreqLabel(freqHz, step) {
 
 // ── Start-frequency helper with stale-data guard ────────────────────
 //
-// scope_start_freq comes from the scope frame metadata (hardware, ~30 fps)
-// while vfoFreq comes from CAT polling (~10 fps).  When the user tunes the
-// radio, the CAT path updates immediately but the scope frame still carries
-// the old centre frequency for several frames (hardware DSP latency).
+// The FT-710 hardware stores the scope CENTER frequency (not the left
+// edge) at offset 144 of the scope frame.  We convert it to a left-edge
+// frequency for canvas rendering.
 //
-// Using a stale scope_start_freq with a fresh vfoFreq produces a marker that
-// is wildly off‑canvas.  _getStartFreq validates that the VFO logically
-// falls within the scope span (±15 % tolerance for timing jitter).  If the
-// hardware value fails the sanity check we fall back to the CENTER‑mode
-// assumption (the server always sends EX040200 on init):
+// scope_start_freq comes from scope frame metadata (~30 fps) while
+// vfoFreq comes from CAT polling (~10 fps).  When the user tunes the
+// radio, the CAT path updates immediately but the scope frame still
+// carries the old centre for several frames (hardware DSP latency).
 //
-//     scope_start_freq = vfoFreq − spanHz / 2
-//
-// which is exact when the scope is in CENTER mode (the VFO sits at the
-// display centre).
+// If the hardware centre places the VFO >15 % outside the displayed
+// span we discard it and fall back to the CENTER-mode assumption (the
+// server always sends EX040200 on init, so the VFO sits at the display
+// centre by default).
 function _getStartFreq(vfoFreq, spanHz) {
-    const raw = radioState.scope_start_freq;
-    if (!raw || raw <= 0) {
+    const rawCenter = radioState.scope_start_freq;  // actually the CENTER freq
+    if (!rawCenter || rawCenter <= 0) {
         return vfoFreq - spanHz / 2;
     }
-    // Sanity check: the VFO should be inside [raw, raw + spanHz].
-    // Allow 15 % overshoot on either side for sub‑second timing jitter.
+    // Sanity check: the VFO should be within ~±half-span of the scope centre.
+    const halfSpan = spanHz / 2;
     const slack = Math.round(spanHz * 0.15);
-    if (vfoFreq >= raw - slack && vfoFreq <= raw + spanHz + slack) {
-        return raw;
+    if (vfoFreq >= rawCenter - halfSpan - slack &&
+        vfoFreq <= rawCenter + halfSpan + slack) {
+        return rawCenter - halfSpan;
     }
     // Stale — the scope frame hasn't caught up with the new VFO yet.
-    return vfoFreq - spanHz / 2;
+    return vfoFreq - halfSpan;
 }
 
 function renderScopeSettings() {

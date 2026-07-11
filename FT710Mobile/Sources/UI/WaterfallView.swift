@@ -80,24 +80,31 @@ struct WaterfallView: View {
 
     /// Validate scopeStartFreq against the VFO frequency.
     ///
-    /// scopeStartFreq (from scope frame metadata, ~30 fps) and vfoFreq
-    /// (from CAT polling, ~10 fps) are two independent data sources.
-    /// After a frequency change the CAT path updates immediately while
-    /// scope frames carry the old centre for several more frames.
+    /// The FT-710 hardware stores the scope CENTER frequency (not the
+    /// left edge) at offset 144 of the scope frame.  We convert it to
+    /// a left-edge frequency for rendering.
     ///
-    /// If the hardware value places the VFO >15 % outside the displayed
-    /// span we discard it and fall back to the CENTER-mode assumption
+    /// scopeStartFreq (from scope frame, ~30 fps) and vfoFreq (from CAT
+    /// polling, ~10 fps) are two independent data sources.  After a
+    /// frequency change the CAT path updates immediately while scope
+    /// frames carry the old centre for several more frames.
+    ///
+    /// If the hardware centre places the VFO outside the displayed span
+    /// (±15 % slack) we discard it and fall back to CENTER-mode math
     /// (the server always sends EX040200 at startup).
     private func validatedLeftEdge(raw: Double, vfoFreq: Double, span: Double) -> Double {
-        guard raw > 0 else {
+        let rawCenter = raw  // scope_start_freq from hardware is actually the centre
+        guard rawCenter > 0 else {
             return vfoFreq - span / 2.0
         }
+        let halfSpan = span / 2.0
         let slack = span * 0.15
-        if vfoFreq >= raw - slack && vfoFreq <= raw + span + slack {
-            return raw  // hardware value looks consistent
+        if vfoFreq >= rawCenter - halfSpan - slack &&
+           vfoFreq <= rawCenter + halfSpan + slack {
+            return rawCenter - halfSpan
         }
         // Stale — scope hasn't caught up with the new VFO yet.
-        return vfoFreq - span / 2.0
+        return vfoFreq - halfSpan
     }
 
     private struct FreqMark { let label: String; let hz: Int; let xPos: CGFloat }
