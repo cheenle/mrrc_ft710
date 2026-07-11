@@ -39,7 +39,7 @@ final class RadioViewModel: ObservableObject {
         state.powerOn = true
         startPing()
 
-        let scheme = connection.serverHost.contains("localhost") ? "http" : "https"
+        let scheme = "http"  // Default HTTP for self-hosted servers (ATS allows via Info.plist)
         guard let loginURL = URL(string: "\(scheme)://\(connection.serverHost)/api/auth/login") else {
             connection.connectAll(); return
         }
@@ -53,6 +53,13 @@ final class RadioViewModel: ObservableObject {
         URLSession.shared.dataTask(with: req) { [weak self] data, response, error in
             DispatchQueue.main.async {
                 guard let self = self else { return }
+
+                // Handle network error
+                if let err = error {
+                    self.state.connectionError = "连接失败: \(err.localizedDescription)"
+                    self.state.powerOn = false
+                    return
+                }
 
                 // Extract token from Set-Cookie header
                 var token: String?
@@ -72,10 +79,11 @@ final class RadioViewModel: ObservableObject {
                 if let tok = token, !tok.isEmpty {
                     self.connection.updateCredentials(password: tok)
                     self.bindSockets()  // re-bind after socket recreation!
+                    self.connection.connectAll()
                 } else {
                     self.state.connectionError = "认证失败，请检查密码"
+                    self.state.powerOn = false  // Reset power state on auth failure
                 }
-                self.connection.connectAll()
             }
             Task.detached { [weak self] in
                 self?.audioPlayback.start()

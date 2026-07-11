@@ -5,13 +5,15 @@ struct FrequencyDisplayView: View {
     let freqHz: Int
 
     var body: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 1) {
             ForEach(Array(digits.enumerated()), id: \.offset) { _, segment in
                 Text(segment)
-                    .font(.system(size: 56, weight: .bold, design: .monospaced))
+                    .font(.system(size: 32, weight: .bold, design: .monospaced))
                     .foregroundColor(.radioAccent)
+                    .lineLimit(1)
             }
         }
+        .minimumScaleFactor(0.5)
     }
 
     /// Format: XX.XXX.XXX (e.g. 14.074.000)

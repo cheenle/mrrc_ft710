@@ -49,32 +49,26 @@ struct HeaderView: View {
                 }
             }
 
-            // Row 2: Frequency + band
-            HStack(spacing: 8) {
+            // Row 2: Frequency + step arrows
+            HStack(spacing: 6) {
                 Button(action: { viewModel.stepFrequency(up: false) }) {
                     Image(systemName: "chevron.left")
-                        .font(.title2.weight(.bold)).foregroundColor(.radioAccent)
+                        .font(.title3.weight(.bold)).foregroundColor(.radioAccent)
                 }
 
                 FrequencyDisplayView(freqHz: viewModel.state.activeFreq)
-                    .onTapGesture {
-                        // Frequency tap-to-edit handled via alert in MainRXView
-                    }
 
                 Button(action: { viewModel.stepFrequency(up: true) }) {
                     Image(systemName: "chevron.right")
-                        .font(.title2.weight(.bold)).foregroundColor(.radioAccent)
+                        .font(.title3.weight(.bold)).foregroundColor(.radioAccent)
                 }
-
-                Spacer()
-
-                BandSelectorView()
             }.padding(.horizontal, 4)
 
-            // Row 3: Mode + Filter + scope span
+            // Row 3: Mode + Filter + Band + band name
             HStack(spacing: 6) {
                 ModeSelectorView()
                 FilterSelectorView()
+                BandSelectorView()
                 Spacer()
                 Text(viewModel.state.bandName)
                     .font(.caption.weight(.bold)).foregroundColor(.radioAccent)

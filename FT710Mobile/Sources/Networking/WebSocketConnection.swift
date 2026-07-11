@@ -30,7 +30,7 @@ final class WebSocketConnection: NSObject, @unchecked Sendable {
         super.init()
         let config = URLSessionConfiguration.default
         // Server may validate Origin header — match the web frontend
-        let scheme = serverHost.contains("localhost") ? "http" : "https"
+        let scheme = "http"  // Default HTTP for self-hosted servers
         config.httpAdditionalHeaders = [
             "Origin": "\(scheme)://\(serverHost)",
             "User-Agent": "FT710Mobile/1.0",
@@ -72,7 +72,7 @@ final class WebSocketConnection: NSObject, @unchecked Sendable {
     // MARK: - Private
 
     private func doConnect() {
-        let scheme = serverHost.contains("localhost") ? "ws" : "wss"
+        let scheme = "ws"  // Default WS for self-hosted servers (ATS allows via Info.plist)
         var urlStr = "\(scheme)://\(serverHost)\(endpoint)"
 
         // Server uses ?token= query param for WebSocket auth (sunmrrc)
