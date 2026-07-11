@@ -432,6 +432,25 @@ function renderWaterfallRow(wf1) {
         ctx.fillRect(x, h - 1, 1, 1);
     }
 
+    // VFO red line over the waterfall at the actual VFO frequency position.
+    const spanHz = SCOPE_SPAN_HZ[radioState.scope_span] || 100000;
+    const vfoFreq = radioState.active_freq ||
+        (radioState.active_vfo === 'B' ? radioState.vfo_b_freq : radioState.vfo_a_freq) ||
+        14200000;
+    let startFreq = radioState.scope_start_freq;
+    if (!startFreq || startFreq <= 0) {
+        startFreq = vfoFreq - spanHz / 2;
+    }
+    const vfoX = ((vfoFreq - startFreq) / spanHz) * w;
+    if (vfoX >= 0 && vfoX <= w) {
+        ctx.strokeStyle = 'rgba(239, 68, 68, 0.9)';  // red
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(Math.round(vfoX) + 0.5, 0);
+        ctx.lineTo(Math.round(vfoX) + 0.5, h);
+        ctx.stroke();
+    }
+
     // Update frequency scale
     renderFreqScale(w);
 }
@@ -446,23 +465,86 @@ function renderFreqScale(canvasWidth) {
     ctx.fillRect(0, 0, w, 20);
 
     const spanHz = SCOPE_SPAN_HZ[radioState.scope_span] || 100000;
-    const centerFreq = radioState.active_freq ||
+    const vfoFreq = radioState.active_freq ||
         (radioState.active_vfo === 'B' ? radioState.vfo_b_freq : radioState.vfo_a_freq) ||
         14200000;
 
     let startFreq = radioState.scope_start_freq;
     if (!startFreq || startFreq <= 0) {
-        startFreq = centerFreq - spanHz / 2;
+        startFreq = vfoFreq - spanHz / 2;
     }
 
-    ctx.fillStyle = '#666';
+    // Adaptive step size — roughly 8-12 marks across the canvas width.
+    const step = _freqStep(spanHz);
+    const firstMark = Math.floor(startFreq / step) * step;
+
+    // Tick marks and labels
     ctx.font = '9px monospace';
-    ctx.textAlign = 'center';
-    const numMarks = 5;
-    for (let i = 0; i <= numMarks; i++) {
-        const x = (i / numMarks) * w;
-        const freq = startFreq + (i / numMarks) * spanHz;
-        ctx.fillText((freq / 1e6).toFixed(3), x, 14);
+    for (let f = firstMark; f <= startFreq + spanHz; f += step) {
+        const x = ((f - startFreq) / spanHz) * w;
+        if (x < 0 || x > w) continue;
+
+        // Tick line
+        ctx.strokeStyle = '#444';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(Math.round(x) + 0.5, 0);
+        ctx.lineTo(Math.round(x) + 0.5, 4);
+        ctx.stroke();
+
+        // Label
+        ctx.fillStyle = '#999';
+        ctx.textAlign = 'center';
+        ctx.fillText(_formatFreqLabel(f, step), Math.round(x), 15);
+    }
+
+    // VFO marker on the scale (red triangle + label)
+    const vfoX = ((vfoFreq - startFreq) / spanHz) * w;
+    if (vfoX >= 0 && vfoX <= w) {
+        const vx = Math.round(vfoX);
+        // Red marker triangle
+        ctx.fillStyle = '#ef4444';
+        ctx.beginPath();
+        ctx.moveTo(vx, 0);
+        ctx.lineTo(vx - 4, 6);
+        ctx.lineTo(vx + 4, 6);
+        ctx.closePath();
+        ctx.fill();
+        // Label above scale
+        ctx.fillStyle = '#ef4444';
+        ctx.font = 'bold 9px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText((vfoFreq / 1e6).toFixed(3), vx, 20);
+    }
+}
+
+// ── Frequency scale helpers ──────────────────────────────────────────
+
+function _freqStep(spanHz) {
+    if (spanHz <= 2000)       return 200;
+    else if (spanHz <= 5000)  return 500;
+    else if (spanHz <= 10000)  return 1000;
+    else if (spanHz <= 25000)  return 2500;
+    else if (spanHz <= 50000)  return 5000;
+    else if (spanHz <= 100000) return 10000;
+    else if (spanHz <= 200000) return 25000;
+    else if (spanHz <= 500000) return 50000;
+    else                       return 100000;
+}
+
+function _formatFreqLabel(freqHz, step) {
+    if (step < 1000) {
+        // 200/500 Hz steps — kHz with one decimal
+        return (freqHz / 1000).toFixed(1) + 'k';
+    } else if (step <= 5000) {
+        // 1–5 kHz steps — integer kHz
+        return (freqHz / 1000).toFixed(0) + 'k';
+    } else if (step <= 25000) {
+        // 10–25 kHz steps — MHz with two decimals
+        return (freqHz / 1e6).toFixed(2);
+    } else {
+        // 50–100 kHz steps — MHz with three decimals
+        return (freqHz / 1e6).toFixed(3);
     }
 }
 
