@@ -832,8 +832,9 @@ function initUI() {
     });
     document.getElementById('slider-afgain').addEventListener('input', function() {
         setText('val-afgain', this.value);
-        // Control browser audio volume (gain 0.0–1.0 from slider 0–255)
-        var g = parseInt(this.value) / 255.0;
+        // Control browser audio volume with 1.5x boost (see _applyAfGainToAudioNode).
+        var raw = parseInt(this.value) / 255.0;
+        var g = Math.min(1.0, raw * (typeof AUDIO_GAIN_BOOST !== 'undefined' ? AUDIO_GAIN_BOOST : 1.5));
         if (typeof AudioRX_gain_node !== 'undefined' && AudioRX_gain_node) {
             AudioRX_gain_node.gain.value = g;
         }

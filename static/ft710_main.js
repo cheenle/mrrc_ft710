@@ -261,6 +261,7 @@ function handleMessage(msg) {
             }
             radioState.ws_connected = true;
             renderAll();
+            _applyAfGainToAudioNode();  // sync gain node from radio state
             // Also request memChannels explicitly (belt-and-suspenders with server push)
             if (!msg.memChannels) {
                 sendMsg({type: 'memLoadAll'});
@@ -275,6 +276,9 @@ function handleMessage(msg) {
                 const changedFields = msg.fields ? Object.keys(msg.fields) : msg.dirty;
                 if (changedFields) {
                     renderUpdates(changedFields);
+                    if (changedFields.includes('af_gain')) {
+                        _applyAfGainToAudioNode();
+                    }
                 }
             }
             break;
@@ -616,7 +620,7 @@ function AudioRX_start() {
                 }
                 rxNode.connect(AudioRX_gain_node);
                 AudioRX_gain_node.connect(AudioRX_context.destination);
-                AudioRX_gain_node.gain.value = 1.0;  // Ensure not muted
+                _applyAfGainToAudioNode();
                 console.log('Audio RX playback started (AudioWorklet) gain=' + AudioRX_gain_node.gain.value);
             } catch(e) {
                 console.warn('AudioWorklet failed, fallback to ScriptProcessor:', e);
@@ -688,7 +692,7 @@ function AudioRX_start() {
 
             AudioRX_source_node.connect(AudioRX_gain_node);
             AudioRX_gain_node.connect(AudioRX_context.destination);
-            AudioRX_gain_node.gain.value = 1.0;
+            _applyAfGainToAudioNode();
             console.log('Audio RX playback started (ScriptProcessor) gain=' + AudioRX_gain_node.gain.value);
         }
     })();
@@ -1183,6 +1187,18 @@ var FullscreenMgr = (function () {
 
     return { init: init, toggle: toggle, isFullscreen: isFullscreen };
 })();
+
+// ── Audio gain helper ────────────────────────────────────────────────
+// Sync the Web Audio gain node from radioState.af_gain, with a
+// 1.5× boost multiplier to compensate for quiet FT-710 USB audio.
+// Clamped to [0, 1] so it never distorts.
+var AUDIO_GAIN_BOOST = 1.5;
+function _applyAfGainToAudioNode() {
+    if (typeof AudioRX_gain_node === 'undefined' || !AudioRX_gain_node) return;
+    var raw = (radioState.af_gain || 128) / 255.0;
+    var boosted = Math.min(1.0, raw * AUDIO_GAIN_BOOST);
+    AudioRX_gain_node.gain.value = boosted;
+}
 
 document.addEventListener('DOMContentLoaded', function () {
     WakeLockMgr.init();

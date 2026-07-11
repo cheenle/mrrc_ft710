@@ -23,10 +23,25 @@ final class AudioPlaybackManager: NSObject, ObservableObject, @unchecked Sendabl
 
     // ── Observable state ──────────────────────────────────────
     @Published var isMuted: Bool = false {
-        didSet { playerNode.volume = isMuted ? 0 : 1 }
+        didSet { applyVolume() }
+    }
+    /// 0-255, mirrors the server af_gain.  Default 128 = centre.
+    @Published var afGain: Int = 128 {
+        didSet { applyVolume() }
     }
     @Published var rmsLevel: Float = 0.0
     @Published var audioError: String?
+
+    /// Map af_gain (0–255) to AVAudioPlayerNode volume (0–1) with a
+    /// 1.5× boost to compensate for quiet FT-710 USB audio.
+    private func applyVolume() {
+        if isMuted {
+            playerNode.volume = 0
+        } else {
+            let raw = Float(afGain) / 255.0
+            playerNode.volume = min(1.0, raw * 1.5)
+        }
+    }
 
     // ── Recording ─────────────────────────────────────────────
     @Published var isRecording: Bool = false
@@ -65,7 +80,7 @@ final class AudioPlaybackManager: NSObject, ObservableObject, @unchecked Sendabl
         configureSession()
         engine.attach(playerNode)
         engine.connect(playerNode, to: engine.mainMixerNode, format: playbackFormat)
-        playerNode.volume = isMuted ? 0 : 1
+        applyVolume()
 
         do {
             try engine.start()

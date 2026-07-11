@@ -258,6 +258,11 @@ final class RadioViewModel: ObservableObject {
             self?.state.spectrumConnected = $0
         }.store(in: &cancellables)
 
+        // ── Audio gain → playback volume ───────────────────────
+        state.$afGain.receive(on: RunLoop.main).sink { [weak self] gain in
+            self?.audioPlayback.afGain = gain
+        }.store(in: &cancellables)
+
         // ── Error forwarding ───────────────────────────────────
         connection.ctrl.onError = { [weak self] err in
             Task { @MainActor [weak self] in
