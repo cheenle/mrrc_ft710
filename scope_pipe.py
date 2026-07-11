@@ -46,6 +46,7 @@ SYS_CLK_24 = 1
 
 MAX_SYNC_ATTEMPTS = 3
 MAX_CONSECUTIVE_ERRORS = 50
+MAX_REINIT_CYCLES = 5      # consecutive full-device reinitialisations before giving up
 
 running = True
 
@@ -196,6 +197,7 @@ def main():
     consecutive_errors = 0
     consecutive_bad_frames = 0
     sync_attempts_this_device = 0
+    reinit_count = 0
 
     emit_status("pipe_running")
 
@@ -260,6 +262,7 @@ def main():
                 parsed = parse_scope_frame(frame)
                 consecutive_bad_frames = 0
                 sync_attempts_this_device = 0
+                reinit_count = 0  # successful frame resets the reinit counter
             except ValueError:
                 consecutive_bad_frames += 1
                 emit_status(f"sync_lost:bad_frame_{consecutive_bad_frames}")
@@ -275,7 +278,11 @@ def main():
 
                     if sync_attempts_this_device >= MAX_SYNC_ATTEMPTS:
                         # Re-initialize the device (matches wfview approach)
-                        emit_status("reinitializing_device")
+                        reinit_count += 1
+                        if reinit_count > MAX_REINIT_CYCLES:
+                            emit_status(f"fatal:too_many_reinits:{reinit_count}")
+                            break
+                        emit_status(f"reinitializing_device:{reinit_count}/{MAX_REINIT_CYCLES}")
                         close_device(d2xx, f4, ft_handle)
                         ft_handle = open_device(d2xx, f4, clock_divider)
                         if ft_handle is None:

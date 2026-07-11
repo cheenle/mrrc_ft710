@@ -187,7 +187,7 @@ def get_ft4222_clock_divider() -> int:
     wfview uses CLK_DIV_64 (enum value 7) with SYS_CLK_24 for FT-710 scope.
     Hardware experiments can override this without code edits.
     """
-    raw = os.environ.get("FT710_FT4222_CLK_DIV", "5")  # CLK_DIV_16 for ~15-20fps
+    raw = os.environ.get("FT710_FT4222_CLK_DIV", "7")  # CLK_DIV_64 (wfview default, more stable)
     try:
         value = int(raw)
     except ValueError:
