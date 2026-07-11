@@ -437,10 +437,7 @@ function renderWaterfallRow(wf1) {
     const vfoFreq = radioState.active_freq ||
         (radioState.active_vfo === 'B' ? radioState.vfo_b_freq : radioState.vfo_a_freq) ||
         14200000;
-    let startFreq = radioState.scope_start_freq;
-    if (!startFreq || startFreq <= 0) {
-        startFreq = vfoFreq - spanHz / 2;
-    }
+    const startFreq = _getStartFreq(vfoFreq, spanHz);
     const vfoX = ((vfoFreq - startFreq) / spanHz) * w;
     if (vfoX >= 0 && vfoX <= w) {
         ctx.strokeStyle = 'rgba(239, 68, 68, 0.9)';  // red
@@ -469,10 +466,7 @@ function renderFreqScale(canvasWidth) {
         (radioState.active_vfo === 'B' ? radioState.vfo_b_freq : radioState.vfo_a_freq) ||
         14200000;
 
-    let startFreq = radioState.scope_start_freq;
-    if (!startFreq || startFreq <= 0) {
-        startFreq = vfoFreq - spanHz / 2;
-    }
+    const startFreq = _getStartFreq(vfoFreq, spanHz);
 
     // Adaptive step size — roughly 8-12 marks across the canvas width.
     const step = _freqStep(spanHz);
@@ -546,6 +540,38 @@ function _formatFreqLabel(freqHz, step) {
         // 50–100 kHz steps — MHz with three decimals
         return (freqHz / 1e6).toFixed(3);
     }
+}
+
+// ── Start-frequency helper with stale-data guard ────────────────────
+//
+// scope_start_freq comes from the scope frame metadata (hardware, ~30 fps)
+// while vfoFreq comes from CAT polling (~10 fps).  When the user tunes the
+// radio, the CAT path updates immediately but the scope frame still carries
+// the old centre frequency for several frames (hardware DSP latency).
+//
+// Using a stale scope_start_freq with a fresh vfoFreq produces a marker that
+// is wildly off‑canvas.  _getStartFreq validates that the VFO logically
+// falls within the scope span (±15 % tolerance for timing jitter).  If the
+// hardware value fails the sanity check we fall back to the CENTER‑mode
+// assumption (the server always sends EX040200 on init):
+//
+//     scope_start_freq = vfoFreq − spanHz / 2
+//
+// which is exact when the scope is in CENTER mode (the VFO sits at the
+// display centre).
+function _getStartFreq(vfoFreq, spanHz) {
+    const raw = radioState.scope_start_freq;
+    if (!raw || raw <= 0) {
+        return vfoFreq - spanHz / 2;
+    }
+    // Sanity check: the VFO should be inside [raw, raw + spanHz].
+    // Allow 15 % overshoot on either side for sub‑second timing jitter.
+    const slack = Math.round(spanHz * 0.15);
+    if (vfoFreq >= raw - slack && vfoFreq <= raw + spanHz + slack) {
+        return raw;
+    }
+    // Stale — the scope frame hasn't caught up with the new VFO yet.
+    return vfoFreq - spanHz / 2;
 }
 
 function renderScopeSettings() {

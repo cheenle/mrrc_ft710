@@ -9,19 +9,20 @@ struct WaterfallView: View {
         GeometryReader { geo in
             let w = geo.size.width
             let h = geo.size.height
-            // scopeStartFreq is the left-edge frequency from the FT-710 hardware.
-            // When available (scope connected), use it to anchor the scale.
-            // Fall back to centring on the active VFO when scope data is absent.
-            let centerFreq = Double(viewModel.state.scopeStartFreq > 0
-                ? viewModel.state.scopeStartFreq + viewModel.state.scopeSpanHz / 2
-                : viewModel.state.activeFreq)
-            let halfSpan = Double(viewModel.state.scopeSpanHz) / 2.0
-            let leftEdge = centerFreq - halfSpan
-            let span = halfSpan * 2
+            let span = Double(viewModel.state.scopeSpanHz)
+            let vfoFreq = Double(viewModel.state.activeFreq)
+            // Validate scopeStartFreq against the VFO — the two values
+            // arrive from different data sources (scope frame vs CAT poll)
+            // and scope_start_freq can be stale for several frames after
+            // a frequency change.  If the hardware value disagrees with
+            // the VFO by >15 % of the span, fall back to CENTER-mode math.
+            let leftEdge = validatedLeftEdge(
+                raw: Double(viewModel.state.scopeStartFreq),
+                vfoFreq: vfoFreq, span: span
+            )
             let step = freqStep(span: span)
 
-            // VFO position within the spectrum (not necessarily centre).
-            let vfoFreq = Double(viewModel.state.activeFreq)
+            // VFO position within the spectrum.
             let vfoX = CGFloat((vfoFreq - leftEdge) / span) * w
 
             ZStack(alignment: .topLeading) {
@@ -75,6 +76,28 @@ struct WaterfallView: View {
                 viewModel.setFrequency(clickedFreq)
             })
         }
+    }
+
+    /// Validate scopeStartFreq against the VFO frequency.
+    ///
+    /// scopeStartFreq (from scope frame metadata, ~30 fps) and vfoFreq
+    /// (from CAT polling, ~10 fps) are two independent data sources.
+    /// After a frequency change the CAT path updates immediately while
+    /// scope frames carry the old centre for several more frames.
+    ///
+    /// If the hardware value places the VFO >15 % outside the displayed
+    /// span we discard it and fall back to the CENTER-mode assumption
+    /// (the server always sends EX040200 at startup).
+    private func validatedLeftEdge(raw: Double, vfoFreq: Double, span: Double) -> Double {
+        guard raw > 0 else {
+            return vfoFreq - span / 2.0
+        }
+        let slack = span * 0.15
+        if vfoFreq >= raw - slack && vfoFreq <= raw + span + slack {
+            return raw  // hardware value looks consistent
+        }
+        // Stale — scope hasn't caught up with the new VFO yet.
+        return vfoFreq - span / 2.0
     }
 
     private struct FreqMark { let label: String; let hz: Int; let xPos: CGFloat }

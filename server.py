@@ -233,8 +233,8 @@ async def _broadcast_spectrum_loop():
     idle wakeups.  Synthetic Gaussian generation is also skipped.
     """
     global scope, spectrum_clients
-    interval = 1.0 / 30.0
-    idle_interval = 0.500  # 500 ms deep-sleep when no listeners
+    interval = 1.0 / 15.0     # ~66ms → 15 fps (scope_pipe gives ~21 fps native)
+    idle_interval = 0.500      # 500 ms deep-sleep when no listeners
     _first = True
     _idle_skipped = 0
     while True:
