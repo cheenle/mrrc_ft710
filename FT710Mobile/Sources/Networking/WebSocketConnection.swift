@@ -75,7 +75,7 @@ final class WebSocketConnection: NSObject, @unchecked Sendable {
         let scheme = "ws"  // Default WS for self-hosted servers (ATS allows via Info.plist)
         var urlStr = "\(scheme)://\(serverHost)\(endpoint)"
 
-        // Server uses ?token= query param for WebSocket auth (sunmrrc)
+        // Server uses ?token= query param for WebSocket auth
         if let pass = password, !pass.isEmpty {
             let encPass = pass.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? pass
             urlStr += "?token=\(encPass)"

@@ -2,16 +2,16 @@ import SwiftUI
 
 struct MemoryChannelsView: View {
     @EnvironmentObject var viewModel: RadioViewModel
-    @StateObject private var memManager = MemoryChannelsManager()
 
     let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 5)
 
     var body: some View {
+        let channels = viewModel.memChannels.channels
         VStack(spacing: 2) {
             Text("MEMORY").font(.system(size: 9, weight: .bold)).foregroundColor(.radioMuted)
             LazyVGrid(columns: columns, spacing: 4) {
                 ForEach(0..<10, id: \.self) { i in
-                    if let ch = memManager.channels[i] {
+                    if let ch = channels[i] {
                         Button(action: {
                             viewModel.setFrequency(ch.freq)
                             viewModel.setMode(ch.mode)

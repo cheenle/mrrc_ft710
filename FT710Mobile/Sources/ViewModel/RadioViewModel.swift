@@ -240,6 +240,10 @@ final class RadioViewModel: ObservableObject {
             self?.objectWillChange.send()
         }.store(in: &cancellables)
 
+        memChannels.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
+        }.store(in: &cancellables)
+
         // ── Connection status sync ────────────────────────────
         connection.$ctrlConnected.receive(on: RunLoop.main).sink { [weak self] in
             self?.state.ctrlConnected = $0
