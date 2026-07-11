@@ -1,51 +1,31 @@
 import SwiftUI
 
-/// Single rotary-knob style mode selector — tap to cycle, or use < > arrows.
+/// Mode cycle: < LSB / USB / CW-U / AM / FM / RTTY-L / DATA-L >
 struct ModeSelectorView: View {
-    let currentMode: String
-    let onSelect: (String) -> Void
-
-    private let modes = ["USB", "LSB", "AM", "FM", "CW", "RTTY", "DIGI"]
+    @EnvironmentObject var viewModel: RadioViewModel
 
     private var currentIndex: Int {
-        modes.firstIndex(of: currentMode) ?? 0
+        RadioState.uiModes.firstIndex(of: viewModel.state.modeName) ?? 1
     }
 
     var body: some View {
-        HStack(spacing: 2) {
-            // Left arrow
-            Button(action: { select(offset: -1) }) {
-                Image(systemName: "chevron.left")
-                    .font(.caption.weight(.bold))
-                    .foregroundColor(.orange)
-            }
-            .padding(.horizontal, 4)
-
-            // Center — tap to cycle
-            Button(action: { select(offset: 1) }) {
-                Text(currentMode)
-                    .font(.subheadline.weight(.bold))
-                    .foregroundColor(.orange)
-                    .frame(minWidth: 40)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(Color.orange.opacity(0.15))
-                    .cornerRadius(6)
-            }
-
-            // Right arrow
-            Button(action: { select(offset: 1) }) {
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.bold))
-                    .foregroundColor(.orange)
-            }
-            .padding(.horizontal, 4)
+        HStack(spacing: 0) {
+            Button(action: { cycle(-1) }) {
+                Image(systemName: "chevron.left").font(.caption2.weight(.bold))
+            }.frame(width: 22, height: 28)
+            Text(viewModel.state.modeDisplay).font(.caption2.weight(.bold)).foregroundColor(.black)
+                .frame(minWidth: 34).frame(height: 28).background(Color.radioAccent)
+            Button(action: { cycle(1) }) {
+                Image(systemName: "chevron.right").font(.caption2.weight(.bold))
+            }.frame(width: 22, height: 28)
         }
+        .foregroundColor(.radioAccent).background(Color.radioSurface).cornerRadius(6)
     }
 
-    private func select(offset: Int) {
+    private func cycle(_ offset: Int) {
+        let modes = RadioState.uiModes
         var idx = (currentIndex + offset) % modes.count
         if idx < 0 { idx += modes.count }
-        onSelect(modes[idx])
+        viewModel.setMode(modes[idx])
     }
 }

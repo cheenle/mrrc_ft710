@@ -9,7 +9,7 @@ struct FrequencyDisplayView: View {
             ForEach(Array(digits.enumerated()), id: \.offset) { _, segment in
                 Text(segment)
                     .font(.system(size: 56, weight: .bold, design: .monospaced))
-                    .foregroundColor(.orange)
+                    .foregroundColor(.radioAccent)
             }
         }
     }
