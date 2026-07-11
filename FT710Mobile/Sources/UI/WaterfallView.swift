@@ -49,16 +49,17 @@ struct WaterfallView: View {
                     }
                 }
 
-                // VFO red line at the actual VFO frequency position.
-                Rectangle().fill(Color.red).frame(width: 1.5, height: h)
+                // VFO red hairline — semi-transparent so the waterfall
+                // data remains visible behind it.
+                Rectangle().fill(Color.red.opacity(0.45)).frame(width: 1, height: h)
                     .position(x: vfoX, y: h / 2)
 
                 // VFO frequency label above the red line.
                 Text(formatVfoFreq(vfoFreq))
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
                     .foregroundColor(.red)
                     .background(Color.black.opacity(0.7))
-                    .position(x: vfoX, y: 10)
+                    .position(x: vfoX, y: 9)
 
                 // Tick labels at the bottom
                 ForEach(freqLabels(w: w, leftEdge: leftEdge, span: span, step: step), id: \.hz) { m in

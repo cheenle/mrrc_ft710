@@ -440,12 +440,20 @@ function renderWaterfallRow(wf1) {
     const startFreq = _getStartFreq(vfoFreq, spanHz);
     const vfoX = ((vfoFreq - startFreq) / spanHz) * w;
     if (vfoX >= 0 && vfoX <= w) {
-        ctx.strokeStyle = 'rgba(239, 68, 68, 0.9)';  // red
-        ctx.lineWidth = 1.5;
+        const vx = Math.round(vfoX) + 0.5;
+        // Semi-transparent red hairline — visible but doesn't block the
+        // waterfall data behind it.
+        ctx.strokeStyle = 'rgba(239, 68, 68, 0.45)';
+        ctx.lineWidth = 1.0;
         ctx.beginPath();
-        ctx.moveTo(Math.round(vfoX) + 0.5, 0);
-        ctx.lineTo(Math.round(vfoX) + 0.5, h);
+        ctx.moveTo(vx, 0);
+        ctx.lineTo(vx, h);
         ctx.stroke();
+        // VFO frequency label pinned above the marker line.
+        ctx.fillStyle = 'rgba(239, 68, 68, 0.9)';
+        ctx.font = 'bold 8px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText((vfoFreq / 1e6).toFixed(3), vx, 9);
     }
 
     // Update frequency scale
