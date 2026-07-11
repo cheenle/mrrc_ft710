@@ -1,0 +1,200 @@
+/* SunsdrMobile — Amber/Orange brand overrides for octen.css */
+
+/* ── Brand colour overrides ── */
+:root {
+  --bg-primary: #0a0e14;
+  --bg-secondary: #0d1117;
+  --bg-tertiary: #10161e;
+  --bg-card: rgba(255,255,255,0.025);
+  --accent: #f39c12;
+  --accent-dim: #e67e22;
+  --accent-glow: rgba(243,156,18,0.12);
+  --text-secondary: #8899aa;
+  --text-muted: #5c6370;
+  --border: rgba(255,255,255,0.06);
+  --border-hover: rgba(243,156,18,0.25);
+  --nav-h: 56px;
+}
+
+/* ── Navbar tweaks ── */
+.logo span { color: var(--accent); }
+
+/* ── Gradient text override ── */
+.gradient {
+  background: linear-gradient(135deg, #f39c12, #e67e22);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Button accent overrides ── */
+.btn-primary { background: var(--accent); color: #0a0e14; }
+.btn-primary:hover { background: #e67e22; box-shadow: 0 8px 24px rgba(243,156,18,0.3); }
+.btn-outline { background: transparent; color: var(--text-secondary); border: 1px solid rgba(255,255,255,0.15); }
+.btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+.btn-secondary { color: var(--text-secondary); }
+
+/* ── Architecture diagram — override monospace for SVG ── */
+.arch-diagram {
+  white-space: normal;
+  font-family: var(--font-sans);
+  overflow-x: auto;
+  text-align: center;
+  padding: 2rem 1.5rem;
+  border-radius: 20px;
+  margin-bottom: 2rem;
+}
+.arch-diagram svg { max-width: 100%; height: auto; }
+
+/* ── Section label ── */
+.section-label {
+  text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.875rem; font-weight: 600;
+  color: var(--accent); margin-bottom: 0.75rem;
+}
+
+/* ── Section subtitle / desc ── */
+.section-desc {
+  font-size: 1.125rem; color: var(--text-secondary); max-width: 600px; margin-bottom: 3rem;
+}
+
+/* ── Feature cards (site-specific: coloured icons + bullet lists) ── */
+.feature-card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 16px; padding: 2rem; transition: all 0.3s;
+}
+.feature-card:hover {
+  border-color: rgba(243,156,18,0.25); transform: translateY(-3px);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+}
+.feature-card .icon {
+  width: 48px; height: 48px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.25rem; margin-bottom: 1.25rem;
+}
+.feature-card h3 { font-size: 1.15rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.6rem; }
+.feature-card p { color: var(--text-secondary); font-size: 0.92rem; line-height: 1.7; }
+.feature-card ul { list-style: none; margin-top: 0.75rem; }
+.feature-card ul li { color: var(--text-secondary); font-size: 0.85rem; padding: 0.2rem 0; }
+.feature-card ul li::before { content: "▸ "; color: var(--accent); font-size: 0.7rem; }
+
+/* Feature icon colour variants */
+.icon-waterfall { background: rgba(52,152,219,0.15); color: #3498db; }
+.icon-audio     { background: rgba(46,204,113,0.15); color: #2ecc71; }
+.icon-controls  { background: rgba(155,89,182,0.15); color: #9b59b6; }
+.icon-dsp       { background: rgba(230,126,34,0.15); color: #e67e22; }
+.icon-memory    { background: rgba(241,196,15,0.15); color: #f1c40f; }
+.icon-settings  { background: rgba(149,165,166,0.15); color: #95a5a6; }
+
+/* ── Architecture endpoint cards ── */
+.arch-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1.5rem; margin-top: 2rem;
+}
+.arch-card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 14px; padding: 1.5rem; text-align: center;
+}
+.arch-card .label {
+  display: inline-block; background: rgba(243,156,18,0.15); color: var(--accent);
+  padding: 0.2rem 0.8rem; border-radius: 6px; font-size: 0.7rem; font-weight: 600;
+  letter-spacing: 0.05em; margin-bottom: 0.75rem;
+}
+.arch-card .endpoint { font-family: var(--font-mono); color: #5dade2; font-weight: 600; font-size: 1rem; }
+.arch-card .dir { color: var(--text-secondary); font-size: 0.8rem; margin-top: 0.25rem; }
+.arch-card .payload { color: var(--text-muted); font-size: 0.78rem; margin-top: 0.5rem; }
+
+/* ── UI phone mockup showcase ── */
+.ui-showcase {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 20px; padding: 2rem 1.5rem; overflow-x: auto; text-align: center;
+}
+.ui-showcase svg { max-width: 100%; height: auto; }
+.screen-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.5rem; margin-top: 2rem;
+}
+.screen-card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 14px; padding: 1.5rem;
+}
+.screen-card h4 { color: var(--text-primary); font-size: 1rem; margin-bottom: 0.75rem; }
+.screen-card p { color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.5rem; line-height: 1.7; }
+.screen-card .comp {
+  display: inline-block; background: rgba(93,173,226,0.1); color: #5dade2;
+  padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.72rem;
+  margin: 0.15rem; font-family: var(--font-mono);
+}
+
+/* ── Performance metrics ── */
+.perf-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.5rem;
+}
+.perf-card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 14px; padding: 1.75rem; text-align: center;
+}
+.perf-card .metric { font-size: 2.8rem; font-weight: 800; color: var(--accent); line-height: 1; }
+.perf-card .metric-label { color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.4rem; }
+
+/* ── Steps / Quick Start ── */
+.steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1.5rem; counter-reset: step;
+}
+.step {
+  position: relative; background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 14px; padding: 2rem 1.5rem;
+}
+.step::before {
+  counter-increment: step; content: counter(step);
+  position: absolute; top: -14px; left: 1.5rem;
+  width: 32px; height: 32px; border-radius: 50%;
+  background: var(--accent); color: #0a0e14;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: 0.9rem;
+}
+.step h4 { color: var(--text-primary); font-weight: 700; font-size: 1.05rem; margin: 0.5rem 0 0.5rem; }
+.step code {
+  display: block; background: rgba(0,0,0,0.3); color: #5dade2;
+  padding: 0.6rem 1rem; border-radius: 8px; font-size: 0.8rem;
+  margin-top: 0.75rem; overflow-x: auto;
+}
+.step p { color: var(--text-secondary); font-size: 0.85rem; }
+
+/* ── Tech stack tags ── */
+.tech-stack { display: flex; flex-wrap: wrap; gap: 0.6rem; justify-content: center; margin: 2rem 0; }
+.tech-tag {
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 100px; padding: 0.4rem 1.1rem; font-size: 0.82rem;
+  color: var(--text-primary); transition: all 0.2s;
+}
+.tech-tag:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── Footer "Built with" badge ── */
+footer .built { color: var(--accent); font-size: 0.78rem; margin-top: 0.75rem; }
+
+/* ── Fade-up animation ── */
+@keyframes fadeUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+.animate { animation: fadeUp 0.7s ease-out both; }
+.animate:nth-child(2) { animation-delay: 0.1s; }
+.animate:nth-child(3) { animation-delay: 0.2s; }
+.animate:nth-child(4) { animation-delay: 0.3s; }
+.animate:nth-child(5) { animation-delay: 0.4s; }
+.animate:nth-child(6) { animation-delay: 0.5s; }
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .hero-title { font-size: 2.25rem; }
+  .section-title { font-size: 1.75rem; }
+  .section { padding: 4rem 1.25rem; }
+  .features-grid { grid-template-columns: 1fr; }
+  .arch-grid { grid-template-columns: 1fr; }
+  .screen-row { grid-template-columns: 1fr; }
+  .perf-grid { grid-template-columns: 1fr 1fr; }
+  .steps { grid-template-columns: 1fr; }
+}

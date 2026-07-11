@@ -1,0 +1,424 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0DBAA6F90186AC5FBDF2D716 /* RadioViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D62CC7E6BFD3E507CB2FB9DB /* RadioViewModel.swift */; };
+		15597B60373BCED1D29C64EA /* ModeSelectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32918148C5CBA08CB773375B /* ModeSelectorView.swift */; };
+		19662EC4015D00FAE9325003 /* AudioCaptureManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C157EAE8C8690EF73D0880A /* AudioCaptureManager.swift */; };
+		2F3801A2B935E53821F2F8B5 /* PTTButtonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC324FD8D979748BADC1C40B /* PTTButtonView.swift */; };
+		2FB0F597540EA56D90C06C89 /* WaterfallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCF414FDEC6980A57582ACBD /* WaterfallView.swift */; };
+		353ABF0B86F00182614C23F0 /* MainRXView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B213691E8629DDB947FFC82C /* MainRXView.swift */; };
+		648B2185BDD918B194FCA284 /* ConnectionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA35D4D362BF3B541D7EE8A5 /* ConnectionManager.swift */; };
+		81D6FE36922533D348B8AF93 /* DSPPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C383D9A97FCEC5E407A668BD /* DSPPanelView.swift */; };
+		A98E325FD8F5503A4A87289B /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D19A5C7B47FBF5B9FEA52E12 /* SettingsView.swift */; };
+		AA416A6B341406BF483DB3C2 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5FE5EF147D278798C3667A8 /* LoginView.swift */; };
+		AC77ECA6664A3DFE3949E426 /* RadioState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79F849B007EFCA1C1B25D92F /* RadioState.swift */; };
+		B0A3E7F55E09E6C30A0BC5D5 /* AudioPlaybackManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE0A084FE2099A1A0BA6AD87 /* AudioPlaybackManager.swift */; };
+		BFDEB099AF669F554FEFD42F /* WebSocketConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 599667BB247E4B195330A60F /* WebSocketConnection.swift */; };
+		C958045326E902C993900ED6 /* SMeterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 571C8D0AF256B0A4ECC8933B /* SMeterView.swift */; };
+		D338B004CC9F928B74ADAEDB /* FrequencyDisplay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A206EC58D51F49CAEF76658 /* FrequencyDisplay.swift */; };
+		DC834C525888E31385236F82 /* HeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77D0287AA65811A1995AA8CB /* HeaderView.swift */; };
+		DEBBE844CE134AD603F196FB /* Colors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03A6BD94BCEF0DBF26311355 /* Colors.swift */; };
+		E5330CF62CD88CD132708D12 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75A3B8FD0CC31411814FB37E /* ContentView.swift */; };
+		F10EC127F2B0283D64D2DAA2 /* FavoritesManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F113B9170614C0CDC0390EAC /* FavoritesManager.swift */; };
+		F7912AD97AA97DB76B4BCD5E /* SpectrumProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E2696B43DC968723461FFC9 /* SpectrumProcessor.swift */; };
+		FBE05FFF684F2417E1AADF8D /* SunsdrMobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C42C900F5CA8428154703451 /* SunsdrMobileApp.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		03A6BD94BCEF0DBF26311355 /* Colors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Colors.swift; sourceTree = "<group>"; };
+		1A206EC58D51F49CAEF76658 /* FrequencyDisplay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrequencyDisplay.swift; sourceTree = "<group>"; };
+		32918148C5CBA08CB773375B /* ModeSelectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModeSelectorView.swift; sourceTree = "<group>"; };
+		4C157EAE8C8690EF73D0880A /* AudioCaptureManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioCaptureManager.swift; sourceTree = "<group>"; };
+		571C8D0AF256B0A4ECC8933B /* SMeterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SMeterView.swift; sourceTree = "<group>"; };
+		599667BB247E4B195330A60F /* WebSocketConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSocketConnection.swift; sourceTree = "<group>"; };
+		6E2696B43DC968723461FFC9 /* SpectrumProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpectrumProcessor.swift; sourceTree = "<group>"; };
+		75A3B8FD0CC31411814FB37E /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		77D0287AA65811A1995AA8CB /* HeaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeaderView.swift; sourceTree = "<group>"; };
+		79F849B007EFCA1C1B25D92F /* RadioState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadioState.swift; sourceTree = "<group>"; };
+		7EDFB07C9535CB0D110B9863 /* FT710Mobile.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = FT710Mobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A5FE5EF147D278798C3667A8 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
+		B213691E8629DDB947FFC82C /* MainRXView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainRXView.swift; sourceTree = "<group>"; };
+		BCF414FDEC6980A57582ACBD /* WaterfallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaterfallView.swift; sourceTree = "<group>"; };
+		BE0A084FE2099A1A0BA6AD87 /* AudioPlaybackManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlaybackManager.swift; sourceTree = "<group>"; };
+		C383D9A97FCEC5E407A668BD /* DSPPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DSPPanelView.swift; sourceTree = "<group>"; };
+		C42C900F5CA8428154703451 /* SunsdrMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SunsdrMobileApp.swift; sourceTree = "<group>"; };
+		D19A5C7B47FBF5B9FEA52E12 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		D62CC7E6BFD3E507CB2FB9DB /* RadioViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadioViewModel.swift; sourceTree = "<group>"; };
+		DC324FD8D979748BADC1C40B /* PTTButtonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PTTButtonView.swift; sourceTree = "<group>"; };
+		EA35D4D362BF3B541D7EE8A5 /* ConnectionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionManager.swift; sourceTree = "<group>"; };
+		F113B9170614C0CDC0390EAC /* FavoritesManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoritesManager.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		100A63DC1EBF34C14BEFF4AF /* Audio */ = {
+			isa = PBXGroup;
+			children = (
+				4C157EAE8C8690EF73D0880A /* AudioCaptureManager.swift */,
+				BE0A084FE2099A1A0BA6AD87 /* AudioPlaybackManager.swift */,
+				6E2696B43DC968723461FFC9 /* SpectrumProcessor.swift */,
+			);
+			path = Audio;
+			sourceTree = "<group>";
+		};
+		819C24A1DB1E5347344249F2 /* ViewModel */ = {
+			isa = PBXGroup;
+			children = (
+				D62CC7E6BFD3E507CB2FB9DB /* RadioViewModel.swift */,
+			);
+			path = ViewModel;
+			sourceTree = "<group>";
+		};
+		8BF512FC5B2488D852CD90B0 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				B8C8B9B13FF8D2BDFE03C5BD /* App */,
+				100A63DC1EBF34C14BEFF4AF /* Audio */,
+				C4450643ED38BCF1E7301A73 /* Model */,
+				B13AD3A56FFAE08921C814B9 /* Networking */,
+				EC8C6CDBD66D20F0FEC158BE /* UI */,
+				819C24A1DB1E5347344249F2 /* ViewModel */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		9165CD5CA971B9BAC294E28E /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				7EDFB07C9535CB0D110B9863 /* FT710Mobile.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		B13AD3A56FFAE08921C814B9 /* Networking */ = {
+			isa = PBXGroup;
+			children = (
+				EA35D4D362BF3B541D7EE8A5 /* ConnectionManager.swift */,
+				599667BB247E4B195330A60F /* WebSocketConnection.swift */,
+			);
+			path = Networking;
+			sourceTree = "<group>";
+		};
+		B8C8B9B13FF8D2BDFE03C5BD /* App */ = {
+			isa = PBXGroup;
+			children = (
+				03A6BD94BCEF0DBF26311355 /* Colors.swift */,
+				C42C900F5CA8428154703451 /* SunsdrMobileApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		C4450643ED38BCF1E7301A73 /* Model */ = {
+			isa = PBXGroup;
+			children = (
+				F113B9170614C0CDC0390EAC /* FavoritesManager.swift */,
+				79F849B007EFCA1C1B25D92F /* RadioState.swift */,
+			);
+			path = Model;
+			sourceTree = "<group>";
+		};
+		DAC253A0CA852622467A97D6 = {
+			isa = PBXGroup;
+			children = (
+				8BF512FC5B2488D852CD90B0 /* Sources */,
+				9165CD5CA971B9BAC294E28E /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		EC8C6CDBD66D20F0FEC158BE /* UI */ = {
+			isa = PBXGroup;
+			children = (
+				75A3B8FD0CC31411814FB37E /* ContentView.swift */,
+				C383D9A97FCEC5E407A668BD /* DSPPanelView.swift */,
+				1A206EC58D51F49CAEF76658 /* FrequencyDisplay.swift */,
+				77D0287AA65811A1995AA8CB /* HeaderView.swift */,
+				A5FE5EF147D278798C3667A8 /* LoginView.swift */,
+				B213691E8629DDB947FFC82C /* MainRXView.swift */,
+				32918148C5CBA08CB773375B /* ModeSelectorView.swift */,
+				DC324FD8D979748BADC1C40B /* PTTButtonView.swift */,
+				D19A5C7B47FBF5B9FEA52E12 /* SettingsView.swift */,
+				571C8D0AF256B0A4ECC8933B /* SMeterView.swift */,
+				BCF414FDEC6980A57582ACBD /* WaterfallView.swift */,
+			);
+			path = UI;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		11D3029027139DF36CFFB79A /* FT710Mobile */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 426C9EE0583D768B08FED690 /* Build configuration list for PBXNativeTarget "FT710Mobile" */;
+			buildPhases = (
+				556CE73C16CDEF53F938A533 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = FT710Mobile;
+			packageProductDependencies = (
+			);
+			productName = FT710Mobile;
+			productReference = 7EDFB07C9535CB0D110B9863 /* FT710Mobile.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		F4651A46DAAF7BBA3A422F84 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					11D3029027139DF36CFFB79A = {
+						DevelopmentTeam = VQ89MM7935;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = A077CE62F973A46455C15607 /* Build configuration list for PBXProject "FT710Mobile" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = DAC253A0CA852622467A97D6;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 9165CD5CA971B9BAC294E28E /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				11D3029027139DF36CFFB79A /* FT710Mobile */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		556CE73C16CDEF53F938A533 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				19662EC4015D00FAE9325003 /* AudioCaptureManager.swift in Sources */,
+				B0A3E7F55E09E6C30A0BC5D5 /* AudioPlaybackManager.swift in Sources */,
+				DEBBE844CE134AD603F196FB /* Colors.swift in Sources */,
+				648B2185BDD918B194FCA284 /* ConnectionManager.swift in Sources */,
+				E5330CF62CD88CD132708D12 /* ContentView.swift in Sources */,
+				81D6FE36922533D348B8AF93 /* DSPPanelView.swift in Sources */,
+				F10EC127F2B0283D64D2DAA2 /* FavoritesManager.swift in Sources */,
+				D338B004CC9F928B74ADAEDB /* FrequencyDisplay.swift in Sources */,
+				DC834C525888E31385236F82 /* HeaderView.swift in Sources */,
+				AA416A6B341406BF483DB3C2 /* LoginView.swift in Sources */,
+				353ABF0B86F00182614C23F0 /* MainRXView.swift in Sources */,
+				15597B60373BCED1D29C64EA /* ModeSelectorView.swift in Sources */,
+				2F3801A2B935E53821F2F8B5 /* PTTButtonView.swift in Sources */,
+				AC77ECA6664A3DFE3949E426 /* RadioState.swift in Sources */,
+				0DBAA6F90186AC5FBDF2D716 /* RadioViewModel.swift in Sources */,
+				C958045326E902C993900ED6 /* SMeterView.swift in Sources */,
+				A98E325FD8F5503A4A87289B /* SettingsView.swift in Sources */,
+				F7912AD97AA97DB76B4BCD5E /* SpectrumProcessor.swift in Sources */,
+				FBE05FFF684F2417E1AADF8D /* SunsdrMobileApp.swift in Sources */,
+				2FB0F597540EA56D90C06C89 /* WaterfallView.swift in Sources */,
+				BFDEB099AF669F554FEFD42F /* WebSocketConnection.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		20EEA33100ACA1CA4D04C8C8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = VQ89MM7935;
+				INFOPLIST_FILE = Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.hamradio.ft710mobile;
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = iphoneos;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		4207C46EA7D7611EEB6065D6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = VQ89MM7935;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				INFOPLIST_FILE = Resources/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		9A723C5F9255944AC3BBFF79 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = VQ89MM7935;
+				INFOPLIST_FILE = Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.hamradio.ft710mobile;
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = iphoneos;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		BCB1426211904B7E10182B18 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = VQ89MM7935;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				INFOPLIST_FILE = Resources/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		426C9EE0583D768B08FED690 /* Build configuration list for PBXNativeTarget "FT710Mobile" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				20EEA33100ACA1CA4D04C8C8 /* Debug */,
+				9A723C5F9255944AC3BBFF79 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		A077CE62F973A46455C15607 /* Build configuration list for PBXProject "FT710Mobile" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4207C46EA7D7611EEB6065D6 /* Debug */,
+				BCB1426211904B7E10182B18 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = F4651A46DAAF7BBA3A422F84 /* Project object */;
+}

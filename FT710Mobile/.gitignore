@@ -1,0 +1,17 @@
+# Xcode
+build/
+*.xcuserdata
+xcuserdata/
+*.xcworkspace/xcuserdata/
+DerivedData/
+*.xcbkptlist
+*.xcuserstate
+
+# CocoaPods
+Pods/
+
+# SPM
+.swiftpm/
+
+# macOS
+.DS_Store

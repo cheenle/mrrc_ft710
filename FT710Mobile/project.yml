@@ -1,0 +1,40 @@
+name: FT710Mobile
+options:
+  bundleIdPrefix: com.hamradio
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+
+settings:
+  base:
+    INFOPLIST_FILE: Resources/Info.plist
+    DEVELOPMENT_TEAM: "VQ89MM7935"
+
+schemes:
+  FT710Mobile:
+    build:
+      targets:
+        FT710Mobile: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+
+targets:
+  FT710Mobile:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+    resources:
+      - path: Resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.hamradio.ft710mobile
+        INFOPLIST_FILE: Resources/Info.plist
+        SUPPORTED_PLATFORMS: iphoneos
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "5.9"
+        DEVELOPMENT_TEAM: "VQ89MM7935"
+        CODE_SIGN_STYLE: Automatic

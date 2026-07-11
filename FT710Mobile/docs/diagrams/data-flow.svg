@@ -1,0 +1,30 @@
+<svg viewBox="0 0 340 160" xmlns="http://www.w3.org/2000/svg">
+  <rect x="110" y="8" width="120" height="50" rx="8" fill="rgba(93,173,226,0.06)" stroke="rgba(93,173,226,0.25)" stroke-width="1.5"/>
+  <text x="170" y="32" text-anchor="middle" fill="#5dade2" font-size="12" font-weight="700" font-family="sans-serif">sunmrrc Server</text>
+  <text x="170" y="48" text-anchor="middle" fill="#8899aa" font-size="9" font-family="sans-serif">radio.vlsc.net:8889</text>
+
+  <!-- Connections -->
+  <line x1="170" y1="58" x2="170" y2="85" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+
+  <!-- WS Endpoints -->
+  <line x1="170" y1="85" x2="45" y2="120" stroke="rgba(243,156,18,0.3)" stroke-width="1.2"/>
+  <line x1="170" y1="85" x2="120" y2="120" stroke="rgba(46,204,113,0.3)" stroke-width="1.2"/>
+  <line x1="170" y1="85" x2="220" y2="120" stroke="rgba(155,89,182,0.3)" stroke-width="1.2"/>
+  <line x1="170" y1="85" x2="295" y2="120" stroke="rgba(230,126,34,0.3)" stroke-width="1.2"/>
+
+  <rect x="5" y="118" width="85" height="28" rx="5" fill="rgba(243,156,18,0.08)" stroke="rgba(243,156,18,0.2)" stroke-width="1"/>
+  <text x="47" y="136" text-anchor="middle" fill="#f39c12" font-size="9" font-family="monospace">/WSCTRX</text>
+  <text x="47" y="151" text-anchor="middle" fill="#5c6370" font-size="7" font-family="sans-serif">Bidirectional text</text>
+
+  <rect x="92" y="118" width="57" height="28" rx="5" fill="rgba(46,204,113,0.08)" stroke="rgba(46,204,113,0.2)" stroke-width="1"/>
+  <text x="120" y="136" text-anchor="middle" fill="#2ecc71" font-size="8" font-family="monospace">audioRX</text>
+  <text x="120" y="151" text-anchor="middle" fill="#5c6370" font-size="7" font-family="sans-serif">↓ PCM/Opus</text>
+
+  <rect x="192" y="118" width="57" height="28" rx="5" fill="rgba(155,89,182,0.08)" stroke="rgba(155,89,182,0.2)" stroke-width="1"/>
+  <text x="220" y="136" text-anchor="middle" fill="#9b59b6" font-size="8" font-family="monospace">audioTX</text>
+  <text x="220" y="151" text-anchor="middle" fill="#5c6370" font-size="7" font-family="sans-serif">↑ Int16 PCM</text>
+
+  <rect x="255" y="118" width="76" height="28" rx="5" fill="rgba(230,126,34,0.08)" stroke="rgba(230,126,34,0.2)" stroke-width="1"/>
+  <text x="293" y="136" text-anchor="middle" fill="#e67e22" font-size="8" font-family="monospace">/WSspectrum</text>
+  <text x="293" y="151" text-anchor="middle" fill="#5c6370" font-size="7" font-family="sans-serif">↓ 512 uint8</text>
+</svg>

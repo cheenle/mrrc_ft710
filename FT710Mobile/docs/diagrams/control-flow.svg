@@ -1,0 +1,25 @@
+<svg viewBox="0 0 520 100" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="gb1" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="rgba(243,156,18,0.08)"/><stop offset="100%" stop-color="rgba(243,156,18,0.02)"/></linearGradient>
+    <linearGradient id="gb2" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="rgba(93,173,226,0.08)"/><stop offset="100%" stop-color="rgba(93,173,226,0.02)"/></linearGradient>
+  </defs>
+  <rect x="10" y="12" width="170" height="70" rx="10" fill="url(#gb1)" stroke="rgba(243,156,18,0.35)" stroke-width="1.5"/>
+  <text x="95" y="40" text-anchor="middle" fill="#f39c12" font-size="13" font-weight="700" font-family="sans-serif">RadioViewModel</text>
+  <text x="95" y="55" text-anchor="middle" fill="#8899aa" font-size="10" font-family="sans-serif">@MainActor</text>
+  <text x="95" y="72" text-anchor="middle" fill="#5c6370" font-size="9" font-family="sans-serif">state.frequency</text>
+
+  <rect x="340" y="12" width="170" height="70" rx="10" fill="url(#gb2)" stroke="rgba(93,173,226,0.35)" stroke-width="1.5"/>
+  <text x="425" y="40" text-anchor="middle" fill="#5dade2" font-size="13" font-weight="700" font-family="sans-serif">ConnectionMgr</text>
+  <text x="425" y="55" text-anchor="middle" fill="#8899aa" font-size="10" font-family="sans-serif">/WSCTRX</text>
+  <text x="425" y="72" text-anchor="middle" fill="#5c6370" font-size="9" font-family="sans-serif">onText callback</text>
+
+  <!-- Top arrow: send -->
+  <line x1="180" y1="42" x2="340" y2="42" stroke="rgba(46,204,113,0.4)" stroke-width="1.5"/>
+  <polygon points="332,37 340,42 332,47" fill="rgba(46,204,113,0.5)"/>
+  <text x="260" y="34" text-anchor="middle" fill="#2ecc71" font-size="9" font-family="monospace">setFreq:14074000</text>
+
+  <!-- Bottom arrow: response -->
+  <line x1="340" y1="62" x2="180" y2="62" stroke="rgba(155,89,182,0.4)" stroke-width="1.5"/>
+  <polygon points="188,57 180,62 188,67" fill="rgba(155,89,182,0.5)"/>
+  <text x="260" y="78" text-anchor="middle" fill="#9b59b6" font-size="9" font-family="monospace">getFreq:14074000</text>
+</svg>
