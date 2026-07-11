@@ -8,51 +8,65 @@
 
 /* Begin PBXBuildFile section */
 		0DBAA6F90186AC5FBDF2D716 /* RadioViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D62CC7E6BFD3E507CB2FB9DB /* RadioViewModel.swift */; };
+		143A6B51219A6441207E4E3C /* FT710MobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DD67DEBFDB29969EAA9B3F1 /* FT710MobileApp.swift */; };
 		15597B60373BCED1D29C64EA /* ModeSelectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32918148C5CBA08CB773375B /* ModeSelectorView.swift */; };
 		19662EC4015D00FAE9325003 /* AudioCaptureManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C157EAE8C8690EF73D0880A /* AudioCaptureManager.swift */; };
 		2F3801A2B935E53821F2F8B5 /* PTTButtonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC324FD8D979748BADC1C40B /* PTTButtonView.swift */; };
 		2FB0F597540EA56D90C06C89 /* WaterfallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCF414FDEC6980A57582ACBD /* WaterfallView.swift */; };
 		353ABF0B86F00182614C23F0 /* MainRXView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B213691E8629DDB947FFC82C /* MainRXView.swift */; };
+		40B0A078D2B2E0EF4DA20AE5 /* MemoryChannelsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF987F7D69693580D861684F /* MemoryChannelsManager.swift */; };
+		5329F94F27C447A715A7CD11 /* MemoryChannelsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1966D9EFC41E35228B8B7C83 /* MemoryChannelsView.swift */; };
+		584908848AFDF1944FE85C6D /* TunerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1887F7829F4094CB16B0C0DD /* TunerView.swift */; };
 		648B2185BDD918B194FCA284 /* ConnectionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA35D4D362BF3B541D7EE8A5 /* ConnectionManager.swift */; };
+		801DEF3F460117D1284A1B3D /* FilterSelectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA7F707392BC5E4B981E6AFE /* FilterSelectorView.swift */; };
 		81D6FE36922533D348B8AF93 /* DSPPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C383D9A97FCEC5E407A668BD /* DSPPanelView.swift */; };
+		A0D5064F92F5B75ED0FA32AA /* OpusEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF74DEA1C9A60039A4A0FB54 /* OpusEncoder.swift */; };
+		A788C47BE4DA57142851F870 /* OpusDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B74F206BEC73DD89D06D4F /* OpusDecoder.swift */; };
 		A98E325FD8F5503A4A87289B /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D19A5C7B47FBF5B9FEA52E12 /* SettingsView.swift */; };
 		AA416A6B341406BF483DB3C2 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5FE5EF147D278798C3667A8 /* LoginView.swift */; };
 		AC77ECA6664A3DFE3949E426 /* RadioState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79F849B007EFCA1C1B25D92F /* RadioState.swift */; };
 		B0A3E7F55E09E6C30A0BC5D5 /* AudioPlaybackManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE0A084FE2099A1A0BA6AD87 /* AudioPlaybackManager.swift */; };
+		BE31368B091EC95505CEE2C0 /* SpectrumProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 339927CA5FEABE608B6E67F6 /* SpectrumProcessor.swift */; };
 		BFDEB099AF669F554FEFD42F /* WebSocketConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 599667BB247E4B195330A60F /* WebSocketConnection.swift */; };
 		C958045326E902C993900ED6 /* SMeterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 571C8D0AF256B0A4ECC8933B /* SMeterView.swift */; };
+		CE1F27BAF91AA8BC6F8DD670 /* BandSelectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7749903EC42A6EF6AA18E574 /* BandSelectorView.swift */; };
 		D338B004CC9F928B74ADAEDB /* FrequencyDisplay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A206EC58D51F49CAEF76658 /* FrequencyDisplay.swift */; };
 		DC834C525888E31385236F82 /* HeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77D0287AA65811A1995AA8CB /* HeaderView.swift */; };
 		DEBBE844CE134AD603F196FB /* Colors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03A6BD94BCEF0DBF26311355 /* Colors.swift */; };
 		E5330CF62CD88CD132708D12 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75A3B8FD0CC31411814FB37E /* ContentView.swift */; };
-		F10EC127F2B0283D64D2DAA2 /* FavoritesManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F113B9170614C0CDC0390EAC /* FavoritesManager.swift */; };
-		F7912AD97AA97DB76B4BCD5E /* SpectrumProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E2696B43DC968723461FFC9 /* SpectrumProcessor.swift */; };
-		FBE05FFF684F2417E1AADF8D /* SunsdrMobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C42C900F5CA8428154703451 /* SunsdrMobileApp.swift */; };
+		F3C4641C77ECF03BBF0537C9 /* MeterBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 902B42102F8B88B3287DC547 /* MeterBarView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		03A6BD94BCEF0DBF26311355 /* Colors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Colors.swift; sourceTree = "<group>"; };
+		1887F7829F4094CB16B0C0DD /* TunerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TunerView.swift; sourceTree = "<group>"; };
+		1966D9EFC41E35228B8B7C83 /* MemoryChannelsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryChannelsView.swift; sourceTree = "<group>"; };
 		1A206EC58D51F49CAEF76658 /* FrequencyDisplay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrequencyDisplay.swift; sourceTree = "<group>"; };
+		2DD67DEBFDB29969EAA9B3F1 /* FT710MobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FT710MobileApp.swift; sourceTree = "<group>"; };
 		32918148C5CBA08CB773375B /* ModeSelectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModeSelectorView.swift; sourceTree = "<group>"; };
+		339927CA5FEABE608B6E67F6 /* SpectrumProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpectrumProcessor.swift; sourceTree = "<group>"; };
 		4C157EAE8C8690EF73D0880A /* AudioCaptureManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioCaptureManager.swift; sourceTree = "<group>"; };
 		571C8D0AF256B0A4ECC8933B /* SMeterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SMeterView.swift; sourceTree = "<group>"; };
 		599667BB247E4B195330A60F /* WebSocketConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSocketConnection.swift; sourceTree = "<group>"; };
-		6E2696B43DC968723461FFC9 /* SpectrumProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpectrumProcessor.swift; sourceTree = "<group>"; };
 		75A3B8FD0CC31411814FB37E /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		7749903EC42A6EF6AA18E574 /* BandSelectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BandSelectorView.swift; sourceTree = "<group>"; };
 		77D0287AA65811A1995AA8CB /* HeaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeaderView.swift; sourceTree = "<group>"; };
 		79F849B007EFCA1C1B25D92F /* RadioState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadioState.swift; sourceTree = "<group>"; };
 		7EDFB07C9535CB0D110B9863 /* FT710Mobile.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = FT710Mobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		902B42102F8B88B3287DC547 /* MeterBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeterBarView.swift; sourceTree = "<group>"; };
 		A5FE5EF147D278798C3667A8 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
 		B213691E8629DDB947FFC82C /* MainRXView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainRXView.swift; sourceTree = "<group>"; };
 		BCF414FDEC6980A57582ACBD /* WaterfallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaterfallView.swift; sourceTree = "<group>"; };
 		BE0A084FE2099A1A0BA6AD87 /* AudioPlaybackManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlaybackManager.swift; sourceTree = "<group>"; };
 		C383D9A97FCEC5E407A668BD /* DSPPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DSPPanelView.swift; sourceTree = "<group>"; };
-		C42C900F5CA8428154703451 /* SunsdrMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SunsdrMobileApp.swift; sourceTree = "<group>"; };
 		D19A5C7B47FBF5B9FEA52E12 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		D62CC7E6BFD3E507CB2FB9DB /* RadioViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadioViewModel.swift; sourceTree = "<group>"; };
+		DA7F707392BC5E4B981E6AFE /* FilterSelectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilterSelectorView.swift; sourceTree = "<group>"; };
 		DC324FD8D979748BADC1C40B /* PTTButtonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PTTButtonView.swift; sourceTree = "<group>"; };
 		EA35D4D362BF3B541D7EE8A5 /* ConnectionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionManager.swift; sourceTree = "<group>"; };
-		F113B9170614C0CDC0390EAC /* FavoritesManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoritesManager.swift; sourceTree = "<group>"; };
+		EF987F7D69693580D861684F /* MemoryChannelsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryChannelsManager.swift; sourceTree = "<group>"; };
+		F1B74F206BEC73DD89D06D4F /* OpusDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpusDecoder.swift; sourceTree = "<group>"; };
+		FF74DEA1C9A60039A4A0FB54 /* OpusEncoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpusEncoder.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -61,9 +75,18 @@
 			children = (
 				4C157EAE8C8690EF73D0880A /* AudioCaptureManager.swift */,
 				BE0A084FE2099A1A0BA6AD87 /* AudioPlaybackManager.swift */,
-				6E2696B43DC968723461FFC9 /* SpectrumProcessor.swift */,
+				F1B74F206BEC73DD89D06D4F /* OpusDecoder.swift */,
+				FF74DEA1C9A60039A4A0FB54 /* OpusEncoder.swift */,
 			);
 			path = Audio;
+			sourceTree = "<group>";
+		};
+		35B3F1E9E5230EE3BA8FC5A6 /* Spectrum */ = {
+			isa = PBXGroup;
+			children = (
+				339927CA5FEABE608B6E67F6 /* SpectrumProcessor.swift */,
+			);
+			path = Spectrum;
 			sourceTree = "<group>";
 		};
 		819C24A1DB1E5347344249F2 /* ViewModel */ = {
@@ -81,6 +104,7 @@
 				100A63DC1EBF34C14BEFF4AF /* Audio */,
 				C4450643ED38BCF1E7301A73 /* Model */,
 				B13AD3A56FFAE08921C814B9 /* Networking */,
+				35B3F1E9E5230EE3BA8FC5A6 /* Spectrum */,
 				EC8C6CDBD66D20F0FEC158BE /* UI */,
 				819C24A1DB1E5347344249F2 /* ViewModel */,
 			);
@@ -108,7 +132,7 @@
 			isa = PBXGroup;
 			children = (
 				03A6BD94BCEF0DBF26311355 /* Colors.swift */,
-				C42C900F5CA8428154703451 /* SunsdrMobileApp.swift */,
+				2DD67DEBFDB29969EAA9B3F1 /* FT710MobileApp.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -116,7 +140,7 @@
 		C4450643ED38BCF1E7301A73 /* Model */ = {
 			isa = PBXGroup;
 			children = (
-				F113B9170614C0CDC0390EAC /* FavoritesManager.swift */,
+				EF987F7D69693580D861684F /* MemoryChannelsManager.swift */,
 				79F849B007EFCA1C1B25D92F /* RadioState.swift */,
 			);
 			path = Model;
@@ -133,16 +157,21 @@
 		EC8C6CDBD66D20F0FEC158BE /* UI */ = {
 			isa = PBXGroup;
 			children = (
+				7749903EC42A6EF6AA18E574 /* BandSelectorView.swift */,
 				75A3B8FD0CC31411814FB37E /* ContentView.swift */,
 				C383D9A97FCEC5E407A668BD /* DSPPanelView.swift */,
+				DA7F707392BC5E4B981E6AFE /* FilterSelectorView.swift */,
 				1A206EC58D51F49CAEF76658 /* FrequencyDisplay.swift */,
 				77D0287AA65811A1995AA8CB /* HeaderView.swift */,
 				A5FE5EF147D278798C3667A8 /* LoginView.swift */,
 				B213691E8629DDB947FFC82C /* MainRXView.swift */,
+				1966D9EFC41E35228B8B7C83 /* MemoryChannelsView.swift */,
+				902B42102F8B88B3287DC547 /* MeterBarView.swift */,
 				32918148C5CBA08CB773375B /* ModeSelectorView.swift */,
 				DC324FD8D979748BADC1C40B /* PTTButtonView.swift */,
 				D19A5C7B47FBF5B9FEA52E12 /* SettingsView.swift */,
 				571C8D0AF256B0A4ECC8933B /* SMeterView.swift */,
+				1887F7829F4094CB16B0C0DD /* TunerView.swift */,
 				BCF414FDEC6980A57582ACBD /* WaterfallView.swift */,
 			);
 			path = UI;
@@ -209,23 +238,30 @@
 			files = (
 				19662EC4015D00FAE9325003 /* AudioCaptureManager.swift in Sources */,
 				B0A3E7F55E09E6C30A0BC5D5 /* AudioPlaybackManager.swift in Sources */,
+				CE1F27BAF91AA8BC6F8DD670 /* BandSelectorView.swift in Sources */,
 				DEBBE844CE134AD603F196FB /* Colors.swift in Sources */,
 				648B2185BDD918B194FCA284 /* ConnectionManager.swift in Sources */,
 				E5330CF62CD88CD132708D12 /* ContentView.swift in Sources */,
 				81D6FE36922533D348B8AF93 /* DSPPanelView.swift in Sources */,
-				F10EC127F2B0283D64D2DAA2 /* FavoritesManager.swift in Sources */,
+				143A6B51219A6441207E4E3C /* FT710MobileApp.swift in Sources */,
+				801DEF3F460117D1284A1B3D /* FilterSelectorView.swift in Sources */,
 				D338B004CC9F928B74ADAEDB /* FrequencyDisplay.swift in Sources */,
 				DC834C525888E31385236F82 /* HeaderView.swift in Sources */,
 				AA416A6B341406BF483DB3C2 /* LoginView.swift in Sources */,
 				353ABF0B86F00182614C23F0 /* MainRXView.swift in Sources */,
+				40B0A078D2B2E0EF4DA20AE5 /* MemoryChannelsManager.swift in Sources */,
+				5329F94F27C447A715A7CD11 /* MemoryChannelsView.swift in Sources */,
+				F3C4641C77ECF03BBF0537C9 /* MeterBarView.swift in Sources */,
 				15597B60373BCED1D29C64EA /* ModeSelectorView.swift in Sources */,
+				A788C47BE4DA57142851F870 /* OpusDecoder.swift in Sources */,
+				A0D5064F92F5B75ED0FA32AA /* OpusEncoder.swift in Sources */,
 				2F3801A2B935E53821F2F8B5 /* PTTButtonView.swift in Sources */,
 				AC77ECA6664A3DFE3949E426 /* RadioState.swift in Sources */,
 				0DBAA6F90186AC5FBDF2D716 /* RadioViewModel.swift in Sources */,
 				C958045326E902C993900ED6 /* SMeterView.swift in Sources */,
 				A98E325FD8F5503A4A87289B /* SettingsView.swift in Sources */,
-				F7912AD97AA97DB76B4BCD5E /* SpectrumProcessor.swift in Sources */,
-				FBE05FFF684F2417E1AADF8D /* SunsdrMobileApp.swift in Sources */,
+				BE31368B091EC95505CEE2C0 /* SpectrumProcessor.swift in Sources */,
+				584908848AFDF1944FE85C6D /* TunerView.swift in Sources */,
 				2FB0F597540EA56D90C06C89 /* WaterfallView.swift in Sources */,
 				BFDEB099AF669F554FEFD42F /* WebSocketConnection.swift in Sources */,
 			);
