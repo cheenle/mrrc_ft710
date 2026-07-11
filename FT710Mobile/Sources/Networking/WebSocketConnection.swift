@@ -33,7 +33,7 @@ final class WebSocketConnection: NSObject, @unchecked Sendable {
         let scheme = serverHost.contains("localhost") ? "http" : "https"
         config.httpAdditionalHeaders = [
             "Origin": "\(scheme)://\(serverHost)",
-            "User-Agent": "SunsdrMobile/1.0",
+            "User-Agent": "FT710Mobile/1.0",
         ]
         session = URLSession(configuration: config, delegate: self, delegateQueue: nil)
     }
