@@ -14,6 +14,10 @@ final class AudioCaptureManager: NSObject, ObservableObject, @unchecked Sendable
     private let frameSize = 320  // 16000 * 0.020 = 320 samples
     private var accumulator: [Float] = []
 
+    // ── Opus encoder ──────────────────────────────────────────
+    private let opusEncoder = OpusEncoder()
+    var useOpus: Bool = false              // false = PCM, true = Opus
+
     @Published var isCapturing = false
     @Published var txLevel: Float = 0.0    // RMS 0–1
     @Published var captureError: String?
@@ -116,18 +120,30 @@ final class AudioCaptureManager: NSObject, ObservableObject, @unchecked Sendable
             let frame = Array(accumulator.prefix(frameSize))
             accumulator.removeFirst(frameSize)
 
-            // Build tagged PCM frame: 1-byte codec tag (0x00=PCM) + Int16 payload.
-            // Server uses the first byte to discriminate tagged vs legacy frames.
-            var int16Data = Data(capacity: 1 + frameSize * 2)
-            int16Data.append(0x00)  // AUDIO_TAG_PCM
-            for s in frame {
-                let gained = s * micGain
-                let clamped = max(-1.0, min(1.0, gained))
-                var sample = Int16(clamped * 32767.0)
-                int16Data.append(withUnsafeBytes(of: &sample) { Data($0) })
+            if useOpus {
+                let int16Samples = frame.map { s in
+                    let gained = s * micGain
+                    let clamped = max(-1.0, min(1.0, gained))
+                    return Int16(clamped * 32767.0)
+                }
+                if let opusFrame = opusEncoder.encode(int16Samples) {
+                    var data = Data(capacity: 1 + opusFrame.count)
+                    data.append(0x01)  // AUDIO_TAG_OPUS
+                    data.append(opusFrame)
+                    onFrame?(data)
+                }
+            } else {
+                // Existing PCM path
+                var int16Data = Data(capacity: 1 + frameSize * 2)
+                int16Data.append(0x00)  // AUDIO_TAG_PCM
+                for s in frame {
+                    let gained = s * micGain
+                    let clamped = max(-1.0, min(1.0, gained))
+                    var sample = Int16(clamped * 32767.0)
+                    int16Data.append(withUnsafeBytes(of: &sample) { Data($0) })
+                }
+                onFrame?(int16Data)
             }
-
-            onFrame?(int16Data)
         }
     }
 }

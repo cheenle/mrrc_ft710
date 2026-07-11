@@ -13,6 +13,9 @@ final class AudioPlaybackManager: NSObject, ObservableObject, @unchecked Sendabl
 
     private(set) var isStarted = false
 
+    // ── Opus decoder ──────────────────────────────────────────
+    private let opusDecoder = OpusDecoder()
+
     // ── Diagnostics ───────────────────────────────────────────
     private var frameCount: Int = 0
     private var opusDropCount: Int = 0
@@ -90,16 +93,24 @@ final class AudioPlaybackManager: NSObject, ObservableObject, @unchecked Sendabl
         guard isStarted, int16Data.count >= 3 else { return }
         let codec = int16Data[0]
         if codec == 0x01 {
-            opusDropCount += 1
-            // Notify ctrl channel to resend setOpus:false if Opus persists
-            if opusDropCount == 10 {
-                print("⚠️ Audio: received 10 Opus frames — sending setOpus:false")
-                NotificationCenter.default.post(name: .audioOpusDetected, object: nil)
+            // Decode Opus → PCM, then process as PCM
+            if let pcmData = opusDecoder.decode(int16Data.dropFirst()) {
+                processPCM(pcmData)
+            } else {
+                opusDropCount += 1
+                if opusDropCount == 10 {
+                    print("⚠️ Audio: Opus decode failed 10× — check libopus")
+                }
             }
             return
         }
 
         let pcmBytes = int16Data.dropFirst()
+        processPCM(pcmBytes)
+    }
+
+    /// Process decoded PCM data (Int16 LE) — shared by PCM and Opus paths.
+    private func processPCM(_ pcmBytes: Data) {
         let sampleCount = pcmBytes.count / 2
         guard sampleCount > 0 else { return }
 
