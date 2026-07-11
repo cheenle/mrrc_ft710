@@ -44,8 +44,9 @@ SunsdrMobile/
     │   └── RadioViewModel.swift    # Central @ObservableObject coordinator
     ├── Audio/
     │   ├── AudioPlaybackManager.swift  # RX: Int16 PCM → AVAudioPlayerNode
-    │   ├── AudioCaptureManager.swift   # TX: Mic → downsample → Int16 PCM
-    │   └── SpectrumProcessor.swift     # Background waterfall rendering
+    │   └── AudioCaptureManager.swift   # TX: Mic → downsample → Int16 PCM
+    ├── Spectrum/
+    │   └── SpectrumProcessor.swift     # Background waterfall rendering (850-bin)
     └── UI/
         ├── ContentView.swift       # Main container, power-on gate
         ├── HeaderView.swift        # Frequency + band + step + status bar

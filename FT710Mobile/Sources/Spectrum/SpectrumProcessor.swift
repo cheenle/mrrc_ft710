@@ -1,20 +1,16 @@
 import UIKit
 
-/// Processes raw 512-byte spectrum frames into waterfall UIImage rows.
-/// All heavy computation runs on a background queue; only the final image
-/// is published on the main actor.
+/// Processes FT-710 scope spectrum frames (1B version + 850B wf1 + 850B wf2)
+/// into a scrolling waterfall UIImage. All CPU work on background queue.
 final class SpectrumProcessor: @unchecked Sendable {
-    private let binCount = 512
+    private let binCount = 850
     private let rowHistory = 100
+    private let wfDecimate = 2     // accumulate 2 frames → 1 row (~15 fps waterfall)
+    private let wfGain: Float = 12.0
+    private let wfBias: Float = 40
+    private let wfPctl: Float = 0.35
 
-    // Web-matching waterfall parameters
-    private let wfDecimate = 5   // accumulate 5 frames → 1 waterfall row
-    private let wfPctl: Float = 0.30
-    private let wfHeadroom: Float = 2
-    private let wfGain: Float = 8.0
-    private let wfBias: Float = 52
-
-    // Colour LUT matching web frontend
+    // Colour LUT matching web frontend (dark blue → cyan → yellow → red)
     private static let lut: [UInt32] = {
         var t = [UInt32](repeating: 0, count: 256)
         for i in 0..<256 {
@@ -38,32 +34,32 @@ final class SpectrumProcessor: @unchecked Sendable {
         return t
     }()
 
-    private var accum = [Float](repeating: 0, count: 512)
+    private var accum = [Float](repeating: 0, count: 850)
     private var accumCount = 0
     private var pixelBuffer = [UInt32]()
     private var lastDraw = Date()
-    private var skipCounter = 0
     private let queue = DispatchQueue(label: "spectrum.processor", qos: .userInteractive)
 
-    /// Called from any thread with raw 512-byte spectrum data.
+    /// Feed a raw spectrum frame (1B version + 850B wf1 + 850B wf2 = 1701 bytes).
     func feed(data: Data, onImage: @escaping (UIImage) -> Void) {
-        guard data.count == binCount else { return }
+        // Expect 1701 bytes: 1B version + 850B wf1 + 850B wf2
+        guard data.count >= binCount + 1 else { return }
 
-        // Skip every other frame — dispatching + accumulating still costs CPU
-        skipCounter += 1
-        if skipCounter & 1 == 0 { return }
+        let bytes = [UInt8](data)
+        let version = bytes[0]
+        guard version == 0x01 else { return }
 
-        // Accumulate on serial background queue
+        // Use wf1 (bytes 1..851) for the waterfall
+        let wf1 = bytes[1...binCount]
+
         queue.async { [weak self] in
             guard let self else { return }
-            let bins = [UInt8](data)
-            for k in 0..<self.binCount { self.accum[k] += Float(bins[k]) }
+            for k in 0..<self.binCount { self.accum[k] += Float(wf1[k]) }
             self.accumCount += 1
             guard self.accumCount >= self.wfDecimate else { return }
 
-            // Throttle to ~10 fps (plenty for visual waterfall, saves CPU)
             let now = Date()
-            if now.timeIntervalSince(self.lastDraw) < 0.10 { return }
+            if now.timeIntervalSince(self.lastDraw) < 0.066 { return } // ~15 fps max
             self.lastDraw = now
 
             let snapshot = self.accum
@@ -79,24 +75,23 @@ final class SpectrumProcessor: @unchecked Sendable {
         let w = binCount, h = rowHistory
         let inv = 1.0 / Float(count)
 
-        // Normalise in-place
         var avg = snapshot
-        for k in 0..<binCount { avg[k] *= inv }
+        for k in 0..<w { avg[k] *= inv }
 
         // Adaptive noise floor
         var sorted = avg.sorted()
-        let floor = sorted[Int(Float(binCount) * wfPctl)] + wfHeadroom
+        let floor = sorted[Int(Float(w) * wfPctl)] + 2
 
         // Build pixel row
-        let pixels = UnsafeMutablePointer<UInt32>.allocate(capacity: binCount)
+        let pixels = UnsafeMutablePointer<UInt32>.allocate(capacity: w)
         let lut = Self.lut
-        for x in 0..<binCount {
+        for x in 0..<w {
             var v = wfBias + (avg[x] - floor) * wfGain
             v = max(0, min(255, v))
             pixels[x] = lut[Int(v)]
         }
 
-        // Scroll buffer + insert new row
+        // Scroll buffer
         var buf = pixelBuffer
         if buf.count != w * h {
             buf = [UInt32](repeating: 0xFF000000, count: w * h)
@@ -110,7 +105,7 @@ final class SpectrumProcessor: @unchecked Sendable {
         }
         pixels.deallocate()
 
-        // Build CGImage
+        // Build CGImage → UIImage
         let img = buf.withUnsafeMutableBytes { raw -> UIImage? in
             guard let provider = CGDataProvider(data: NSData(bytes: raw.baseAddress!, length: raw.count)),
                   let cgImg = CGImage(width: w, height: h,
