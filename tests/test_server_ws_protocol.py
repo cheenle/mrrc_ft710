@@ -208,13 +208,13 @@ class StateBroadcastLogicTests(unittest.TestCase):
 
     def test_static_assets_are_cache_busted_after_ui_changes(self):
         index_source = Path("static/index.html").read_text()
-        self.assertIn('/ft710.css?v=10', index_source)
-        self.assertIn('/ft710_main.js?v=10', index_source)
-        self.assertIn('/ft710_ui.js?v=10', index_source)
+        self.assertIn('/ft710.css?v=11', index_source)
+        self.assertIn('/ft710_main.js?v=11', index_source)
+        self.assertIn('/ft710_ui.js?v=11', index_source)
 
         sw_source = Path("static/sw.js").read_text()
-        self.assertIn("const CACHE = 'ft710-v10'", sw_source)
-        self.assertIn("'/ft710_ui.js?v=10'", sw_source)
+        self.assertIn("const CACHE = 'ft710-v11'", sw_source)
+        self.assertIn("'/ft710_ui.js?v=11'", sw_source)
 
     def test_empty_dirty_set_no_broadcast(self):
         dirty = set()

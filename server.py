@@ -228,13 +228,23 @@ async def _broadcast_spectrum_loop():
 
     When scope_pipe is not connected (no FT4222 data), falls back to
     S-meter-based synthetic spectrum from the CAT polling data.
+
+    Idle (0 clients): sleeps 500ms instead of 33ms, cutting ~93% of
+    idle wakeups.  Synthetic Gaussian generation is also skipped.
     """
     global scope, spectrum_clients
     interval = 1.0 / 30.0
+    idle_interval = 0.500  # 500 ms deep-sleep when no listeners
     _first = True
+    _idle_skipped = 0
     while True:
         try:
-            if scope and spectrum_clients:
+            if not spectrum_clients:
+                _idle_skipped += 1
+                await asyncio.sleep(idle_interval)
+                continue
+
+            if scope:
                 if not scope.connected:
                     # No FT4222 data — use S-meter fallback
                     scope.update_from_radio_state(radio)
@@ -498,29 +508,41 @@ async def _audio_rx_loop():
     Reads int16 PCM chunks from the audio handler, encodes via Opus (or
     sends raw PCM), and broadcasts to all connected audio_rx_clients.
 
-    Runs continuously while the server is active. Each frame is prefixed
-    with a 1-byte codec tag so the client knows how to decode.
+    Idle (0 clients): skips PCM reads entirely and sleeps 500ms instead
+    of 20ms, cutting ~96% of wakeups.  On client arrival the next 20ms
+    tick catches the small accumulated buffer with no perceptible delay.
     """
     global audio, audio_rx_clients
-    interval = 0.020  # 20 ms chunk interval
+    interval = 0.020       # 20 ms chunk interval (active)
+    idle_interval = 0.500  # 500 ms deep-sleep when no listeners
     _first = True
     _loop_count = 0
     _pcm_count = 0
     _send_count = 0
     _trimmed_bursts = 0
+    _idle_skipped = 0
     while True:
         try:
             _loop_count += 1
             if audio and audio._rx_running:
+                # ── Idle: no clients → skip PCM read entirely ──────
+                # PCM read + resample + Opus encode is the #1 CPU
+                # consumer when idle.  Skip everything, sleep deep.
+                if not audio_rx_clients:
+                    _idle_skipped += 1
+                    if _loop_count % 500 == 0 and _idle_skipped > 50:
+                        logger.info(
+                            "Audio loop idle: %d skips so far, entering deep-sleep",
+                            _idle_skipped,
+                        )
+                    await asyncio.sleep(idle_interval)
+                    continue
+
                 pcm = audio.read_rx_chunk()
                 if pcm:
+                    _idle_skipped = 0
                     _pcm_count += 1
-                    # No listeners: keep draining capture stream but skip
-                    # resample+encode to reduce CPU under server load.
-                    if audio_rx_clients:
-                        frames = audio.encode_rx_audio(pcm)
-                    else:
-                        frames = []
+                    frames = audio.encode_rx_audio(pcm)
 
                     if frames:
                         # If the loop fell behind and produced multiple Opus
@@ -550,7 +572,7 @@ async def _audio_rx_loop():
                             logger.warning("Removed %d dead/slow audio clients", len(dead))
                             audio_rx_clients -= dead
             # Periodic health log
-            if _loop_count % 250 == 0:  # Every 5 seconds
+            if _loop_count % 250 == 0 and _idle_skipped == 0:  # Every ~5s when active
                 logger.info("Audio loop: loops=%d pcm_chunks=%d sends=%d trimmed=%d clients=%d running=%s",
                            _loop_count, _pcm_count, _send_count,
                            _trimmed_bursts,
@@ -570,10 +592,13 @@ async def _audio_tx_drain_loop():
     blocks the asyncio event loop.  Without this, a slow audio write
     can stall all other async work — including CAT commands and state
     broadcasts — causing UI stutter on both audio and CAT.
+
+    Idle (no pending TX): sleeps 200ms instead of 50ms, cutting
+    ~75% of idle wakeups.
     """
     global audio
     active_interval = 0.010  # 10 ms drain interval during TX playback
-    idle_interval = 0.050    # avoid 100 idle to_thread calls per second
+    idle_interval = 0.200    # 200 ms deep-idle when no TX audio pending
     while True:
         try:
             if audio and audio.has_pending_tx_audio():
@@ -624,6 +649,64 @@ async def _handle_ws_message(ws: WebSocket, msg_str: str):
                 await ws.send_text(json.dumps({
                     "type": "value", "field": field, "value": full[field],
                 }))
+
+    elif msg_type == "memRecall":
+        # Atomic memory channel recall: send frequency + mode in a single
+        # message so the poll cycle cannot capture the intermediate state
+        # between two separate CAT commands.  Order matters — see below.
+        if cat is None or not cat.connected:
+            await ws.send_text(json.dumps({
+                "type": "error", "message": "Radio not connected",
+            }))
+            return
+
+        freq = msg.get("freq")
+        mode_name = msg.get("mode")
+        vfo = str(msg.get("vfo") or radio.active_vfo or "A").upper()
+        if vfo not in ("A", "B"):
+            await ws.send_text(json.dumps({
+                "type": "error", "message": f"Unknown VFO: {vfo}",
+            }))
+            return
+        logger.info(
+            "Memory recall: freq=%s mode=%s vfo=%s", freq, mode_name, vfo,
+        )
+        if freq is not None:
+            scheduler and scheduler.note_user_command()
+            # Skip polls for 2 s so they don't capture stale intermediate
+            # state while the two CAT commands are in flight.
+            scheduler and scheduler.skip_next_poll("if", 2.0)
+            scheduler and scheduler.skip_next_poll("vfo", 2.0)
+            # CRITICAL ORDER: frequency FIRST, then mode.
+            # The FT-710 band stacking register auto-recalls the last-used
+            # mode whenever the frequency changes bands.  If we sent mode
+            # first, the subsequent frequency change could revert it.
+            # Setting mode AFTER frequency overrides band-stack auto-recall.
+            await cat.set_frequency(int(freq), vfo)
+            if vfo.upper() == "B":
+                radio.update(vfo_b_freq=int(freq))
+            else:
+                radio.update(vfo_a_freq=int(freq), active_vfo="A")
+        if mode_name is not None:
+            mode_num = MODE_NAME_TO_NUM.get(str(mode_name).upper())
+            if mode_num is not None:
+                await cat.set_mode(mode_num)
+                radio.update(mode=mode_num)
+                scheduler and scheduler.skip_next_poll("if", 2.0)
+                if freq is not None:
+                    # SSB mode changes can shift the carrier/displayed
+                    # frequency by the sideband offset (observed ±1400 Hz
+                    # on FT-710).  Set the stored frequency again after MD0
+                    # so the final polled frequency matches the memory slot.
+                    await cat.set_frequency(int(freq), vfo)
+                    if vfo == "B":
+                        radio.update(vfo_b_freq=int(freq))
+                    else:
+                        radio.update(vfo_a_freq=int(freq))
+                    scheduler and scheduler.skip_next_poll("if", 2.0)
+                    scheduler and scheduler.skip_next_poll("vfo", 2.0)
+            else:
+                logger.warning("Memory recall: unknown mode %r", mode_name)
 
     elif msg_type == "set":
         await _execute_set_command(field, value, ws)
@@ -982,11 +1065,23 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                 scheduler and scheduler.skip_next_poll("vfo", 1.0)
                 bs_ok = await cat.set_band_stack(band["bsr"])
                 fa_ok = await cat.set_frequency(band["default_freq"], "A")
+                # FT-710 band stacking auto-recalls the last-used mode for
+                # the new band.  Explicitly set a sensible default so the
+                # web UI and saved memory channels see a predictable mode.
+                default_mode = 0x01 if band["default_freq"] < 10_000_000 \
+                    else 0x02  # LSB below 10 MHz, USB above
+                md_ok = await cat.set_mode(default_mode)
                 if bs_ok and fa_ok:
-                    radio.update(vfo_a_freq=band["default_freq"], active_vfo="A")
+                    radio.update(
+                        vfo_a_freq=band["default_freq"],
+                        active_vfo="A",
+                        mode=default_mode,
+                    )
                     logger.info(
-                        "Band change applied: name=%s BS%02d OK FA%09d OK local_band=%s",
-                        band["name"], band["bsr"], band["default_freq"], radio.band_name,
+                        "Band change applied: name=%s BS%02d OK FA%09d OK "
+                        "MD0%X OK local_band=%s mode=%s",
+                        band["name"], band["bsr"], band["default_freq"],
+                        default_mode, radio.band_name, radio.mode_name,
                     )
                 else:
                     # CAT command(s) failed — don't update server state,
@@ -997,6 +1092,8 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                         failed.append(f"band stack BS{band['bsr']:02d}")
                     if not fa_ok:
                         failed.append(f"frequency FA{band['default_freq']:09d}")
+                    if not md_ok:
+                        failed.append(f"mode MD0{default_mode:X}")
                     logger.error(
                         "Band change FAILED: name=%s failed_commands=%s",
                         band["name"], failed,
@@ -1391,6 +1488,8 @@ async def ws_radio(ws: WebSocket):
     await ws.accept()
     ctrl_clients.add(ws)
     logger.info("WS client connected (%d total)", len(ctrl_clients))
+    if scheduler:
+        scheduler.set_active(len(ctrl_clients) > 0)
 
     # Push full initial state
     try:
@@ -1417,6 +1516,8 @@ async def ws_radio(ws: WebSocket):
     finally:
         ctrl_clients.discard(ws)
         logger.info("WS client disconnected (%d remain)", len(ctrl_clients))
+        if scheduler:
+            scheduler.set_active(len(ctrl_clients) > 0)
 
         # PTT safety: if no clients remain and radio is transmitting, force RX
         if not ctrl_clients and radio.is_transmitting and cat and cat.connected:

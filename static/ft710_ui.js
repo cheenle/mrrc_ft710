@@ -802,17 +802,28 @@ function initUI() {
     // Memory buttons
     document.querySelectorAll('.mem-btn').forEach(btn => {
         let pressTimer;
+        let longPressHandled = false;
         const idx = parseInt(btn.dataset.mem);
 
         btn.addEventListener('click', function() {
+            if (longPressHandled) {
+                longPressHandled = false;
+                return;
+            }
             // Tap: recall
             const ch = memChannels[idx];
             if (ch && ch.freq) {
-                sendCommand('freq', ch.freq);
-                radioState.vfo_a_freq = ch.freq;
-                radioState.active_vfo = 'A';
+                sendMsg({
+                    type: 'memRecall',
+                    freq: ch.freq,
+                    mode: ch.mode || undefined,
+                });
+                if (radioState.active_vfo === 'B') {
+                    radioState.vfo_b_freq = ch.freq;
+                } else {
+                    radioState.vfo_a_freq = ch.freq;
+                }
                 if (ch.mode) {
-                    sendCommand('mode', ch.mode);
                     radioState.mode_name = ch.mode;
                 }
                 renderFrequency();
@@ -820,23 +831,28 @@ function initUI() {
             }
         });
 
+        function saveMemoryChannel() {
+            longPressHandled = true;
+            var saveFreq = radioState.active_vfo === 'A' ? radioState.vfo_a_freq : radioState.vfo_b_freq;
+            const ch = {
+                freq: saveFreq,
+                mode: radioState.mode_name,
+                label: radioState.band_name + ' ' + (saveFreq / 1e6).toFixed(3),
+            };
+            memChannels[idx] = ch;
+            // Persist locally so channels survive page refresh
+            try { sessionStorage.setItem('ft710_memChannels', JSON.stringify(memChannels)); } catch(e) {}
+            sendMsg({
+                type: 'memSave',
+                channels: memChannels,
+            });
+            renderMemoryChannels();
+        }
+
         // Long press: save (uses active VFO)
         btn.addEventListener('touchstart', function(e) {
             pressTimer = setTimeout(function() {
-                var saveFreq = radioState.active_vfo === 'A' ? radioState.vfo_a_freq : radioState.vfo_b_freq;
-                const ch = {
-                    freq: saveFreq,
-                    mode: radioState.mode_name,
-                    label: radioState.band_name + ' ' + (saveFreq / 1e6).toFixed(3),
-                };
-                memChannels[idx] = ch;
-                // Persist locally so channels survive page refresh
-                try { sessionStorage.setItem('ft710_memChannels', JSON.stringify(memChannels)); } catch(e) {}
-                sendMsg({
-                    type: 'memSave',
-                    channels: memChannels,
-                });
-                renderMemoryChannels();
+                saveMemoryChannel();
                 hapticFeedback('medium');
             }, 800);
         });
@@ -845,20 +861,7 @@ function initUI() {
         // Desktop long press (uses active VFO)
         btn.addEventListener('mousedown', function(e) {
             pressTimer = setTimeout(function() {
-                var saveFreq = radioState.active_vfo === 'A' ? radioState.vfo_a_freq : radioState.vfo_b_freq;
-                const ch = {
-                    freq: saveFreq,
-                    mode: radioState.mode_name,
-                    label: radioState.band_name + ' ' + (saveFreq / 1e6).toFixed(3),
-                };
-                memChannels[idx] = ch;
-                // Persist locally so channels survive page refresh
-                try { sessionStorage.setItem('ft710_memChannels', JSON.stringify(memChannels)); } catch(e) {}
-                sendMsg({
-                    type: 'memSave',
-                    channels: memChannels,
-                });
-                renderMemoryChannels();
+                saveMemoryChannel();
             }, 800);
         });
         btn.addEventListener('mouseup', function() { clearTimeout(pressTimer); });

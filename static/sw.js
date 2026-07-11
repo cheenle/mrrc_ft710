@@ -1,13 +1,13 @@
 // FT-710 Service Worker — basic offline cache
-const CACHE = 'ft710-v10';
+const CACHE = 'ft710-v11';
 const ASSETS = [
     '/',
     '/index.html',
-    '/ft710.css?v=10',
-    '/ft710_main.js?v=10',
-    '/ft710_ui.js?v=10',
-    '/modules/ptt_manager.js?v=10',
-    '/modules/settings_manager.js?v=10',
+    '/ft710.css?v=11',
+    '/ft710_main.js?v=11',
+    '/ft710_ui.js?v=11',
+    '/modules/ptt_manager.js?v=11',
+    '/modules/settings_manager.js?v=11',
     '/manifest.json',
 ];
 

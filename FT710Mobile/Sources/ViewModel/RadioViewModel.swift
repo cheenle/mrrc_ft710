@@ -10,6 +10,7 @@ final class RadioViewModel: ObservableObject {
     let audioPlayback = AudioPlaybackManager()
     let audioCapture = AudioCaptureManager()
     let spectrumProc = SpectrumProcessor()
+    let memChannels = MemoryChannelsManager()
     private var cancellables = Set<AnyCancellable>()
 
     // MARK: - Init
@@ -265,6 +266,9 @@ final class RadioViewModel: ObservableObject {
                     if let fullData = json["data"] as? [String: Any] {
                         self.state.applyFullState(fullData)
                     }
+                    if let memChannels = json["memChannels"] as? [[String: Any]] {
+                        self.memChannels.loadFromServer(memChannels)
+                    }
                 case "stateUpdate":
                     if let fields = json["fields"] as? [String: Any] {
                         self.state.applyStateUpdate(fields)
@@ -273,6 +277,10 @@ final class RadioViewModel: ObservableObject {
                     break
                 case "error":
                     self.state.connectionError = json["message"] as? String
+                case "memChannels":
+                    if let channels = json["channels"] as? [[String: Any]] {
+                        self.memChannels.loadFromServer(channels)
+                    }
                 default:
                     break
                 }

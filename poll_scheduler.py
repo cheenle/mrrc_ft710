@@ -43,6 +43,12 @@ class PollScheduler:
         self._last_user_command: float = 0.0
         # How long (seconds) to pause background polling after a user command.
         self._user_command_pause: float = 0.3
+        # ── Idle rate scaling ──────────────────────────────────────
+        # When 0 control clients are connected, poll intervals are
+        # multiplied by IDLE_MULTIPLIER to reduce CPU/Serial load.
+        # Set via set_active() from server.py on client connect/disconnect.
+        self._idle_multiplier: int = 1
+        self.IDLE_MULTIPLIER: int = 4  # IF poll: 100ms→400ms, settings: 2s→8s, etc.
 
     async def start(self):
         """Launch all background polling tasks."""
@@ -77,6 +83,22 @@ class PollScheduler:
         """
         import time
         self._last_user_command = time.time()
+
+    def set_active(self, has_clients: bool):
+        """Scale poll intervals based on whether control clients exist.
+
+        When no clients are connected, multiply all poll intervals by
+        IDLE_MULTIPLIER (4x) to drastically reduce CPU / serial bus load.
+        Called from server.py on each client connect/disconnect.
+        """
+        new = 1 if has_clients else self.IDLE_MULTIPLIER
+        if new != self._idle_multiplier:
+            old = self._idle_multiplier
+            self._idle_multiplier = new
+            logger.info(
+                "Poll rate scaling: %s (multiplier %d→%d)",
+                "active" if has_clients else "idle", old, new,
+            )
 
     async def _polling_paused(self) -> bool:
         """Return True if background polling should yield for a user command.
@@ -183,7 +205,7 @@ class PollScheduler:
                     await self._on_state_changed()
 
             _loop_count += 1
-            await asyncio.sleep(POLL_IF_INTERVAL)
+            await asyncio.sleep(POLL_IF_INTERVAL * self._idle_multiplier)
 
     # ── Tier 1b: Active VFO + VFO-B freq (medium cadence) ──────────
 
@@ -225,7 +247,7 @@ class PollScheduler:
                 return
             except Exception as e:
                 logger.debug("VFO poll error: %s", e)
-            await asyncio.sleep(POLL_VFO_INTERVAL)
+            await asyncio.sleep(POLL_VFO_INTERVAL * self._idle_multiplier)
 
     # ── Tier 2B: TX status ────────────────────────────────────────
 
@@ -264,7 +286,7 @@ class PollScheduler:
             except Exception as e:
                 logger.debug("TX poll error: %s", e)
                 failures += 1
-            await asyncio.sleep(POLL_TX_STATUS_INTERVAL)
+            await asyncio.sleep(POLL_TX_STATUS_INTERVAL * self._idle_multiplier)
 
     # ── Tier 2A: TX meters (COMP, ALC, Power, SWR) — TX only ─────
 
@@ -367,7 +389,7 @@ class PollScheduler:
                     "(is_transmitting=%s, connected=%s)",
                     failures, self.state.is_transmitting, self.cat.connected,
                 )
-            await asyncio.sleep(POLL_TX_METERS_INTERVAL)
+            await asyncio.sleep(POLL_TX_METERS_INTERVAL * self._idle_multiplier)
 
     # ── Tier 3: Settings (filter, gains, preamp, att, NR, NB, AN, tuner) ──
 
@@ -433,7 +455,7 @@ class PollScheduler:
                 return
             except Exception as e:
                 logger.debug("Settings poll error: %s", e)
-            await asyncio.sleep(POLL_SETTINGS_INTERVAL)
+            await asyncio.sleep(POLL_SETTINGS_INTERVAL * self._idle_multiplier)
 
     # ── Tier 4: Slow telemetry (compressor, contour, AMC, RI) ────────
     # NOTE: id_meter (RM7) and vd_meter (RM8) were moved to Tier 2A
@@ -484,7 +506,7 @@ class PollScheduler:
                 return
             except Exception as e:
                 logger.debug("Slow poll error: %s", e)
-            await asyncio.sleep(POLL_SLOW_INTERVAL)
+            await asyncio.sleep(POLL_SLOW_INTERVAL * self._idle_multiplier)
 
     # ── Connection Watchdog ────────────────────────────────────────
 
