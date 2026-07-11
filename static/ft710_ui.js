@@ -8,6 +8,20 @@
 // ── Tuning step ─────────────────────────────────────────────────────
 let currentTuneStep = 1000;  // Hz
 const tuneSteps = [10, 100, 1000, 5000, 10000, 25000];
+const DEFAULT_BAND_CYCLE = [
+    {name: '160m', start: 1_800_000, end: 2_000_000, default_freq: 1_845_500},
+    {name: '80m', start: 3_500_000, end: 4_000_000, default_freq: 3_850_000},
+    {name: '60m', start: 5_250_000, end: 5_450_000, default_freq: 5_350_000},
+    {name: '40m', start: 7_000_000, end: 7_300_000, default_freq: 7_050_000},
+    {name: '30m', start: 10_100_000, end: 10_150_000, default_freq: 10_140_000},
+    {name: '20m', start: 14_000_000, end: 14_350_000, default_freq: 14_270_000},
+    {name: '17m', start: 18_068_000, end: 18_168_000, default_freq: 18_132_500},
+    {name: '15m', start: 21_000_000, end: 21_450_000, default_freq: 21_400_000},
+    {name: '12m', start: 24_890_000, end: 24_990_000, default_freq: 24_952_500},
+    {name: '10m', start: 28_000_000, end: 29_700_000, default_freq: 28_450_000},
+    {name: '6m', start: 50_000_000, end: 54_000_000, default_freq: 50_150_000},
+    {name: '4m', start: 70_000_000, end: 70_500_000, default_freq: 70_250_000},
+];
 
 function tuneBy(delta) {
     const freq = radioState.active_vfo === 'A' ? radioState.vfo_a_freq : radioState.vfo_b_freq;
@@ -204,11 +218,21 @@ function getNextMode(currentMode) {
     return modeCycle[(idx + 1) % modeCycle.length];
 }
 
+function getBandCycle() {
+    const serverBandsByName = new Map((bands || []).map(b => [b.name, b]));
+    return DEFAULT_BAND_CYCLE.map(function(defaultBand) {
+        return Object.assign({}, defaultBand, serverBandsByName.get(defaultBand.name) || {});
+    });
+}
+
+// Dead simple: find current band in the cycle, return the next one.
+// Falls off the end → wraps to 160m.  Unknown band → starts at 160m.
 function getNextBand(currentBand) {
-    const names = bands.map(b => b.name);
-    const idx = names.indexOf(currentBand);
-    const nextIdx = (idx + 1) % names.length;
-    return bands[nextIdx];
+    const bandList = getBandCycle();
+    let idx = bandList.findIndex(b => b.name === currentBand);
+    if (idx < 0) idx = 0;   // unknown → 160m is as good a guess as any
+    const nextIdx = (idx + 1) % bandList.length;
+    return bandList[nextIdx];
 }
 
 function getNextFilter(currentIdx, modeName) {
@@ -572,15 +596,17 @@ function initUI() {
     document.getElementById('btn-band').addEventListener('click', function() {
         const nextBand = getNextBand(radioState.band_name);
         if (nextBand) {
+            console.log('[Band] click', {
+                current: radioState.band_name,
+                next: nextBand.name,
+                bsr: nextBand.bsr,
+                default_freq: nextBand.default_freq,
+                bands: bands.map(b => b.name),
+            });
             sendCommand('band', nextBand.name);
             radioState.band_name = nextBand.name;
-            // Update active VFO frequency
-            if (radioState.active_vfo === 'A') {
-                radioState.vfo_a_freq = nextBand.default_freq;
-            } else {
-                radioState.vfo_b_freq = nextBand.default_freq;
-            }
-            sendCommand('freq', nextBand.default_freq);
+            radioState.active_vfo = 'A';
+            radioState.vfo_a_freq = nextBand.default_freq;
             renderFrequency();
             renderButtonLabels();
             renderStatusBar();

@@ -525,6 +525,17 @@ class AudioHandler:
                     logger.debug("[TX-AUDIO] write_tx_chunk: write error: %s", e)
                     return
 
+    def has_pending_tx_audio(self) -> bool:
+        """Return True when the TX drain loop has useful work to do."""
+        with self._tx_lock:
+            stream = self._tx_stream
+            if stream is None:
+                return False
+            try:
+                return bool(stream.is_active())
+            except Exception:
+                return False
+
     # ── Cleanup ─────────────────────────────────────────────────────
 
     def close(self):

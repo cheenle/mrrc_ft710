@@ -271,8 +271,11 @@ function handleMessage(msg) {
             if (msg.fields) {
                 Object.assign(radioState, msg.fields);
             }
-            if (msg.dirty) {
-                renderUpdates(msg.dirty);
+            {
+                const changedFields = msg.fields ? Object.keys(msg.fields) : msg.dirty;
+                if (changedFields) {
+                    renderUpdates(changedFields);
+                }
             }
             break;
 
@@ -1186,4 +1189,3 @@ document.addEventListener('DOMContentLoaded', function () {
     WakeLockMgr.initAutoEnable();
     FullscreenMgr.init();
 });
-

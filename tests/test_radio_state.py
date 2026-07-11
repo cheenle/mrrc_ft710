@@ -178,9 +178,47 @@ class RadioStateSerializationTests(unittest.TestCase):
     def test_to_dirty_dict_only_returns_requested_fields(self):
         self.state.update(vfo_a_freq=14_250_000, mode=2, s_meter=100)
         dirty = self.state.to_dirty_dict({"vfo_a_freq", "s_meter"})
-        self.assertEqual(set(dirty.keys()), {"vfo_a_freq", "s_meter"})
+        self.assertEqual(
+            set(dirty.keys()),
+            {
+                "vfo_a_freq",
+                "active_freq",
+                "band_name",
+                "s_meter",
+                "s_meter_dbm",
+                "s_unit",
+            },
+        )
         self.assertEqual(dirty["vfo_a_freq"], 14_250_000)
         self.assertEqual(dirty["s_meter"], 100)
+        self.assertIsInstance(dirty["s_meter_dbm"], float)
+        self.assertIsInstance(dirty["s_unit"], str)
+
+    def test_to_dirty_dict_includes_meter_derived_fields(self):
+        self.state.update(
+            power_meter=205,
+            swr_meter=52,
+            vd_meter=192,
+            id_meter=53,
+            alc_meter=128,
+        )
+        dirty = self.state.to_dirty_dict({
+            "power_meter",
+            "swr_meter",
+            "vd_meter",
+            "id_meter",
+            "alc_meter",
+        })
+        self.assertEqual(dirty["power_meter"], 205)
+        self.assertAlmostEqual(dirty["power_watts"], 100.0)
+        self.assertEqual(dirty["swr_meter"], 52)
+        self.assertAlmostEqual(dirty["swr_ratio"], 1.5)
+        self.assertEqual(dirty["vd_meter"], 192)
+        self.assertAlmostEqual(dirty["vd_volts"], 13.8)
+        self.assertEqual(dirty["id_meter"], 53)
+        self.assertAlmostEqual(dirty["id_amps"], 5.0)
+        self.assertEqual(dirty["alc_meter"], 128)
+        self.assertAlmostEqual(dirty["alc_pct"], 128 / 255 * 100)
 
     def test_to_dirty_dict_ignores_unknown_fields(self):
         d = self.state.to_dirty_dict({"nonexistent"})

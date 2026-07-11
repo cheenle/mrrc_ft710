@@ -3,6 +3,7 @@ Tests for server.py WebSocket protocol — SDD §9.2, §10.4.
 Verifies: message format, auth token flow, PTT safety logic, state broadcast.
 """
 import json
+from pathlib import Path
 import unittest
 
 
@@ -172,10 +173,61 @@ class PTTSafetyLogicTests(unittest.TestCase):
 class StateBroadcastLogicTests(unittest.TestCase):
     """SDD §9.7: State broadcasting via dirty-field tracking."""
 
+    def test_meter_broadcast_log_interval_is_half_second(self):
+        server_source = Path("server.py").read_text()
+        self.assertIn("METER_BROADCAST_LOG_INTERVAL_SECONDS = 0.5", server_source)
+        self.assertIn(
+            "now - _last_meter_broadcast_log >= METER_BROADCAST_LOG_INTERVAL_SECONDS",
+            server_source,
+        )
+
+    def test_band_command_is_single_backend_transaction(self):
+        server_source = Path("server.py").read_text()
+        self.assertIn('await cat.set_band_stack(band["bsr"])', server_source)
+        self.assertIn('await cat.set_frequency(band["default_freq"], "A")', server_source)
+
+        ui_source = Path("static/ft710_ui.js").read_text()
+        band_button_handler = ui_source.split("// Band button: cycles to next band", 1)[1]
+        band_button_handler = band_button_handler.split("// Filter button", 1)[0]
+        self.assertIn("sendCommand('band', nextBand.name)", band_button_handler)
+        self.assertNotIn("sendCommand('freq'", band_button_handler)
+
+    def test_band_cycle_uses_full_frontend_fallback_and_frequency_fallback(self):
+        ui_source = Path("static/ft710_ui.js").read_text()
+        self.assertIn("const DEFAULT_BAND_CYCLE = [", ui_source)
+        for band in ("160m", "80m", "60m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m", "4m"):
+            self.assertIn(f"name: '{band}'", ui_source)
+        self.assertIn("function getBandCycle()", ui_source)
+        self.assertIn("function getNextBand(currentBand)", ui_source)
+        self.assertIn("const nextIdx = (idx + 1) % bandList.length;", ui_source)
+
+    def test_state_update_renders_from_actual_fields_not_dirty_only(self):
+        main_source = Path("static/ft710_main.js").read_text()
+        self.assertIn("const changedFields = msg.fields ? Object.keys(msg.fields) : msg.dirty;", main_source)
+        self.assertIn("renderUpdates(changedFields);", main_source)
+
+    def test_static_assets_are_cache_busted_after_ui_changes(self):
+        index_source = Path("static/index.html").read_text()
+        self.assertIn('/ft710.css?v=10', index_source)
+        self.assertIn('/ft710_main.js?v=10', index_source)
+        self.assertIn('/ft710_ui.js?v=10', index_source)
+
+        sw_source = Path("static/sw.js").read_text()
+        self.assertIn("const CACHE = 'ft710-v10'", sw_source)
+        self.assertIn("'/ft710_ui.js?v=10'", sw_source)
+
     def test_empty_dirty_set_no_broadcast(self):
         dirty = set()
         self.assertEqual(len(dirty), 0)
         # Should not broadcast when nothing changed
+
+    def test_scope_pipe_starts_lazily_for_spectrum_clients(self):
+        server_source = Path("server.py").read_text()
+        lifespan_block = server_source.split("@asynccontextmanager", 1)[1].split("app = FastAPI", 1)[0]
+        spectrum_block = server_source.split('@app.websocket("/WSspectrum")', 1)[1].split("# ── Audio RX WebSocket", 1)[0]
+        self.assertNotIn("asyncio.create_subprocess_exec", lifespan_block)
+        self.assertIn("_ensure_scope_pipe_running", server_source)
+        self.assertIn("await _ensure_scope_pipe_running()", spectrum_block)
 
     def test_non_empty_dirty_set_triggers_broadcast(self):
         dirty = {"vfo_a_freq", "s_meter"}
@@ -195,13 +247,147 @@ class StateBroadcastLogicTests(unittest.TestCase):
         self.assertEqual(len(partial), 1)
         self.assertEqual(partial["vfo_a_freq"], 14_200_000)
 
-    def test_skip_next_poll_after_command(self):
-        """SDD AD-009: skip_next_poll prevents redundant CAT queries."""
-        # A field that was just set by user command doesn't need polling
-        skip_fields = {"if", "tx_status"}
-        poll_commands = ["FA", "MD0", "TX"]
-        # After user sets frequency, skip FA poll for 1.0s
-        self.assertIn("if", skip_fields)
+    def test_skip_next_poll_before_cat_commands(self):
+        """skip_next_poll must come BEFORE the CAT command to prevent
+        in-flight poll results from overwriting the user's new setting."""
+        server_source = Path("server.py").read_text()
+        # Extract the band handler block
+        band_block_start = server_source.index('elif field == "band":')
+        band_block_end = server_source.index('elif field == "vfo_equal":')
+        band_block = server_source[band_block_start:band_block_end]
+        skip_pos = band_block.index('skip_next_poll("if"')
+        cat_pos = band_block.index("await cat.set_band_stack")
+        self.assertLess(
+            skip_pos, cat_pos,
+            "skip_next_poll must be called BEFORE set_band_stack "
+            "so in-flight poll results see the skip",
+        )
+        # Also check the freq command
+        freq_block_start = server_source.index('if field == "freq":')
+        freq_block_end = server_source.index('elif field == "vfo_a_freq":')
+        freq_block = server_source[freq_block_start:freq_block_end]
+        skip_freq_pos = freq_block.index('skip_next_poll("if"')
+        cat_freq_pos = freq_block.index("await cat.set_frequency")
+        self.assertLess(
+            skip_freq_pos, cat_freq_pos,
+            "skip_next_poll must be called BEFORE set_frequency",
+        )
+
+    def test_poll_guards_against_stale_frequency_after_skip(self):
+        """The IF poll must check _should_skip AFTER reading frequency,
+        not just at the start of the loop iteration."""
+        poll_source = Path("poll_scheduler.py").read_text()
+        self.assertIn("not await self._should_skip", poll_source)
+        # Verify the guard appears AFTER get_frequency and BEFORE
+        # adding to changes
+        freq_idx = poll_source.index('get_frequency("A"')
+        guard_idx = poll_source.index(
+            'not await self._should_skip("if")',
+            freq_idx,
+        )
+        self.assertGreater(
+            guard_idx, freq_idx,
+            "Guard must appear AFTER get_frequency to catch stale reads",
+        )
+
+    def test_client_server_band_lists_are_consistent(self):
+        """Client DEFAULT_BAND_CYCLE and server BANDS must stay in sync:
+        same bands, same names, valid frequency ranges that don't overlap
+        or leave gaps that could cause band-detection mismatches."""
+        import ast
+        import re as _re
+
+        config_source = Path("config.py").read_text()
+        ui_source = Path("static/ft710_ui.js").read_text()
+
+        # Parse server BANDS — handle both plain and type-annotated assignment
+        tree = ast.parse(config_source)
+        server_bands = None
+        for node in ast.walk(tree):
+            target = None
+            if isinstance(node, ast.Assign):
+                for t in node.targets:
+                    if isinstance(t, ast.Name) and t.id == 'BANDS':
+                        target = t
+                        break
+            elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                if node.target.id == 'BANDS':
+                    target = node.target
+            if target is not None:
+                server_bands = ast.literal_eval(node.value)
+                break
+        self.assertIsNotNone(server_bands, "Could not parse BANDS from config.py")
+        self.assertEqual(len(server_bands), 12,
+                         f"Server expects 12 bands, got {len(server_bands)}")
+
+        # Parse client DEFAULT_BAND_CYCLE — extract each band entry
+        # as a dict by scraping the JS object literal syntax.
+        cycle_start = ui_source.index("const DEFAULT_BAND_CYCLE = [")
+        cycle_end = ui_source.index("];", cycle_start) + 2
+        cycle_block = ui_source[cycle_start:cycle_end]
+        client_bands = []
+        # Match each {name: '...', start: N, end: N, default_freq: N} block
+        band_pattern = (
+            r"\{name:\s*'(\w+)',\s*start:\s*([\d_]+),\s*"
+            r"end:\s*([\d_]+),\s*default_freq:\s*([\d_]+)\}"
+        )
+        for m in _re.finditer(band_pattern, cycle_block):
+            client_bands.append({
+                "name": m.group(1),
+                "start": int(m.group(2).replace("_", "")),
+                "end": int(m.group(3).replace("_", "")),
+                "default_freq": int(m.group(4).replace("_", "")),
+            })
+        self.assertEqual(len(client_bands), 12,
+                         f"Client expects 12 bands, got {len(client_bands)}")
+
+        # Validate each pair matches
+        server_by_name = {b["name"]: b for b in server_bands}
+        for cb in client_bands:
+            name = cb["name"]
+            self.assertIn(name, server_by_name,
+                          f"Client band '{name}' missing from server BANDS")
+            sb = server_by_name[name]
+            self.assertEqual(cb["start"], sb["start"],
+                             f"Band {name}: start mismatch {cb['start']} vs {sb['start']}")
+            self.assertEqual(cb["end"], sb["end"],
+                             f"Band {name}: end mismatch {cb['end']} vs {sb['end']}")
+            self.assertEqual(cb["default_freq"], sb["default_freq"],
+                             f"Band {name}: default_freq mismatch "
+                             f"{cb['default_freq']} vs {sb['default_freq']}")
+            # default_freq must be within band range
+            self.assertGreaterEqual(sb["default_freq"], sb["start"],
+                                    f"Band {name}: default_freq < start")
+            self.assertLessEqual(sb["default_freq"], sb["end"],
+                                 f"Band {name}: default_freq > end")
+
+        # Check client and server lists have the SAME band names in the SAME order
+        client_names = [b["name"] for b in client_bands]
+        server_names = [b["name"] for b in server_bands]
+        self.assertEqual(client_names, server_names,
+                         "DEFAULT_BAND_CYCLE order must match BANDS order")
+
+    def test_band_error_feedback_on_cat_failure(self):
+        """When CAT commands fail, server must log the failure and
+        send an error message back to the client so it can revert
+        its optimistic update."""
+        server_source = Path("server.py").read_text()
+        # Error message must be sent on failure
+        self.assertIn(
+            'Band change FAILED:',
+            server_source,
+            "Must log on CAT failure",
+        )
+        self.assertIn(
+            'message": f"Band change to {band[\'name\']} failed',
+            server_source,
+            "Must send error message to client on CAT failure",
+        )
+        self.assertIn(
+            'message": f"Unknown band: {band_name}',
+            server_source,
+            "Must send error message to client for unknown band",
+        )
 
 
 if __name__ == "__main__":

@@ -69,6 +69,7 @@ ctrl_clients: set[WebSocket] = set()
 spectrum_clients: set[WebSocket] = set()
 audio_rx_clients: set[WebSocket] = set()
 audio_tx_clients: set[WebSocket] = set()
+_last_meter_broadcast_log = 0.0
 # Single-owner guard for the TX uplink: only the first connected TX client's
 # audio is fed to the radio. Prevents two open tabs from interleaving mic
 # frames into the same playback queue (garbled TX). A later client takes over
@@ -77,6 +78,8 @@ _tx_owner_ws: Optional[WebSocket] = None
 _state_broadcast_task: asyncio.Task | None = None
 _scope_read_task: asyncio.Task | None = None
 _scope_broadcast_task: asyncio.Task | None = None
+_scope_proc: asyncio.subprocess.Process | None = None
+_scope_pipe_lock: asyncio.Lock | None = None
 _audio_rx_task: asyncio.Task | None = None
 _audio_tx_task: asyncio.Task | None = None
 
@@ -86,6 +89,7 @@ _opus_tx_decoder: TxOpusDecoder | None = None
 # RX broadcast pacing/guard rails
 AUDIO_RX_SEND_TIMEOUT = 0.012          # per-frame per-client timeout (seconds)
 AUDIO_RX_MAX_FRAMES_PER_CYCLE = 2      # cap burst send when loop catches up
+METER_BROADCAST_LOG_INTERVAL_SECONDS = 0.5
 
 # Auth: valid session tokens (server-side, cleared on restart)
 _auth_tokens: set[str] = set()
@@ -133,13 +137,38 @@ def _save_mem_channels(channels: list):
 
 async def _broadcast_state():
     """Send dirty state fields to all connected WebSocket clients."""
-    global ctrl_clients
+    global ctrl_clients, _last_meter_broadcast_log
     dirty = radio.get_and_clear_dirty()
     if not dirty:
         return
+    fields = radio.to_dirty_dict(dirty)
+    meter_dirty = {
+        "s_meter", "power_meter", "alc_meter", "swr_meter", "id_meter", "vd_meter",
+    } & dirty
+    now = time.monotonic()
+    if meter_dirty and now - _last_meter_broadcast_log >= METER_BROADCAST_LOG_INTERVAL_SECONDS:
+        _last_meter_broadcast_log = now
+        logger.info(
+            "Meter broadcast dirty=%s raw={S=%s PWR=%s ALC=%s SWR=%s ID=%s VD=%s} "
+            "derived={dBm=%.1f unit=%s W=%.1f ALC%%=%.0f SWR=%.1f Id=%.1f Vd=%.1f}",
+            sorted(meter_dirty),
+            fields.get("s_meter"),
+            fields.get("power_meter"),
+            fields.get("alc_meter"),
+            fields.get("swr_meter"),
+            fields.get("id_meter"),
+            fields.get("vd_meter"),
+            fields.get("s_meter_dbm", radio.s_meter_dbm),
+            fields.get("s_unit", radio.s_unit),
+            fields.get("power_watts", radio.power_watts),
+            fields.get("alc_pct", radio.alc_pct),
+            fields.get("swr_ratio", radio.swr_ratio),
+            fields.get("id_amps", radio.id_amps),
+            fields.get("vd_volts", radio.vd_volts),
+        )
     update = {
         "type": "stateUpdate",
-        "fields": radio.to_dirty_dict(dirty),
+        "fields": fields,
         "dirty": list(dirty),
     }
     data = json.dumps(update)
@@ -239,7 +268,7 @@ async def _read_scope_pipe(proc):
     Stderr lines starting with "STATUS:" are machine-parseable status
     messages from the pipe process.
     """
-    global scope
+    global scope, _scope_proc
     logger.info("Reading from scope_pipe (pid=%d)...", proc.pid)
     _first_frame = True
     _stderr_task = None
@@ -351,6 +380,85 @@ async def _read_scope_pipe(proc):
                 proc.terminate()
             except Exception:
                 pass
+            try:
+                await asyncio.wait_for(proc.wait(), timeout=2.0)
+            except asyncio.TimeoutError:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+                try:
+                    await proc.wait()
+                except Exception:
+                    pass
+        if _scope_proc is proc:
+            _scope_proc = None
+
+
+async def _ensure_scope_pipe_running():
+    """Start the FT4222 scope subprocess only while spectrum clients exist."""
+    global _scope_read_task, _scope_proc, _scope_pipe_lock
+    if _scope_read_task and not _scope_read_task.done():
+        return
+    if _scope_pipe_lock is None:
+        _scope_pipe_lock = asyncio.Lock()
+    async with _scope_pipe_lock:
+        if _scope_read_task and not _scope_read_task.done():
+            return
+        scope_pipe_path = SCRIPT_DIR / "scope_pipe.py"
+        if not scope_pipe_path.exists():
+            logger.warning("scope_pipe.py not found at %s — spectrum will use S-meter fallback only",
+                           scope_pipe_path)
+            return
+        logger.info("Starting scope_pipe subprocess for spectrum client...")
+        try:
+            _scope_proc = await asyncio.create_subprocess_exec(
+                sys.executable, str(scope_pipe_path),
+                stdout=_subprocess.PIPE, stderr=_subprocess.PIPE,
+            )
+            _scope_read_task = asyncio.create_task(
+                _read_scope_pipe(_scope_proc), name="scope_pipe_read"
+            )
+            logger.info("scope_pipe subprocess started (pid=%d)", _scope_proc.pid)
+        except Exception as e:
+            _scope_proc = None
+            _scope_read_task = None
+            logger.warning("Failed to start scope_pipe: %s", e)
+            logger.warning("Spectrum will use S-meter fallback only")
+
+
+async def _stop_scope_pipe():
+    """Stop the FT4222 scope subprocess when no spectrum clients remain."""
+    global _scope_read_task, _scope_proc, scope
+    task = _scope_read_task
+    _scope_read_task = None
+    if task and not task.done():
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            pass
+    proc = _scope_proc
+    _scope_proc = None
+    if proc and proc.returncode is None:
+        try:
+            proc.terminate()
+            await asyncio.wait_for(proc.wait(), timeout=2.0)
+        except asyncio.TimeoutError:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+            try:
+                await proc.wait()
+            except Exception:
+                pass
+        except Exception:
+            pass
+    if scope:
+        scope._connected = False
 
 # ── Audio Broadcast ────────────────────────────────────────────────────
 
@@ -464,16 +572,19 @@ async def _audio_tx_drain_loop():
     broadcasts — causing UI stutter on both audio and CAT.
     """
     global audio
-    interval = 0.010  # 10 ms drain interval
+    active_interval = 0.010  # 10 ms drain interval during TX playback
+    idle_interval = 0.050    # avoid 100 idle to_thread calls per second
     while True:
         try:
-            if audio:
+            if audio and audio.has_pending_tx_audio():
                 await asyncio.to_thread(audio.write_tx_chunk)
         except asyncio.CancelledError:
             return
         except Exception:
             pass
-        await asyncio.sleep(interval)
+        await asyncio.sleep(
+            active_interval if audio and audio.has_pending_tx_audio() else idle_interval
+        )
 
 
 # ── Command Handler ─────────────────────────────────────────────────
@@ -555,21 +666,24 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
             # vfo_a_freq / vfo_b_freq below force a specific VFO.)
             freq = int(value)
             vfo = radio.active_vfo or "A"
+            # Skip poll BEFORE sending CAT command so in-flight poll
+            # results don't overwrite our new setting (same race as band).
+            scheduler and scheduler.skip_next_poll("if", 1.0)
             await cat.set_frequency(freq, vfo)
             if vfo == "B":
                 radio.update(vfo_b_freq=freq)
             else:
                 radio.update(vfo_a_freq=freq)
-            scheduler and scheduler.skip_next_poll("if", 1.0)
 
         elif field == "vfo_a_freq":
             freq = int(value)
+            scheduler and scheduler.skip_next_poll("if", 1.0)
             await cat.set_frequency(freq, "A")
             radio.update(vfo_a_freq=freq)
-            scheduler and scheduler.skip_next_poll("if", 1.0)
 
         elif field == "vfo_b_freq":
             freq = int(value)
+            scheduler and scheduler.skip_next_poll("vfo", 1.0)
             await cat.set_frequency(freq, "B")
             radio.update(vfo_b_freq=freq)
 
@@ -856,20 +970,62 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
             band_name = str(value)
             band = next((b for b in BANDS if b["name"] == band_name), None)
             if band:
-                await cat.set_band_stack(band["bsr"])
-                radio.update(vfo_a_freq=band["default_freq"], active_vfo="A")
+                logger.info(
+                    "Band change request: name=%s bsr=%02d default_freq=%d active_vfo=%s",
+                    band["name"], band["bsr"], band["default_freq"], radio.active_vfo,
+                )
+                # Skip the next IF poll BEFORE sending CAT commands so that
+                # any in-flight poll result (which may have already read the
+                # old frequency) is discarded rather than overwriting our new
+                # setting.  See poll_scheduler._poll_if for the counterpart.
                 scheduler and scheduler.skip_next_poll("if", 1.0)
+                scheduler and scheduler.skip_next_poll("vfo", 1.0)
+                bs_ok = await cat.set_band_stack(band["bsr"])
+                fa_ok = await cat.set_frequency(band["default_freq"], "A")
+                if bs_ok and fa_ok:
+                    radio.update(vfo_a_freq=band["default_freq"], active_vfo="A")
+                    logger.info(
+                        "Band change applied: name=%s BS%02d OK FA%09d OK local_band=%s",
+                        band["name"], band["bsr"], band["default_freq"], radio.band_name,
+                    )
+                else:
+                    # CAT command(s) failed — don't update server state,
+                    # let the next poll cycle correct things.  Tell the
+                    # client so it can revert its optimistic update.
+                    failed = []
+                    if not bs_ok:
+                        failed.append(f"band stack BS{band['bsr']:02d}")
+                    if not fa_ok:
+                        failed.append(f"frequency FA{band['default_freq']:09d}")
+                    logger.error(
+                        "Band change FAILED: name=%s failed_commands=%s",
+                        band["name"], failed,
+                    )
+                    await ws.send_text(json.dumps({
+                        "type": "error",
+                        "message": f"Band change to {band['name']} failed: {', '.join(failed)}",
+                    }))
+                    # Skip the broadcast at the end — poll will correct state
+                    return
+            else:
+                logger.warning("Band change rejected: unknown band=%r", band_name)
+                await ws.send_text(json.dumps({
+                    "type": "error",
+                    "message": f"Unknown band: {band_name}",
+                }))
 
         elif field == "vfo_equal":
             # A = B: copy VFO-B to VFO-A
+            scheduler and scheduler.skip_next_poll("if", 1.0)
             await cat.set_frequency(radio.vfo_b_freq, "A")
             radio.update(vfo_a_freq=radio.vfo_b_freq)
-            scheduler and scheduler.skip_next_poll("if", 1.0)
 
         elif field == "vfo_swap":
             # Swap VFO-A and VFO-B
             fa = radio.vfo_a_freq
             fb = radio.vfo_b_freq
+            scheduler and scheduler.skip_next_poll("if", 1.0)
+            scheduler and scheduler.skip_next_poll("vfo", 1.0)
             await cat.set_frequency(fb, "A")
             await cat.set_frequency(fa, "B")
             radio.update(vfo_a_freq=fb, vfo_b_freq=fa)
@@ -1022,30 +1178,6 @@ async def lifespan(app: FastAPI):
     # Do this even if initial CAT probe failed — the serial port may still work
     await _init_scope_cat()
 
-    # Start scope_pipe subprocess for real FT4222 SPI data
-    # This runs independently of CAT serial — scope data comes via FT4222 chip
-    scope_pipe_path = SCRIPT_DIR / "scope_pipe.py"
-    if scope_pipe_path.exists():
-        logger.info("Starting scope_pipe subprocess...")
-        try:
-            scope_proc = await asyncio.create_subprocess_exec(
-                sys.executable, str(scope_pipe_path),
-                stdout=_subprocess.PIPE, stderr=_subprocess.PIPE,
-            )
-            _scope_read_task = asyncio.create_task(
-                _read_scope_pipe(scope_proc), name="scope_pipe_read"
-            )
-            logger.info("scope_pipe subprocess started (pid=%d)", scope_proc.pid)
-            # NOTE: scope._connected is set by _read_scope_pipe after the
-            # first valid frame arrives — we do NOT set it here.
-            # Until then, the broadcast loop falls back to S-meter data.
-        except Exception as e:
-            logger.warning("Failed to start scope_pipe: %s", e)
-            logger.warning("Spectrum will use S-meter fallback only")
-    else:
-        logger.warning("scope_pipe.py not found at %s — spectrum will use S-meter fallback only",
-                       scope_pipe_path)
-
     logger.info("Server ready!")
 
     yield
@@ -1077,8 +1209,7 @@ async def lifespan(app: FastAPI):
         audio = None
 
     # Stop scope
-    if _scope_read_task:
-        _scope_read_task.cancel()
+    await _stop_scope_pipe()
     if _scope_broadcast_task:
         _scope_broadcast_task.cancel()
     if scope:
@@ -1316,6 +1447,7 @@ async def ws_spectrum(ws: WebSocket):
     await ws.accept()
     spectrum_clients.add(ws)
     logger.info("Spectrum client connected (%d total)", len(spectrum_clients))
+    await _ensure_scope_pipe_running()
     try:
         while True:
             # Keep connection alive, actual data sent by broadcast loop
@@ -1327,6 +1459,8 @@ async def ws_spectrum(ws: WebSocket):
     finally:
         spectrum_clients.discard(ws)
         logger.info("Spectrum client disconnected (%d remain)", len(spectrum_clients))
+        if not spectrum_clients:
+            await _stop_scope_pipe()
 
 
 # ── Audio RX WebSocket ────────────────────────────────────────────────

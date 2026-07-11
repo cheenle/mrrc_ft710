@@ -16,6 +16,23 @@ from config import (
     raw_to_power, raw_to_swr, raw_to_voltage, raw_to_current,
 )
 
+_DEPENDENT_DERIVED_FIELDS = {
+    "s_meter": {"s_meter_dbm", "s_unit"},
+    "mode": {"mode_name", "mode_display", "filter_hz"},
+    "filter_width": {"filter_hz"},
+    "vfo_a_freq": {"active_freq", "band_name"},
+    "vfo_b_freq": {"active_freq", "band_name"},
+    "active_vfo": {"active_freq", "band_name"},
+    "tx_status": {"is_transmitting"},
+    "preamp": {"preamp_label"},
+    "attenuator": {"attenuator_label"},
+    "power_meter": {"power_watts"},
+    "swr_meter": {"swr_ratio"},
+    "vd_meter": {"vd_volts"},
+    "id_meter": {"id_amps"},
+    "alc_meter": {"alc_pct"},
+}
+
 
 @dataclass
 class RadioState:
@@ -311,8 +328,12 @@ class RadioState:
     def to_dirty_dict(self, fields: set[str]) -> dict:
         """Return a dict with only the given fields.
 
-        If derived fields are requested, those are also resolved.
+        Dependent derived fields are included so partial WebSocket updates
+        contain the values the UI actually renders.
         """
+        fields = set(fields)
+        for field_name in tuple(fields):
+            fields.update(_DEPENDENT_DERIVED_FIELDS.get(field_name, set()))
         full = self.to_dict(include_derived=True)
         return {f: full[f] for f in fields if f in full}
 

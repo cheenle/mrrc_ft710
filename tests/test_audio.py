@@ -97,7 +97,7 @@ class TxFrontendContractTests(unittest.TestCase):
         self.assertIn("tx_opus_worker.js?v=tx-audio-4", main_source)
         self.assertIn("tx_capture_worklet.js?v=tx-audio-4", main_source)
         self.assertIn("opus_codec.js?v=tx-audio-4", worker_source)
-        self.assertIn("ft710-v6", sw_source)
+        self.assertIn("ft710-v10", sw_source)
 
     def test_tx_debug_tone_bypasses_microphone_capture(self):
         main_source = (REPO_ROOT / "static" / "ft710_main.js").read_text()
@@ -243,6 +243,16 @@ class TXBufferTests(unittest.TestCase):
         self.assertEqual(len(stream.writes), 0)    # nothing drained (force)
         self.assertTrue(stream.closed)
         self.assertIsNone(h._tx_stream)
+
+    def test_has_pending_tx_audio_is_false_when_no_stream(self):
+        h = self._make_handler()
+        self.assertFalse(h.has_pending_tx_audio())
+
+    def test_has_pending_tx_audio_is_true_for_active_stream(self):
+        h = self._make_handler()
+        stream = self._fake_stream()
+        h._tx_stream = stream
+        self.assertTrue(h.has_pending_tx_audio())
 
 
 class TXReleaseOrderTests(unittest.TestCase):
