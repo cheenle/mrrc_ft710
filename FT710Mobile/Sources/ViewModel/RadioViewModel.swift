@@ -2,33 +2,22 @@ import SwiftUI
 import Combine
 import AVFoundation
 
-/// Central ViewModel — coordinates networking, audio, and UI state.
+/// Central ViewModel — coordinates networking, audio, spectrum, and UI state for FT-710.
 @MainActor
 final class RadioViewModel: ObservableObject {
     let state = RadioState()
     let connection: ConnectionManager
-
     let audioPlayback = AudioPlaybackManager()
     let audioCapture = AudioCaptureManager()
-    let favorites = FavoritesManager()
     let spectrumProc = SpectrumProcessor()
-    let fftProc = FFTProcessor()
     private var cancellables = Set<AnyCancellable>()
 
     // MARK: - Init
 
-    init(serverHost: String = "radio.vlsc.net:8889",
+    init(serverHost: String = "radio.vlsc.net:8888",
          password: String? = nil) {
         connection = ConnectionManager(serverHost: serverHost, password: password)
         bindSockets()
-        // Reset FFT EMA buffer on IQ sample rate change
-        state.onSampleRateChanged = { [weak self] in
-            self?.fftProc.reset()
-        }
-        // Re-send setOpus:false if Opus frames detected (server may have reset)
-        NotificationCenter.default.addObserver(forName: .audioOpusDetected, object: nil, queue: .main) { [weak self] _ in
-            self?.connection.sendControl("setOpus:false")
-        }
     }
 
     // MARK: - Public API
@@ -71,7 +60,7 @@ final class RadioViewModel: ObservableObject {
                    let headerFields = httpResp.allHeaderFields as? [String: String],
                    let url = httpResp.url {
                     let cookies = HTTPCookie.cookies(withResponseHeaderFields: headerFields, for: url)
-                    token = cookies.first(where: { $0.name == "sunmrrc_auth" })?.value
+                    token = cookies.first(where: { $0.name == "ft710_auth" })?.value
                     // Also try JSON body fallback
                     if token == nil, let data = data,
                        let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
@@ -96,147 +85,126 @@ final class RadioViewModel: ObservableObject {
     /// Power off: disconnect + stop audio + stop heartbeat.
     func powerOff() {
         state.powerOn = false
-        state.ptt = false
         stopPing()
         connection.disconnectAll()
         audioPlayback.stop()
+        audioCapture.stop()
     }
 
-    // MARK: - Frequency control
+    // MARK: - Control helpers
 
-    /// Set RX frequency in Hz.
-    func setFrequency(_ hz: Int) {
-        let clamped = max(100_000, min(2_000_000_000, hz))
-        state.frequency = clamped
-        connection.sendControl("setFreq:\(clamped)")
+    /// Send a JSON {"type":"set","field":...,"value":...} command.
+    private func sendSet(_ field: String, _ value: Any) {
+        let msg: [String: Any] = ["type": "set", "field": field, "value": value]
+        if let json = try? JSONSerialization.data(withJSONObject: msg),
+           let str = String(data: json, encoding: .utf8) {
+            connection.sendControl(str)
+        }
     }
 
-    /// Step frequency up or down by `stepHz`.
+    // MARK: - Frequency
+
+    /// Set RX frequency in Hz. Optional vfo parameter ("A" or "B").
+    func setFrequency(_ hz: Int, vfo: String? = nil) {
+        let field = (vfo == "B") ? "vfo_b_freq" : "freq"
+        sendSet(field, hz)
+    }
+
+    /// Step frequency up or down by `step` Hz.
     func stepFrequency(up: Bool, step: Int = 1000) {
         let delta = up ? step : -step
-        setFrequency(state.frequency + delta)
+        setFrequency(state.activeFreq + delta)
     }
 
-    /// Jump to a predefined band frequency.
-    func selectBand(_ hz: Int) {
-        setFrequency(hz)
+    /// Jump to a band frequency.
+    func setBand(_ freq: Int) {
+        setFrequency(freq)
     }
 
-    // MARK: - Filter
+    // MARK: - Mode
 
-    /// Set filter bandwidth by low/high cutoff.
-    func setFilter(low: Int, high: Int) {
-        state.filterLow = low
-        state.filterHigh = high
-        connection.sendControl("setFilter:\(low),\(high)")
+    /// Set operating mode by name string: "USB", "LSB", "AM", "FM", "CW-U", etc.
+    func setMode(_ modeName: String) {
+        sendSet("mode", modeName)
     }
 
-    /// Set operating mode: USB, LSB, AM, FM, CW, etc.
-    func setMode(_ mode: String) {
-        state.mode = mode
-        connection.sendControl("setMode:\(mode)")
-    }
+    // MARK: - PTT / Tune
 
     /// Toggle PTT. Starts mic capture on TX, stops on RX. Mutes RX audio during TX.
     func setPTT(_ tx: Bool) {
-        state.ptt = tx
-        connection.sendControl("setPTT:\(tx ? "true" : "false")")
-
+        sendSet("ptt", tx)
         if tx {
-            audioPlayback.isMuted = true   // mute RX during TX to prevent feedback
-            connection.audioTX.send(text: "m:16000,pcm,0,20")
+            audioPlayback.isMuted = true
             audioCapture.start()
         } else {
             audioCapture.stop()
-            connection.audioTX.send(text: "s:")
-            audioPlayback.isMuted = false  // unmute RX when back to receive
+            audioPlayback.isMuted = false
         }
     }
 
-    /// Set AF (volume) gain 0.0–1.0.
-    func setAFGain(_ gain: Float) {
-        state.afGain = gain
-        let val = Int(gain * 100)
-        connection.sendControl("setAFGain:\(val)")
+    /// Tune (steady carrier for antenna tuning, no mic capture).
+    func setTune(_ on: Bool) {
+        sendSet("tune", on)
     }
 
-    /// Set RF gain 0.0–1.0 (maps to 0–100, controls radio front-end gain).
-    func setRFGain(_ gain: Float) {
-        state.rfGain = gain
-        let val = Int(gain * 100)
-        connection.sendControl("setRFGain:\(val)")
-    }
+    // MARK: - Gain controls
 
-    /// Set Mic gain 0.0–2.0, default 1.0 (100%).
-    func setMicGain(_ gain: Float) {
-        state.micGain = gain
-        audioCapture.micGain = gain
-    }
+    /// AF (volume) gain, 0–255.
+    func setAFGain(_ v: Int) { sendSet("af_gain", v) }
 
-    /// Set AGC mode: "off", "slow", "medium", "fast".
-    func setAGC(_ mode: String) {
-        connection.sendControl("setAGC:\(mode)")
-    }
+    /// RF gain, 0–255.
+    func setRFGain(_ v: Int) { sendSet("rf_gain", v) }
 
-    // MARK: - DSP / WDSP
+    /// RF power, 0–100 (percent).
+    func setRFPower(_ v: Int) { sendSet("rf_power", v) }
 
-    func setWDSPEnabled(_ on: Bool) {
-        state.wdspEnabled = on
-        connection.sendControl("setWDSPEnabled:\(on ? "true" : "false")")
-    }
+    /// Squelch level, 0–255.
+    func setSquelch(_ v: Int) { sendSet("squelch", v) }
 
-    func setNR2Enabled(_ on: Bool) {
-        state.nr2Enabled = on
-        connection.sendControl("setWDSPNR2:\(on ? "true" : "false")")
-    }
+    /// Mic gain, 0–100.
+    func setMicGain(_ v: Int) { sendSet("mic_gain", v) }
 
-    func setNR2Level(_ level: Int) {
-        state.nr2Level = level
-        connection.sendControl("setWDSPNR2Level:\(level)")
-    }
+    // MARK: - DSP / Filter
 
-    func setNBEnabled(_ on: Bool) {
-        state.nbEnabled = on
-        connection.sendControl("setWDSPNB:\(on ? "true" : "false")")
-    }
+    /// Select filter by index into the current mode's filter width table.
+    func setFilter(_ idx: Int) { sendSet("filter", idx) }
 
-    func setANFEnabled(_ on: Bool) {
-        state.anfEnabled = on
-        connection.sendControl("setWDSPANF:\(on ? "true" : "false")")
-    }
+    /// Preamp: 0=OFF, 1=AMP1, 2=AMP2.
+    func setPreamp(_ v: Int) { sendSet("preamp", v) }
 
-    func setNFEnabled(_ on: Bool) {
-        state.nfEnabled = on
-        connection.sendControl("setWDSPNFEnabled:\(on ? "true" : "false")")
-    }
+    /// Attenuator: 0=OFF, 1=6dB, 2=12dB, 3=18dB.
+    func setAttenuator(_ v: Int) { sendSet("att", v) }
 
-    func setWDSPAGCMode(_ uiIndex: Int) {
-        // Map UI index to server AGC mode:
-        // UI: 0=关(OFF), 1=慢(SLOW), 2=中(MED), 3=快(FAST)
-        // Server: 0=OFF, 1=LONG, 2=SLOW, 3=MED, 4=FAST
-        let serverMode: Int
-        switch uiIndex {
-        case 0: serverMode = 0  // OFF
-        case 1: serverMode = 2  // SLOW
-        case 2: serverMode = 3  // MED
-        case 3: serverMode = 4  // FAST
-        default: serverMode = 0
-        }
-        state.agcMode = serverMode
-        connection.sendControl("setWDSPAGC:\(serverMode)")
-    }
+    /// Noise blanker on/off.
+    func setNoiseBlanker(_ on: Bool) { sendSet("nb", on) }
 
-    func setIQSampleRate(_ key: String) {
-        connection.sendControl("setSampleRate:\(key)")
-    }
+    /// Noise reduction on/off.
+    func setNoiseReduction(_ on: Bool) { sendSet("nr", on) }
 
-    func addNotch(freqHz: Float, bandwidthHz: Float) {
-        connection.sendControl("addWDSPNotch:\(freqHz),\(bandwidthHz)")
-    }
+    /// Auto notch on/off.
+    func setAutoNotch(_ on: Bool) { sendSet("an", on) }
 
-    func deleteNotch(index: Int) {
-        connection.sendControl("deleteWDSPNotch:\(index)")
-    }
+    /// Compressor on/off.
+    func setCompressor(_ on: Bool) { sendSet("comp", on) }
+
+    /// AGC mode: 0=OFF, 1=FAST, 2=MED, 3=SLOW.
+    func setAGC(_ mode: Int) { sendSet("agc", mode) }
+
+    // MARK: - VFO / Split
+
+    /// Tuner: 0=OFF, 1=ON, 2=Tuning.
+    func setTuner(_ v: Int) { sendSet("tuner", v) }
+
+    /// Select active VFO: "A" or "B".
+    func setVFO(_ vfo: String) { sendSet("vfo", vfo.uppercased()) }
+
+    /// Split mode on/off.
+    func setSplit(_ on: Bool) { sendSet("split", on) }
+
+    // MARK: - Scope
+
+    /// Set scope span by index (maps to scope_spans table).
+    func setScopeSpan(_ v: Int) { sendSet("scope_span", v) }
 
     // MARK: - Private
 
@@ -244,11 +212,8 @@ final class RadioViewModel: ObservableObject {
         stopPing()
         pingTimer = Timer.scheduledTimer(withTimeInterval: pingInterval, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
-                guard let self = self,
-                      self.state.powerOn,
-                      self.connection.ctrlConnected else { return }
-                self.state.lastPingTime = .now
-                self.connection.sendControl("PING")
+                guard let self, self.state.powerOn, self.connection.ctrlConnected else { return }
+                self.connection.sendControl(#"{"type":"ping"}"#)
             }
         }
     }
@@ -287,10 +252,30 @@ final class RadioViewModel: ObservableObject {
             }
         }
 
-        // ── Control text messages ──────────────────────────────
+        // ── Control text → state (JSON protocol) ──────────────
         connection.ctrl.onText = { [weak self] text in
             Task { @MainActor [weak self] in
-                self?.state.apply(serverMessage: text)
+                guard let self,
+                      let data = text.data(using: .utf8),
+                      let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+                else { return }
+                let msgType = json["type"] as? String ?? ""
+                switch msgType {
+                case "fullState":
+                    if let fullData = json["data"] as? [String: Any] {
+                        self.state.applyFullState(fullData)
+                    }
+                case "stateUpdate":
+                    if let fields = json["fields"] as? [String: Any] {
+                        self.state.applyStateUpdate(fields)
+                    }
+                case "pong":
+                    break
+                case "error":
+                    self.state.connectionError = json["message"] as? String
+                default:
+                    break
+                }
             }
         }
 
@@ -304,30 +289,10 @@ final class RadioViewModel: ObservableObject {
             self?.connection.audioTX.send(binary: pcmData)
         }
 
-        // ── Spectrum → SpectrumProcessor (waterfall) + FFTProcessor (line plot) ──
-        var specCount = 0
-        var specLogged = false
+        // ── Spectrum → processor ──────────────────────────────
         connection.spectrum.onBinary = { [weak self] data in
-            specCount += 1
-            if !specLogged && specCount == 10 {
-                specLogged = true
-                print("📊 SPEC: dataSize=\(data.count) vfo=\(self?.state.frequency ?? 0) sr=\(self?.state.iqSampleRateHz ?? 0)")
-                // Print first 8 bytes to verify spectrum data format
-                let bytes = [UInt8](data.prefix(16))
-                print("📊 SPEC: raw[0..15]=\(bytes.map{String($0)}.joined(separator:","))")
-            }
-            if specCount % 100 == 0 {
-                print("🌊 Spectrum frames: \(specCount), last=\(data.count) bytes")
-            }
-            // Waterfall
             self?.spectrumProc.feed(data: data) { img in
                 self?.state.waterfallImage = img
-            }
-            // FFT line plot — every 3rd frame (~12 fps from 38 fps source)
-            if specCount % 3 == 0 {
-                self?.fftProc.feed(data: data) { smoothed in
-                    self?.state.fftData = smoothed
-                }
             }
         }
     }
