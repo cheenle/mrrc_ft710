@@ -270,29 +270,29 @@ function renderButtonLabels() {
     setText('btn-filter', getFilterLabel(nextIdx, modeName));
     document.getElementById('btn-filter').dataset.current = filterIdx;
 
-    // ATT cycle: OFF -> 6dB -> 12dB -> 18dB -> OFF
-    const attLabels = {0:'OFF', 1:'6dB', 2:'12dB', 3:'18dB'};
+    // ATT cycle: OFF -> 6dB -> 12dB -> 18dB -> OFF (short labels ≤3 chars)
+    const attLabels = {0:'OF', 1:'6d', 2:'12', 3:'18'};
     const nextAtt = (radioState.attenuator + 1) % 4;
-    setText('btn-att', 'ATT ' + attLabels[nextAtt]);
+    setText('btn-att', attLabels[nextAtt]);
 
-    // PRE cycle: OFF -> AMP1 -> AMP2 -> OFF
-    const preLabels = {0:'OFF', 1:'AMP1', 2:'AMP2'};
+    // PRE cycle: OFF -> AMP1 -> AMP2 -> OFF (short labels ≤3 chars)
+    const preLabels = {0:'OF', 1:'A1', 2:'A2'};
     const nextPre = (radioState.preamp + 1) % 3;
-    setText('btn-pre', 'PRE ' + preLabels[nextPre]);
+    setText('btn-pre', preLabels[nextPre]);
 }
 
 // ── Toggle States ───────────────────────────────────────────────────
 function renderToggles() {
-    setToggle('toggle-nr', radioState.noise_reduction);
-    setToggle('toggle-nb', radioState.noise_blanker);
-    setToggle('toggle-an', radioState.auto_notch);
-    setToggle('toggle-comp', radioState.compressor);
-    setToggle('toggle-atu', radioState.tuner_status > 0);
+    setDspBtn('dsp-nr', radioState.noise_reduction);
+    setDspBtn('dsp-nb', radioState.noise_blanker);
+    setDspBtn('dsp-an', radioState.auto_notch);
+    setDspBtn('dsp-comp', radioState.compressor);
+    setDspBtn('dsp-atu', radioState.tuner_status > 0);
 }
 
-function setToggle(id, value) {
+function setDspBtn(id, active) {
     const el = document.getElementById(id);
-    if (el) el.checked = value;
+    if (el) el.classList.toggle('on', active);
 }
 
 // ── Sliders ─────────────────────────────────────────────────────────
@@ -352,10 +352,179 @@ function renderPTTState() {
     }
 }
 
+function renderFFTPlot(wf1) {
+    const canvas = document.getElementById('fft-canvas');
+    if (!canvas) return;
+    if (canvas.width < 100 || canvas.height < 5) return;
+
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width;
+    const h = canvas.height;
+
+    // Clear
+    ctx.clearRect(0, 0, w, h);
+
+    // ── Grid lines ────────────────────────────────────────────────
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.lineWidth = 0.5;
+    ctx.shadowBlur = 0;
+    // Horizontal reference lines at 25%, 50%, 75% amplitude
+    for (let pct = 0.25; pct <= 0.75; pct += 0.25) {
+        const gy = Math.round(h - pct * h) + 0.5;
+        ctx.beginPath();
+        ctx.moveTo(0, gy);
+        ctx.lineTo(w, gy);
+        ctx.stroke();
+    }
+    // Vertical lines at frequency tick positions
+    const spanHz = SCOPE_SPAN_HZ[radioState.scope_span] || 100000;
+    const vfoFreq = radioState.active_freq ||
+        (radioState.active_vfo === 'B' ? radioState.vfo_b_freq : radioState.vfo_a_freq) ||
+        14200000;
+    const range = _computeFreqRange(vfoFreq, spanHz);
+    const step = _freqStep(spanHz);
+    const firstMark = Math.floor(range.leftEdge / step) * step;
+    for (let f = firstMark; f <= range.rightEdge; f += step) {
+        const vx = Math.round(((f - range.leftEdge) / spanHz) * w) + 0.5;
+        if (vx < 0 || vx > w) continue;
+        ctx.beginPath();
+        ctx.moveTo(vx, 0);
+        ctx.lineTo(vx, h);
+        ctx.stroke();
+    }
+
+    // Shared floor/ceiling from scope display settings
+    const floor = scopeFloor;
+    const ceil = scopeCeil;
+    const dynRange = Math.max(1, ceil - floor);
+
+    // ── EMA smoothing: slow decay for stable FFT display ──────────
+    const alpha = 0.30;  // blend 30% new data per frame
+    const srcLen = wf1.length;
+    if (!fftSmooth || fftSmooth.length !== srcLen) {
+        // Initialize on first frame or size change
+        fftSmooth = new Float32Array(wf1);
+    } else {
+        for (let i = 0; i < srcLen; i++) {
+            fftSmooth[i] = fftSmooth[i] * (1 - alpha) + wf1[i] * alpha;
+        }
+    }
+
+    // Build polyline path from smoothed data
+    ctx.beginPath();
+    let firstPoint = true;
+    for (let x = 0; x < w; x++) {
+        const srcPos = (x / w) * srcLen;
+        const srcIdx = Math.floor(srcPos);
+        const frac = srcPos - srcIdx;
+        const v1 = fftSmooth[srcIdx] || 0;
+        const v2 = (srcIdx + 1 < srcLen) ? fftSmooth[srcIdx + 1] : v1;
+        const raw = v1 + (v2 - v1) * frac;
+
+        const mapped = (raw - floor) / dynRange;
+        const boost = 2.0;  // 2× amplitude boost for FFT plot
+        const clamped = Math.max(0, Math.min(1, mapped * boost));
+        // Invert Y: top = ceil (low y), bottom = floor (high y)
+        const y = h - clamped * h;
+
+        if (firstPoint) {
+            ctx.moveTo(x + 0.5, y);
+            firstPoint = false;
+        } else {
+            ctx.lineTo(x + 0.5, y);
+        }
+    }
+
+    // Stroke with subtle glow
+    ctx.strokeStyle = '#06b6d4';
+    ctx.lineWidth = 1.0;
+    ctx.shadowColor = 'rgba(6, 182, 212, 0.6)';
+    ctx.shadowBlur = 2;
+    ctx.stroke();
+
+    // Reset shadow to avoid affecting other canvas draws
+    ctx.shadowBlur = 0;
+}
+
 // ── Waterfall Rendering ─────────────────────────────────────────────
 const WF_HISTORY = 120; // rows of waterfall history
 let waterfallHistory = [];
 let waterfallInitialized = false;
+
+// ── Scope display settings (persisted in localStorage) ──────────
+let scopeFloor = parseInt(getStored('scopeFloor', '5'));
+let scopeCeil = parseInt(getStored('scopeCeil', '220'));
+let scopeTheme = getStored('scopeTheme', 'jet');
+let fftSmooth = null;  // EMA-smoothed FFT buffer for slow decay
+
+function getStored(key, fallback) {
+    try { const v = localStorage.getItem('ft710_' + key); if (v !== null) return v; } catch(e) {}
+    return fallback;
+}
+function setStored(key, val) {
+    try { localStorage.setItem('ft710_' + key, String(val)); } catch(e) {}
+}
+
+// ── Color palettes (matching wfview QCustomPlot themes) ───────────
+const WF_PALETTES = {
+    // Jet: black → dark blue → blue → cyan → green → yellow → red (classic)
+    jet: function(v) {
+        let r, g, b;
+        if (v < 0.125) { let u = v / 0.125; r = 0; g = 0; b = Math.floor(128 + u * 127); }
+        else if (v < 0.375) { let u = (v - 0.125) / 0.25; r = 0; g = Math.floor(u * 255); b = 255; }
+        else if (v < 0.625) { let u = (v - 0.375) / 0.25; r = Math.floor(u * 255); g = 255; b = Math.floor(255 * (1 - u)); }
+        else if (v < 0.875) { let u = (v - 0.625) / 0.25; r = 255; g = Math.floor(255 * (1 - u)); b = 0; }
+        else { let u = (v - 0.875) / 0.125; r = Math.floor(255 * (1 - u * 0.5)); g = 0; b = 0; }
+        return [r, g, b];
+    },
+    // Hot: black → red → orange → yellow → white
+    hot: function(v) {
+        let r, g, b;
+        if (v < 0.33) { let u = v / 0.33; r = Math.floor(u * 255); g = 0; b = 0; }
+        else if (v < 0.66) { let u = (v - 0.33) / 0.33; r = 255; g = Math.floor(u * 255); b = 0; }
+        else { let u = (v - 0.66) / 0.34; r = 255; g = 255; b = Math.floor(u * 255); }
+        return [r, g, b];
+    },
+    // Cold: black → dark blue → cyan → white
+    cold: function(v) {
+        let r, g, b;
+        if (v < 0.5) { let u = v / 0.5; r = 0; g = Math.floor(u * 200); b = Math.floor(40 + u * 215); }
+        else { let u = (v - 0.5) / 0.5; r = Math.floor(u * 255); g = Math.floor(200 + u * 55); b = 255; }
+        return [r, g, b];
+    },
+    // Thermal: black → dark red → orange → yellow → white
+    thermal: function(v) {
+        let r, g, b;
+        if (v < 0.25) { let u = v / 0.25; r = Math.floor(60 + u * 140); g = 0; b = 0; }
+        else if (v < 0.5) { let u = (v - 0.25) / 0.25; r = Math.floor(200 + u * 55); g = Math.floor(u * 180); b = 0; }
+        else if (v < 0.75) { let u = (v - 0.5) / 0.25; r = 255; g = Math.floor(180 + u * 75); b = Math.floor(u * 200); }
+        else { let u = (v - 0.75) / 0.25; r = 255; g = 255; b = Math.floor(200 + u * 55); }
+        return [r, g, b];
+    },
+    // Night: black → blue → purple → white (low-light friendly)
+    night: function(v) {
+        let r, g, b;
+        if (v < 0.33) { let u = v / 0.33; r = 0; g = 0; b = Math.floor(u * 128); }
+        else if (v < 0.66) { let u = (v - 0.33) / 0.33; r = Math.floor(u * 180); g = 0; b = Math.floor(128 + u * 127); }
+        else { let u = (v - 0.66) / 0.34; r = Math.floor(180 + u * 75); g = Math.floor(u * 200); b = 255; }
+        return [r, g, b];
+    },
+    // Gray: black → gray → white (monochrome)
+    gray: function(v) {
+        var val = Math.floor(v * 255);
+        return [val, val, val];
+    },
+};
+
+// Legacy palette (kept for reference — matches original hardcoded colors)
+const WF_PALETTE_LEGACY = function(v) {
+    return [
+        Math.floor(v * v * 180),
+        Math.floor(v * v * v * 255),
+        Math.floor(5 + v * 250)
+    ];
+};
+
 const SCOPE_SPAN_HZ = {
     0: 1000,
     1: 2000,
@@ -376,6 +545,14 @@ function initWaterfall() {
     const w = Math.max(100, rect.width - 8); // Minimum 100px wide
     canvas.width = w;
     canvas.height = 67;  // Compact waterfall
+
+    // Size FFT canvas to match width
+    const fftCanvas = document.getElementById('fft-canvas');
+    if (fftCanvas) {
+        fftCanvas.width = w;
+        fftCanvas.height = 33;
+    }
+
     waterfallHistory = [];
     waterfallInitialized = true;
 }
@@ -389,8 +566,14 @@ function ensureWaterfallInitialized() {
     if (canvas && canvas.width < 100) {
         const rect = canvas.parentElement.getBoundingClientRect();
         if (rect.width > 100) {
-            canvas.width = rect.width - 8;
+            const w = rect.width - 8;
+            canvas.width = w;
             canvas.height = 67;
+            const fftCanvas = document.getElementById('fft-canvas');
+            if (fftCanvas) {
+                fftCanvas.width = w;
+                fftCanvas.height = 22;
+            }
             waterfallHistory = [];
         }
     }
@@ -398,6 +581,9 @@ function ensureWaterfallInitialized() {
 
 function renderWaterfallRow(wf1) {
     ensureWaterfallInitialized();
+
+    // Draw FFT spectrum line plot above waterfall
+    renderFFTPlot(wf1);
 
     const canvas = document.getElementById('waterfall-canvas');
     if (!canvas) return;
@@ -410,6 +596,12 @@ function renderWaterfallRow(wf1) {
     // Scroll canvas content up by 1px
     ctx.drawImage(canvas, 0, 1, w, h - 1, 0, 0, w, h - 1);
 
+    // ── Color palette & floor/ceiling ────────────────────────────
+    const palette = WF_PALETTES[scopeTheme] || WF_PALETTES.jet;
+    const floor = scopeFloor;
+    const ceil = scopeCeil;
+    const dynRange = Math.max(1, ceil - floor);
+
     // Draw new row at the bottom (1px high)
     const srcLen = wf1.length;
     for (let x = 0; x < w; x++) {
@@ -419,16 +611,15 @@ function renderWaterfallRow(wf1) {
         const frac = srcPos - srcIdx;
         const v1 = wf1[srcIdx] || 0;
         const v2 = (srcIdx + 1 < srcLen) ? wf1[srcIdx + 1] : v1;
-        const val = Math.min(255, v1 + (v2 - v1) * frac);
+        const raw = v1 + (v2 - v1) * frac;
 
-        // Classic ham waterfall: black→dark blue→blue→cyan→white
-        let r, g, b;
-        const v = val / 255;
-        r = Math.floor(v * v * 180);
-        g = Math.floor(v * v * v * 255);
-        b = Math.floor(5 + v * 250);
+        // Apply floor/ceiling mapping: remap [floor, ceil] → [0, 1]
+        const mapped = (raw - floor) / dynRange;
+        const v = Math.max(0, Math.min(1, mapped));
 
-        ctx.fillStyle = 'rgb(' + Math.floor(r) + ',' + Math.floor(g) + ',' + Math.floor(b) + ')';
+        // Apply color palette
+        const [r, g, b] = palette(v);
+        ctx.fillStyle = 'rgb(' + r + ',' + g + ',' + b + ')';
         ctx.fillRect(x, h - 1, 1, 1);
     }
 
@@ -447,15 +638,11 @@ function renderWaterfallRow(wf1) {
     if (vfoX >= 0 && vfoX <= w) {
         const vx = Math.round(vfoX) + 0.5;
         ctx.strokeStyle = 'rgba(239, 68, 68, 0.45)';
-        ctx.lineWidth = 1.0;
+        ctx.lineWidth = 0.2;
         ctx.beginPath();
         ctx.moveTo(vx, 0);
         ctx.lineTo(vx, h);
         ctx.stroke();
-        ctx.fillStyle = 'rgba(239, 68, 68, 0.9)';
-        ctx.font = 'bold 8px monospace';
-        ctx.textAlign = 'center';
-        ctx.fillText((vfoFreq / 1e6).toFixed(3), vx, 9);
     }
 
     // Update frequency scale
@@ -571,6 +758,16 @@ function renderScopeSettings() {
     if (spanSelect) spanSelect.value = String(radioState.scope_span);
     const speedSelect = document.getElementById('scope-speed-select');
     if (speedSelect) speedSelect.value = String(radioState.scope_speed);
+    const themeSelect = document.getElementById('scope-theme-select');
+    if (themeSelect) themeSelect.value = scopeTheme;
+    const floorSlider = document.getElementById('slider-floor');
+    const floorVal = document.getElementById('val-floor');
+    if (floorSlider) floorSlider.value = scopeFloor;
+    if (floorVal) floorVal.textContent = scopeFloor;
+    const ceilSlider = document.getElementById('slider-ceil');
+    const ceilVal = document.getElementById('val-ceil');
+    if (ceilSlider) ceilSlider.value = scopeCeil;
+    if (ceilVal) ceilVal.textContent = scopeCeil;
     const canvas = document.getElementById('waterfall-canvas');
     if (canvas && canvas.width > 0) {
         renderFreqScale(canvas.width);
@@ -769,28 +966,24 @@ function initUI() {
         });
     });
 
-    // Toggle switches
-    document.getElementById('toggle-nr').addEventListener('change', function() {
-        sendCommand('nr', this.checked);
-        radioState.noise_reduction = this.checked;
-    });
-    document.getElementById('toggle-nb').addEventListener('change', function() {
-        sendCommand('nb', this.checked);
-        radioState.noise_blanker = this.checked;
-    });
-    document.getElementById('toggle-an').addEventListener('change', function() {
-        sendCommand('an', this.checked);
-        radioState.auto_notch = this.checked;
-    });
-    document.getElementById('toggle-comp').addEventListener('change', function() {
-        sendCommand('comp', this.checked);
-        radioState.compressor = this.checked;
-    });
-    document.getElementById('toggle-atu').addEventListener('change', function() {
-        const val = this.checked ? 1 : 0;
-        sendCommand('tuner', val);
-        radioState.tuner_status = val;
-    });
+    // DSP toggle buttons — click to toggle on/off
+    function wireDspBtn(id, field, cmd, onVal, offVal) {
+        const btn = document.getElementById(id);
+        if (!btn) return;
+        btn.addEventListener('click', function() {
+            const cur = radioState[field];
+            const next = !cur;
+            const val = next ? (onVal !== undefined ? onVal : true) : (offVal !== undefined ? offVal : false);
+            sendCommand(cmd, val);
+            radioState[field] = next ? (onVal !== undefined ? onVal : true) : (offVal !== undefined ? offVal : false);
+            btn.classList.toggle('on', next);
+        });
+    }
+    wireDspBtn('dsp-nr',  'noise_reduction', 'nr',    true, false);
+    wireDspBtn('dsp-nb',  'noise_blanker',   'nb',    true, false);
+    wireDspBtn('dsp-an',  'auto_notch',      'an',    true, false);
+    wireDspBtn('dsp-comp','compressor',       'comp',  true, false);
+    wireDspBtn('dsp-atu', 'tuner_status',     'tuner', 1,    0);
 
     // Scope span selector
     document.getElementById('scope-span-select').addEventListener('change', function() {
@@ -807,19 +1000,51 @@ function initUI() {
         renderScopeSettings();
     });
 
+    // Scope color theme selector
+    const themeSelect = document.getElementById('scope-theme-select');
+    themeSelect.value = scopeTheme;  // restore stored preference
+    themeSelect.addEventListener('change', function() {
+        scopeTheme = this.value;
+        setStored('scopeTheme', scopeTheme);
+    });
+
+    // Floor slider: adjusts the noise-floor cutoff for the waterfall
+    const floorSlider = document.getElementById('slider-floor');
+    const floorVal = document.getElementById('val-floor');
+    floorSlider.value = scopeFloor;
+    floorVal.textContent = scopeFloor;
+    floorSlider.addEventListener('input', function() {
+        floorVal.textContent = this.value;
+    });
+    floorSlider.addEventListener('change', function() {
+        scopeFloor = parseInt(this.value);
+        setStored('scopeFloor', scopeFloor);
+    });
+
+    // Ceil slider: adjusts the signal ceiling for the waterfall
+    const ceilSlider = document.getElementById('slider-ceil');
+    const ceilVal = document.getElementById('val-ceil');
+    ceilSlider.value = scopeCeil;
+    ceilVal.textContent = scopeCeil;
+    ceilSlider.addEventListener('input', function() {
+        ceilVal.textContent = this.value;
+    });
+    ceilSlider.addEventListener('change', function() {
+        scopeCeil = parseInt(this.value);
+        setStored('scopeCeil', scopeCeil);
+    });
+
     // NR/NB level sliders
-    document.getElementById('slider-nrlevel').addEventListener('input', function() {
-        setText('val-nrlevel', this.value);
-    });
-    document.getElementById('slider-nrlevel').addEventListener('change', function() {
-        sendCommand('nr_level', parseInt(this.value));
-    });
-    document.getElementById('slider-nblevel').addEventListener('input', function() {
-        setText('val-nblevel', this.value);
-    });
-    document.getElementById('slider-nblevel').addEventListener('change', function() {
-        sendCommand('nb_level', parseInt(this.value));
-    });
+    const nrSlider = document.getElementById('slider-nrlevel');
+    if (nrSlider) {
+        nrSlider.addEventListener('input', function() { setText('val-nrlevel', this.value); });
+        nrSlider.addEventListener('change', function() { sendCommand('nr_level', parseInt(this.value)); });
+    }
+    const nbSlider = document.getElementById('slider-nblevel');
+    if (nbSlider) {
+        nbSlider.addEventListener('input', function() { setText('val-nblevel', this.value); });
+        nbSlider.addEventListener('change', function() { sendCommand('nb_level', parseInt(this.value)); });
+    }
 
     // Sliders
     document.getElementById('slider-rfpower').addEventListener('input', function() {
@@ -832,9 +1057,11 @@ function initUI() {
     });
     document.getElementById('slider-afgain').addEventListener('input', function() {
         setText('val-afgain', this.value);
-        // Control browser audio volume with 1.5x boost (see _applyAfGainToAudioNode).
+        // Control browser audio volume with boost (see _applyAfGainToAudioNode).
         var raw = parseInt(this.value) / 255.0;
-        var g = Math.min(1.0, raw * (typeof AUDIO_GAIN_BOOST !== 'undefined' ? AUDIO_GAIN_BOOST : 1.5));
+        var boost = typeof AUDIO_GAIN_BOOST !== 'undefined' ? AUDIO_GAIN_BOOST : 5.0;
+        var maxGain = typeof AUDIO_GAIN_MAX !== 'undefined' ? AUDIO_GAIN_MAX : 5.0;
+        var g = Math.min(maxGain, raw * boost);
         if (typeof AudioRX_gain_node !== 'undefined' && AudioRX_gain_node) {
             AudioRX_gain_node.gain.value = g;
         }
@@ -843,14 +1070,15 @@ function initUI() {
     document.getElementById('slider-afgain').addEventListener('change', function() {
         // No-op: browser-side volume only, don't send CAT command
     });
-    document.getElementById('slider-micgain').addEventListener('input', function() {
-        setText('val-micgain', this.value);
-    });
-    document.getElementById('slider-micgain').addEventListener('change', function() {
-        const v = parseInt(this.value);
-        sendCommand('mic_gain', v);
-        radioState.mic_gain = v;
-    });
+    const micSlider = document.getElementById('slider-micgain');
+    if (micSlider) {
+        micSlider.addEventListener('input', function() { setText('val-micgain', this.value); });
+        micSlider.addEventListener('change', function() {
+            const v = parseInt(this.value);
+            sendCommand('mic_gain', v);
+            radioState.mic_gain = v;
+        });
+    }
 
     // VFO buttons
     document.getElementById('btn-vfoa').addEventListener('click', function() {
@@ -942,7 +1170,7 @@ function initUI() {
             };
             memChannels[idx] = ch;
             // Persist locally so channels survive page refresh
-            try { sessionStorage.setItem('ft710_memChannels', JSON.stringify(memChannels)); } catch(e) {}
+            try { localStorage.setItem('ft710_memChannels', JSON.stringify(memChannels)); } catch(e) {}
             sendMsg({
                 type: 'memSave',
                 channels: memChannels,
@@ -1003,8 +1231,9 @@ function handleMenuAction(action) {
             showMemoryManager();
             break;
         case 'settings':
-            // Scroll to settings
-            document.getElementById('settings-panel').scrollIntoView({behavior:'smooth'});
+            // Scroll to DSP panel
+            const dspPanel = document.querySelector('.dsp-panel');
+            if (dspPanel) dspPanel.scrollIntoView({behavior:'smooth'});
             break;
         case 'logout':
             fetch('/api/auth/logout', {method:'POST'}).then(function() {
@@ -1116,7 +1345,7 @@ function showMemoryManager() {
             const idx = parseInt(this.dataset.clear);
             memChannels[idx] = null;
             // Persist locally so channels survive page refresh
-            try { sessionStorage.setItem('ft710_memChannels', JSON.stringify(memChannels)); } catch(e) {}
+            try { localStorage.setItem('ft710_memChannels', JSON.stringify(memChannels)); } catch(e) {}
             sendMsg({type: 'memSave', channels: memChannels});
             renderMemoryChannels();
             overlay.remove();
@@ -1134,7 +1363,55 @@ function hapticFeedback(pattern) {
     }
 }
 
+// ── Frequency input (click-to-edit) ─────────────────────────────────
+function initFreqInput() {
+    const display = document.getElementById('freq-display');
+    const input = document.getElementById('freq-input');
+    if (!display || !input) return;
+
+    display.addEventListener('click', function() {
+        const freq = radioState.active_vfo === 'A' ? radioState.vfo_a_freq : radioState.vfo_b_freq;
+        // Show MHz with kHz precision
+        input.value = (freq / 1e6).toFixed(3);
+        display.querySelectorAll('span').forEach(s => s.style.display = 'none');
+        input.style.display = '';
+        input.focus();
+        input.select();
+    });
+
+    function hideInput() {
+        input.style.display = 'none';
+        display.querySelectorAll('span').forEach(s => s.style.display = '');
+    }
+
+    input.addEventListener('blur', function() { commitFreq(); });
+    input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); commitFreq(); input.blur(); }
+        if (e.key === 'Escape') { hideInput(); }
+    });
+
+    function commitFreq() {
+        const raw = input.value.trim();
+        if (!raw) { hideInput(); return; }
+        let hz = parseFloat(raw);
+        if (isNaN(hz)) { hideInput(); return; }
+        // If entered as kHz (< 100,000), convert to Hz
+        if (hz < 100000 && !raw.includes('.')) hz *= 1000;
+        // If entered as MHz (has decimal or < 1000), convert to Hz
+        if (hz < 1000) hz *= 1e6;
+        hz = Math.round(hz);
+        hz = Math.max(30000, Math.min(75000000, hz));
+        const field = radioState.active_vfo === 'A' ? 'freq' : 'vfo_b_freq';
+        sendCommand(field, hz);
+        if (radioState.active_vfo === 'A') radioState.vfo_a_freq = hz;
+        else radioState.vfo_b_freq = hz;
+        renderFrequency();
+        hideInput();
+    }
+}
+
 // ── Initialize ──────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', function() {
     initUI();
+    initFreqInput();
 });

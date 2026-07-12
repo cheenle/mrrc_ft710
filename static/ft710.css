@@ -79,6 +79,13 @@ a { color: var(--accent); text-decoration: none; }
 .freq-small { font-size: 18px; }
 .freq-sep { font-size: 24px; color: var(--text-secondary); margin: 0 1px; }
 .freq-sep-small { font-size: 18px; color: var(--text-muted); }
+.freq-input {
+    font-family: var(--font-mono); font-size: 22px; font-weight: 700;
+    color: var(--accent); background: transparent; border: none;
+    border-bottom: 2px solid var(--accent); outline: none;
+    width: 120px; text-align: center; padding: 0 4px;
+}
+.freq-input::placeholder { color: var(--text-muted); }
 .header-right { display: flex; align-items: center; gap: 8px; }
 .power-btn { font-size: 20px; padding: 4px 8px; border-radius: var(--radius-sm); }
 .power-btn.active { color: var(--accent); }
@@ -115,9 +122,13 @@ a { color: var(--accent); text-decoration: none; }
     background: var(--bg-secondary); border-radius: var(--radius-md);
     padding: 4px; margin-bottom: 4px; overflow: hidden;
 }
+#fft-canvas {
+    width: 100%; height: 33px; display: block;
+    border-radius: 4px 4px 0 0;
+}
 #waterfall-canvas {
     width: 100%; height: 67px; display: block;
-    border-radius: 4px;
+    border-radius: 0 0 4px 4px;
 }
 #freq-scale-canvas {
     width: 100%; height: 20px; display: block;
@@ -167,10 +178,10 @@ a { color: var(--accent); text-decoration: none; }
 .meter-unit { color: var(--text-muted); font-size: 10px; min-width: 14px; }
 
 /* ── Quick Controls ────────────────────────────────────────────── */
-.quick-controls { margin-bottom: 8px; }
-.control-row { display: flex; gap: 6px; }
+.quick-controls { margin-bottom: 4px; }
+.control-row { display: flex; gap: 4px; }
 .quick-btn {
-    flex: 1; padding: 8px 4px; font-size: 12px; font-weight: 600;
+    flex: 1; padding: 3px 2px; font-size: 11px; font-weight: 600;
     background: var(--bg-secondary); color: var(--text-primary);
     border: 1px solid var(--border); border-radius: var(--radius-sm);
     transition: background 0.15s, border-color 0.15s;
@@ -178,27 +189,26 @@ a { color: var(--accent); text-decoration: none; }
 .quick-btn:active { background: var(--accent-dim); border-color: var(--accent); }
 .quick-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
 
-/* ── Settings Toggles ──────────────────────────────────────────── */
-.settings-panel {
+/* ── DSP Toggle Panel ──────────────────────────────────────────── */
+.dsp-panel {
     background: var(--bg-secondary); border-radius: var(--radius-md);
-    padding: 10px; margin-bottom: 8px;
+    padding: 3px 6px; margin-bottom: 4px;
 }
-.setting-row { display: flex; align-items: center; justify-content: center; gap: 8px; }
-.setting-label { font-size: 11px; font-weight: 600; color: var(--text-secondary); min-width: 32px; text-align: center; }
-.toggle-switch { position: relative; display: inline-block; width: 40px; height: 22px; }
-.toggle-switch input { opacity: 0; width: 0; height: 0; }
-.toggle-track {
-    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-    background: var(--bg-card); border-radius: 11px; transition: 0.2s;
-    border: 1px solid var(--border);
+.dsp-row {
+    display: flex; gap: 3px;
 }
-.toggle-track::before {
-    content: ''; position: absolute; top: 2px; left: 2px;
-    width: 16px; height: 16px; border-radius: 50%;
-    background: var(--text-secondary); transition: 0.2s;
+.dsp-btn {
+    flex: 1; padding: 2px 0; font-size: 10px; font-weight: 600;
+    background: var(--bg-card); color: var(--text-muted);
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    transition: all 0.15s;
+    text-align: center;
 }
-.toggle-switch input:checked + .toggle-track { background: var(--accent-dim); border-color: var(--accent); }
-.toggle-switch input:checked + .toggle-track::before { background: var(--accent); transform: translateX(18px); }
+.dsp-btn:active { transform: scale(0.96); }
+.dsp-btn.on {
+    background: var(--accent-dim); color: var(--accent);
+    border-color: var(--accent);
+}
 
 /* ── Sliders ───────────────────────────────────────────────────── */
 .slider-section { margin-bottom: 8px; }
@@ -319,6 +329,45 @@ a { color: var(--accent); text-decoration: none; }
     opacity: 0; pointer-events: none; transition: opacity 0.25s;
 }
 .menu-overlay.open { opacity: 1; pointer-events: auto; }
+
+/* ── Menu Scope Settings ──────────────────────────────────────────── */
+.menu-scope-settings {
+    padding: 12px 0; margin-top: 12px;
+    border-top: 1px solid var(--border);
+}
+.menu-section-title {
+    font-size: 12px; font-weight: 700; color: var(--accent);
+    margin-bottom: 10px; padding: 0 12px;
+}
+.menu-scope-row {
+    display: flex; align-items: center; gap: 6px;
+    padding: 4px 12px; margin-bottom: 6px;
+}
+.menu-scope-label {
+    font-size: 11px; font-weight: 600; color: var(--text-secondary);
+    min-width: 32px; text-align: right;
+}
+.menu-slider-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 3px 12px; margin-bottom: 2px;
+}
+.menu-slider-label {
+    font-size: 11px; font-weight: 600; color: var(--text-secondary);
+    min-width: 42px;
+}
+.menu-slider {
+    flex: 1; height: 4px; border-radius: 2px;
+    background: var(--bg-card); outline: none;
+    -webkit-appearance: none; appearance: none;
+}
+.menu-slider::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 18px; height: 18px;
+    border-radius: 50%; background: var(--accent); cursor: pointer;
+}
+.menu-slider-val {
+    font-family: var(--font-mono); font-size: 12px; font-weight: 700;
+    min-width: 24px; text-align: right; color: var(--accent);
+}
 
 /* ── Scope Settings ───────────────────────────────────────────── */
 .scope-settings {
