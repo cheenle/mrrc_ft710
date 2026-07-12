@@ -1,6 +1,8 @@
 # FT-710 Web Control
 
-Web-based remote control server for the [Yaesu FT-710](https://www.yaesu.com/) HF/50MHz transceiver. Full browser-based control from any modern device — bidirectional audio (RX/TX) with Opus compression, real-time waterfall spectrum, S-meter, frequency/mode/filter control, multi-meter telemetry (PWR/ALC/SWR/Id/Vd), PTT management, and memory channels. Mobile-first responsive UI optimized for iPhone/iOS Safari.
+Web-based remote control server for the [Yaesu FT-710](https://www.yaesu.com/) HF/50MHz transceiver. Full browser-based control from any modern device — bidirectional audio (RX/TX) with Opus compression, real-time FFT spectrum plot + waterfall, S-meter, frequency/mode/filter control, multi-meter telemetry (PWR/ALC/SWR/Id/Vd), PTT management, and memory channels. Mobile-first responsive UI optimized for iPhone/iOS Safari.
+
+![FT-710 Web Control Screenshot](IMG_8888.PNG)
 
 ## Quick Start
 
@@ -175,8 +177,9 @@ FT710/
 
 | Feature | Implementation |
 |---------|---------------|
-| Waterfall | 850-point real-time spectrum, 120-row history, black→blue→green→yellow→red colormap |
-| Frequency scale | Auto-scaled labels below waterfall |
+| FFT Spectrum | 33px real-time amplitude-vs-frequency polyline, cyan (#06b6d4), EMA-smoothed (α=0.30, 2× boost), horizontal + vertical grid |
+| Waterfall | 850-point real-time spectrum, 120-row history, 6 colormaps (Jet/Hot/Cold/Thermal/Night/Gray) |
+| Frequency scale | Auto-scaled labels below waterfall + vertical grid lines on FFT plot |
 | S-Meter | Canvas horizontal bar, S1–S9+60 gradient, dBm digital readout |
 | Multi-meter | 5 real-time horizontal bar meters: PWR (W), ALC, SWR, Id (A), Vd (V) |
 
