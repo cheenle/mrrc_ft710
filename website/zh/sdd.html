@@ -27,7 +27,7 @@
         </a>
         <ul class="nav-links">
             <li><a href="#overview">总览</a></li>
-            <li><a href="#updates">V1.3 更新</a></li>
+            <li><a href="#updates">V1.4 更新</a></li>
             <li><a href="#chapters">章节目录</a></li>
             <li><a href="#decisions">AD 索引</a></li>
             <li><a href="https://github.com/cheenle/mrrc_ft710/tree/main/SDD" target="_blank" rel="noopener">GitHub</a></li>
@@ -43,7 +43,7 @@
     <div class="hero-content">
         <div class="hero-badge">
             <i class="fas fa-book"></i>
-            <span>SDD V1.3 · 2026-07-08</span>
+            <span>SDD V1.4 · 2026-07-12</span>
         </div>
         <h1 class="hero-title">MRRC FT-710<br><span class="gradient">软件设计说明书</span></h1>
         <p class="hero-subtitle">
@@ -74,8 +74,8 @@
             </thead>
             <tbody>
             <tr><td>文档 ID</td><td>SDD-MRRC-FT710-2026-001</td></tr>
-            <tr><td>版本</td><td>V1.3</td></tr>
-            <tr><td>基线日期</td><td>2026-07-08</td></tr>
+            <tr><td>版本</td><td>V1.4</td></tr>
+            <tr><td>基线日期</td><td>2026-07-12</td></tr>
             <tr><td>后端运行时</td><td>Python 3.12+, FastAPI, Uvicorn, PyAudio, NumPy</td></tr>
             <tr><td>前端技术</td><td>HTML5, CSS3, 原生 JavaScript, Web Audio API</td></tr>
             <tr><td>核心接口</td><td>4 路 WebSocket + 串口 CAT + FT4222 SPI + USB 音频</td></tr>
@@ -88,28 +88,28 @@
     <div class="container">
         <div class="section-header">
             <span class="section-label">最新更新</span>
-            <h2 class="section-title">V1.3 变更重点</h2>
+            <h2 class="section-title">V1.4 变更重点</h2>
         </div>
         <div class="features-grid">
             <div class="feature-card">
-                <div class="icon"><i class="fas fa-bolt"></i></div>
-                <h3>高优先级 CAT 指令通道</h3>
-                <p>新增 `send_priority_set_command()` 与 `_cancel_polls`，PTT/TUNE 指令可抢占轮询查询，降低控制延迟。</p>
+                <div class="icon"><i class="fas fa-wave-square"></i></div>
+                <h3>FFT 频谱折线图</h3>
+                <p>瀑布图上方新增 33px 实时 FFT 幅度-频率折线图。青色 (#06b6d4) 折线 + 微辉光，EMA 平滑 (α=0.30)，2× 幅度增益，水平 + 垂直网格线。共用 Floor/Ceil 控件。</p>
             </div>
             <div class="feature-card">
-                <div class="icon"><i class="fas fa-satellite-dish"></i></div>
-                <h3>TUNE 与天调联动</h3>
-                <p>`tune=true` 时执行 `TX2` 后 `AC003`；`tune=false` 时执行 `AC000` 后退出 TX，状态更一致。</p>
+                <div class="icon"><i class="fas fa-chart-line"></i></div>
+                <h3>EMA 频谱平滑</h3>
+                <p>逐点指数移动平均缓冲区 (Float32Array, 850 点) — 每帧 30% 新数据，峰值稳定可读且不掩盖快速变化。</p>
             </div>
             <div class="feature-card">
                 <div class="icon"><i class="fas fa-gauge-high"></i></div>
-                <h3>遥测状态模型扩展</h3>
-                <p>新增 `MS`/`AO`/`RG0` 字段，并纳入 `RI0` 状态（高驻波、录放状态、收发状态、扫描、静噪开闭）。</p>
+                <h3>VFO 红线优化</h3>
+                <p>瀑布图 VFO 标记线宽减至 0.2px，去除频率文字标注（仅保留在频率刻度上），减少视觉干扰。</p>
             </div>
             <div class="feature-card">
-                <div class="icon"><i class="fas fa-arrows-rotate"></i></div>
-                <h3>7 任务轮询调度</h3>
-                <p>轮询拆分为 IF、VFO、TX 状态、TX 表头、设置、慢速遥测、连接看门狗，更易维护与抢占。</p>
+                <div class="icon"><i class="fas fa-globe"></i></div>
+                <h3>文档与官网更新</h3>
+                <p>新增中文介绍文章（含非技术用户安装指南）、截图加入 README 和产品页面、FFT 功能卡片、FAQ 章节。</p>
             </div>
         </div>
     </div>

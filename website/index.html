@@ -51,7 +51,7 @@
     <div class="hero-content">
         <div class="hero-badge">
             <i class="fas fa-check-circle"></i>
-            <span>v1.0 · Production Ready</span>
+            <span>v1.4 · Production Ready</span>
         </div>
         <h1 class="hero-title">
             One USB Cable<br>
@@ -59,7 +59,7 @@
         </h1>
         <p class="hero-subtitle">
             Software SCU-LAN10 replacement for the Yaesu FT-710 HF/50MHz transceiver.
-            Real-time waterfall spectrum via FT4222 SPI, bidirectional Opus 48kHz audio,
+            Real-time FFT spectrum plot + waterfall via FT4222 SPI, bidirectional Opus 48kHz audio,
             full CAT control over 4 WebSocket channels — no $200 dongle required.
         </p>
         <div class="hero-actions">
@@ -70,6 +70,18 @@
                 <i class="fas fa-arrow-down"></i> Explore Features
             </a>
         </div>
+    </div>
+</section>
+
+<!-- Screenshot -->
+<section class="section" style="background: var(--bg-primary); padding: 2rem 0;">
+    <div class="container" style="text-align:center">
+        <img src="../IMG_8888.PNG" alt="FT-710 Web Control Screenshot"
+             style="max-width:360px; width:100%; border-radius:14px; box-shadow:0 8px 32px rgba(0,0,0,0.5);"
+             loading="lazy">
+        <p style="color:var(--text-muted); font-size:0.8rem; margin-top:0.75rem;">
+            FT-710 Web Control — FFT spectrum plot + waterfall on iPhone
+        </p>
     </div>
 </section>
 
@@ -91,6 +103,17 @@
                     <li>FT4222 SPI direct read (libft4222 + libftd2xx)</li>
                     <li>4096-byte scope blocks with 0xFF01EE01 sync</li>
                     <li>~21 fps real spectrum, ~30 fps S-meter fallback</li>
+                </ul>
+            </div>
+
+            <div class="feature-card animate">
+                <div class="icon"><i class="fas fa-wave-square"></i></div>
+                <h3>FFT Spectrum Line Plot</h3>
+                <p>Real-time spectrum amplitude vs frequency polyline above the waterfall. Cyan (#06b6d4) line with EMA smoothing (α=0.30), 2× amplitude boost for peak visibility, and horizontal + vertical grid lines aligned with frequency scale.</p>
+                <ul>
+                    <li>33px polyline with subtle glow + grid reference</li>
+                    <li>EMA-smoothed (30% new data per frame) — stable peaks</li>
+                    <li>Shared Floor/Ceil controls with waterfall</li>
                 </ul>
             </div>
 
@@ -260,8 +283,8 @@
     <div class="container">
         <div class="section-header">
             <span class="section-label">Spectrum</span>
-            <h2 class="section-title">Dual-Mode Real-Time Waterfall</h2>
-            <p class="section-subtitle">FT4222 SPI real spectrum from the FT-710 DSP chip, with automatic S-meter synthetic fallback.</p>
+            <h2 class="section-title">FFT Plot + Dual-Mode Waterfall</h2>
+            <p class="section-subtitle">FT4222 SPI real spectrum from the FT-710 DSP chip — FFT amplitude line chart above 120-line waterfall, with automatic S-meter synthetic fallback.</p>
         </div>
 
         <div class="perf-grid">
@@ -411,7 +434,7 @@
                 <p>
                     Software SCU-LAN10 Replacement<br>
                     One USB Cable, Any Device<br>
-                    v1.0 · GPLv3 License
+                    v1.4 · GPLv3 License
                 </p>
             </div>
             <div class="footer-section">

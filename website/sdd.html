@@ -43,7 +43,7 @@
     <div class="hero-content">
         <div class="hero-badge">
             <i class="fas fa-book"></i>
-            <span>SDD V1.3 · 2026-07-08</span>
+            <span>SDD V1.4 · 2026-07-12</span>
         </div>
         <h1 class="hero-title">MRRC FT-710<br><span class="gradient">Software Design Description</span></h1>
         <p class="hero-subtitle">
@@ -74,8 +74,8 @@
             </thead>
             <tbody>
             <tr><td>Document ID</td><td>SDD-MRRC-FT710-2026-001</td></tr>
-            <tr><td>Version</td><td>V1.3</td></tr>
-            <tr><td>Baseline Date</td><td>2026-07-08</td></tr>
+            <tr><td>Version</td><td>V1.4</td></tr>
+            <tr><td>Baseline Date</td><td>2026-07-12</td></tr>
             <tr><td>Runtime</td><td>Python 3.12+, FastAPI, Uvicorn, PyAudio, NumPy</td></tr>
             <tr><td>Frontend</td><td>HTML5, CSS3, vanilla JavaScript, Web Audio API</td></tr>
             <tr><td>Core Interfaces</td><td>4 WebSockets + Serial CAT + FT4222 SPI + USB Audio</td></tr>
@@ -88,28 +88,28 @@
     <div class="container">
         <div class="section-header">
             <span class="section-label">Latest Update</span>
-            <h2 class="section-title">What Changed In V1.3</h2>
+            <h2 class="section-title">What Changed In V1.4</h2>
         </div>
         <div class="features-grid">
             <div class="feature-card">
-                <div class="icon"><i class="fas fa-bolt"></i></div>
-                <h3>Priority CAT Command Path</h3>
-                <p>`send_priority_set_command()` + `_cancel_polls` allow PTT/TUNE commands to preempt poll queries and reduce control latency.</p>
+                <div class="icon"><i class="fas fa-wave-square"></i></div>
+                <h3>FFT Spectrum Line Plot</h3>
+                <p>New real-time FFT amplitude-vs-frequency polyline above the waterfall. Cyan (#06b6d4) line with EMA smoothing (α=0.30), 2× amplitude boost, horizontal + vertical grid lines. Shared Floor/Ceil controls.</p>
             </div>
             <div class="feature-card">
-                <div class="icon"><i class="fas fa-satellite-dish"></i></div>
-                <h3>Tune + Tuner Sequence</h3>
-                <p>Tune flow now uses `TX2` with `AC003` (start tuning) and exits with `AC000` + `TX0` for clean tuner state transitions.</p>
+                <div class="icon"><i class="fas fa-chart-line"></i></div>
+                <h3>EMA Spectrum Smoothing</h3>
+                <p>Per-bin exponential moving average buffer (Float32Array, 850 points) — 30% new data per frame gives stable, readable peaks without hiding fast transients.</p>
             </div>
             <div class="feature-card">
                 <div class="icon"><i class="fas fa-gauge-high"></i></div>
-                <h3>Expanded Telemetry Model</h3>
-                <p>Added `MS`/`AO`/`RG0` fields and `RI0` status mapping (Hi-SWR, recorder, RX/TX state, scan, squelch-open).</p>
+                <h3>VFO Line Refinements</h3>
+                <p>Waterfall VFO marker thinned to 0.2px for minimal visual obstruction. Frequency label removed from waterfall (now only on scale canvas).</p>
             </div>
             <div class="feature-card">
-                <div class="icon"><i class="fas fa-arrows-rotate"></i></div>
-                <h3>7-Task Poll Scheduler</h3>
-                <p>Polling now explicitly separates IF, VFO, TX status, TX meters, settings, slow telemetry, and connection watchdog tasks.</p>
+                <div class="icon"><i class="fas fa-globe"></i></div>
+                <h3>Documentation + Website</h3>
+                <p>New Chinese introduction article, project screenshot on README and website, FFT feature cards. install.sh added --dev flag for dev dependencies.</p>
             </div>
         </div>
     </div>

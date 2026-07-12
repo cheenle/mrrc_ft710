@@ -51,7 +51,7 @@
     <div class="hero-content">
         <div class="hero-badge">
             <i class="fas fa-check-circle"></i>
-            <span>v1.0 · 正式发布</span>
+            <span>v1.4 · 正式发布</span>
         </div>
         <h1 class="hero-title">
             一根 USB 线<br>
@@ -59,7 +59,7 @@
         </h1>
         <p class="hero-subtitle">
             八重洲 FT-710 HF/50MHz 收发信机的软件 SCU-LAN10 替代方案。
-            通过 FT4222 SPI 获取真实实时频谱瀑布图，双向 Opus 48kHz 音频，
+            FFT 频谱折线图 + 瀑布图双显示，双向 Opus 48kHz 音频，
             4 条 WebSocket 通道实现完整 CAT 控制 — 无需 $200 外置硬件。
         </p>
         <div class="hero-actions">
@@ -70,6 +70,18 @@
                 <i class="fas fa-arrow-down"></i> 了解功能
             </a>
         </div>
+    </div>
+</section>
+
+<!-- Screenshot -->
+<section class="section" style="background: var(--bg-primary); padding: 2rem 0;">
+    <div class="container" style="text-align:center">
+        <img src="../../IMG_8888.PNG" alt="FT-710 Web Control 截图"
+             style="max-width:360px; width:100%; border-radius:14px; box-shadow:0 8px 32px rgba(0,0,0,0.5);"
+             loading="lazy">
+        <p style="color:var(--text-muted); font-size:0.8rem; margin-top:0.75rem;">
+            FT-710 Web Control — FFT 频谱图 + 瀑布图 iPhone 实机截图
+        </p>
     </div>
 </section>
 
@@ -91,6 +103,17 @@
                     <li>FT4222 SPI 直读 (libft4222 + libftd2xx)</li>
                     <li>4096 字节数据块，0xFF01EE01 同步标记</li>
                     <li>~21fps 真实频谱，~30fps S-meter 回退</li>
+                </ul>
+            </div>
+
+            <div class="feature-card animate">
+                <div class="icon"><i class="fas fa-wave-square"></i></div>
+                <h3>FFT 频谱折线图</h3>
+                <p>瀑布图上方实时频谱幅度-频率折线图。青色 (#06b6d4) 折线，EMA 平滑 (α=0.30)，2× 幅度增益突出信号峰，水平 + 垂直网格线与频率刻度对齐。</p>
+                <ul>
+                    <li>33px 折线 + 微辉光 + 网格参考线</li>
+                    <li>EMA 平滑 (每帧 30% 新数据) — 稳定可读的峰值</li>
+                    <li>与瀑布图共用 Floor/Ceil 控件</li>
                 </ul>
             </div>
 
@@ -260,8 +283,8 @@
     <div class="container">
         <div class="section-header">
             <span class="section-label">频谱</span>
-            <h2 class="section-title">双模式实时瀑布图</h2>
-            <p class="section-subtitle">来自 FT-710 DSP 芯片的 FT4222 SPI 真实频谱，自动 S-meter 合成回退。</p>
+            <h2 class="section-title">FFT 折线图 + 双模式瀑布图</h2>
+            <p class="section-subtitle">来自 FT-710 DSP 芯片的 FT4222 SPI 真实频谱 — FFT 幅度折线图叠加 120 行瀑布图，自动 S-meter 合成回退。</p>
         </div>
 
         <div class="perf-grid">
@@ -411,7 +434,7 @@
                 <p>
                     软件 SCU-LAN10 替代方案<br>
                     一根 USB 线，任意设备<br>
-                    v1.0 · GPLv3 协议
+                    v1.4 · GPLv3 协议
                 </p>
             </div>
             <div class="footer-section">
