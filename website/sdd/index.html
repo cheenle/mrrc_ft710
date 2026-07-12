@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SDD Overview — MRRC FT-710 SDD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../css/octen.css?v=4">
+    <link rel="stylesheet" href="../css/sunsdrmobile.css?v=1">
+    <link rel="stylesheet" href="../css/ft710.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7442510147240155" crossorigin="anonymous"></script>
+    <style>
+        .sdd-layout { display: flex; max-width: 1400px; margin: 0 auto; padding: 0 2rem; gap: 2rem; }
+        .sdd-sidebar {
+            width: 260px; flex-shrink: 0; position: sticky; top: 80px;
+            max-height: calc(100vh - 100px); overflow-y: auto;
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 0.75rem; padding: 1.25rem 0;
+        }
+        .sdd-sidebar h4 {
+            font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
+            color: var(--accent); padding: 0 1.25rem; margin-bottom: 0.75rem;
+        }
+        .sdd-sidebar ul { list-style: none; }
+        .sdd-sidebar a {
+            display: block; padding: 0.375rem 1.25rem; font-size: 0.8125rem;
+            color: var(--text-secondary); transition: all 0.15s;
+            border-left: 2px solid transparent;
+        }
+        .sdd-sidebar a:hover { color: var(--text-primary); border-left-color: var(--border-hover); }
+        .sdd-sidebar a.active {
+            color: var(--accent); background: var(--accent-glow);
+            border-left-color: var(--accent); font-weight: 500;
+        }
+        .sdd-content { flex: 1; min-width: 0; padding-bottom: 4rem; }
+        .sdd-content h1 { font-size: 2rem; font-weight: 700; margin: 2rem 0 0.5rem; letter-spacing: -0.02em; }
+        .sdd-content h2 { font-size: 1.375rem; font-weight: 600; margin: 2rem 0 0.75rem; color: var(--accent); }
+        .sdd-content h3 { font-size: 1.125rem; font-weight: 600; margin: 1.5rem 0 0.5rem; }
+        .sdd-content h4 { font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.5rem; }
+        .sdd-content p, .sdd-content li { color: var(--text-secondary); line-height: 1.7; margin-bottom: 0.75rem; }
+        .sdd-content table {
+            width: 100%; border-collapse: collapse; margin: 1.25rem 0;
+            font-size: 0.875rem;
+        }
+        .sdd-content th, .sdd-content td {
+            padding: 0.625rem 0.875rem; text-align: left;
+            border: 1px solid var(--border);
+        }
+        .sdd-content th { background: var(--bg-tertiary); color: var(--text-primary); font-weight: 600; }
+        .sdd-content td { color: var(--text-secondary); }
+        .sdd-content code {
+            font-family: var(--font-mono); font-size: 0.85em;
+            background: var(--bg-tertiary); padding: 1px 6px; border-radius: 3px;
+            color: var(--accent);
+        }
+        .sdd-content pre {
+            background: var(--bg-tertiary); border: 1px solid var(--border);
+            border-radius: 0.5rem; padding: 1rem; overflow-x: auto;
+            margin: 1rem 0; font-size: 0.8125rem; line-height: 1.6;
+        }
+        .sdd-content pre code {
+            background: none; padding: 0; color: var(--text-secondary);
+        }
+        .sdd-content blockquote {
+            border-left: 3px solid var(--accent); padding: 0.5rem 1rem;
+            margin: 1rem 0; color: var(--text-muted); font-size: 0.9375rem;
+            background: var(--bg-tertiary); border-radius: 0 0.375rem 0.375rem 0;
+        }
+        .sdd-content ul, .sdd-content ol { margin-left: 1.5rem; margin-bottom: 1rem; }
+        .sdd-content hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+        .sdd-content a { color: var(--accent); }
+        .sdd-content img { max-width: 100%; border-radius: 0.5rem; margin: 1rem 0; }
+        @media (max-width: 900px) {
+            .sdd-layout { flex-direction: column; padding: 0 1rem; }
+            .sdd-sidebar { width: 100%; position: static; max-height: none; }
+        }
+    </style>
+</head>
+<body data-site="mrrc_ft710">
+
+<nav class="navbar">
+    <div class="container navbar-content">
+        <a href="../index.html" class="logo">
+            <span class="logo-icon"><i class="fas fa-microchip"></i></span>
+            <span>MRRC FT<span style="color: var(--accent);">‑710</span></span>
+        </a>
+        <ul class="nav-links">
+            <li><a href="../index.html#features">Features</a></li>
+            <li><a href="../index.html#architecture">Architecture</a></li>
+            <li><a href="index.html">SDD Docs</a></li>
+            <li><a href="https://github.com/cheenle/mrrc_ft710" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+        </ul>
+        <div class="nav-actions">
+            <a href="../zh/index.html" class="lang-btn">中文</a>
+            <button class="mobile-menu-toggle" onclick="toggleMobileMenu()"><i class="fas fa-bars"></i></button>
+        </div>
+    </div>
+</nav>
+
+<div class="sdd-layout">
+    <aside class="sdd-sidebar">
+        <h4>SDD Chapters</h4>
+        <ul>
+            <li><a href="index.html" class="active">Overview</a></li>
+            <li><a href="01-executive-summary.html">1. Executive Summary</a></li>
+            <li><a href="02-business-direction.html">2. Business Direction</a></li>
+            <li><a href="03-project-definition.html">3. Project Definition</a></li>
+            <li><a href="04-system-context.html">4. System Context</a></li>
+            <li><a href="05-non-functional-requirements.html">5. NFRs</a></li>
+            <li><a href="06-use-case-model.html">6. Use Cases</a></li>
+            <li><a href="07-subject-area-model.html">7. Subject Model</a></li>
+            <li><a href="08-architecture-decisions.html">8. Architecture Decisions</a></li>
+            <li><a href="09-architecture-overview.html">9. Architecture Overview</a></li>
+            <li><a href="10-service-model.html">10. Service Model</a></li>
+            <li><a href="11-component-model.html">11. Component Model</a></li>
+            <li><a href="12-operational-model.html">12. Operational Model</a></li>
+            <li><a href="13-feasibility-assessment.html">13. Feasibility</a></li>
+            <li><a href="14-version-history.html">14. Version History</a></li>
+            <li><a href="15-ptt-safety-architecture.html">15. PTT Safety</a></li>
+        </ul>
+    </aside>
+    <main class="sdd-content">
+<h1 id="mrrc-ft-710-sdd-software-design-description">MRRC FT-710 SDD — Software Design Description</h1>
+<blockquote>
+<p>Yaesu FT-710 Web Remote Control<br />
+IBM Team Solution Design (TeamSD) v2.3.2 aligned documentation set</p>
+</blockquote>
+<h2 id="purpose">Purpose</h2>
+<p>This SDD is the canonical design record for the <code>mrrc_ft710</code> codebase — a Python FastAPI server that bridges a browser to a Yaesu FT-710 HF/50MHz transceiver via serial CAT protocol. It captures requirements, architecture, design decisions, component boundaries, operational model, capability inventory, known gaps, and evolution history.</p>
+<p>Runtime facts are derived from <code>server.py</code>, <code>cat_controller.py</code>, <code>audio_handler.py</code>, <code>radio_state.py</code>, <code>poll_scheduler.py</code>, <code>scope_handler.py</code>, <code>scope_pipe.py</code>, <code>config.py</code>, <code>opus_rx.py</code>, <code>static/index.html</code>, <code>static/ft710_main.js</code>, <code>static/ft710_ui.js</code>, and <code>static/modules/*</code>.</p>
+<h2 id="document-index">Document Index</h2>
+<table>
+<colgroup>
+<col style="width: 10%" />
+<col style="width: 32%" />
+<col style="width: 35%" />
+<col style="width: 21%" />
+</colgroup>
+<thead>
+<tr>
+<th>#</th>
+<th>Chapter</th>
+<th>ART Code</th>
+<th>File</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Executive Summary</td>
+<td>-</td>
+<td><a href="01-executive-summary.md">01-executive-summary.md</a></td>
+</tr>
+<tr>
+<td>2</td>
+<td>Business Direction</td>
+<td>BUS 411</td>
+<td><a href="02-business-direction.md">02-business-direction.md</a></td>
+</tr>
+<tr>
+<td>3</td>
+<td>Project Definition</td>
+<td>ENG 343</td>
+<td><a href="03-project-definition.md">03-project-definition.md</a></td>
+</tr>
+<tr>
+<td>4</td>
+<td>System Context</td>
+<td>APP 011</td>
+<td><a href="04-system-context.md">04-system-context.md</a></td>
+</tr>
+<tr>
+<td>5</td>
+<td>Non-Functional Requirements</td>
+<td>ART 0507</td>
+<td><a href="05-non-functional-requirements.md">05-non-functional-requirements.md</a></td>
+</tr>
+<tr>
+<td>6</td>
+<td>Use Case Model</td>
+<td>ART 0508</td>
+<td><a href="06-use-case-model.md">06-use-case-model.md</a></td>
+</tr>
+<tr>
+<td>7</td>
+<td>Subject Area Model</td>
+<td>APP 408</td>
+<td><a href="07-subject-area-model.md">07-subject-area-model.md</a></td>
+</tr>
+<tr>
+<td>8</td>
+<td>Architecture Decisions</td>
+<td>ART 0513</td>
+<td><a href="08-architecture-decisions.md">08-architecture-decisions.md</a></td>
+</tr>
+<tr>
+<td>9</td>
+<td>Architecture Overview</td>
+<td>ART 0512</td>
+<td><a href="09-architecture-overview.md">09-architecture-overview.md</a></td>
+</tr>
+<tr>
+<td>10</td>
+<td>Service Model</td>
+<td>ART 0582</td>
+<td><a href="10-service-model.md">10-service-model.md</a></td>
+</tr>
+<tr>
+<td>11</td>
+<td>Component Model</td>
+<td>ART 0515</td>
+<td><a href="11-component-model.md">11-component-model.md</a></td>
+</tr>
+<tr>
+<td>12</td>
+<td>Operational Model</td>
+<td>ART 0522</td>
+<td><a href="12-operational-model.md">12-operational-model.md</a></td>
+</tr>
+<tr>
+<td>13</td>
+<td>Feasibility Assessment</td>
+<td>ART 0530</td>
+<td><a href="13-feasibility-assessment.md">13-feasibility-assessment.md</a></td>
+</tr>
+<tr>
+<td>14</td>
+<td>Version History</td>
+<td>-</td>
+<td><a href="14-version-history.md">14-version-history.md</a></td>
+</tr>
+<tr>
+<td>15</td>
+<td>PTT Safety Architecture</td>
+<td>ART 0535</td>
+<td><a href="15-ptt-safety-architecture.md">15-ptt-safety-architecture.md</a></td>
+</tr>
+</tbody>
+</table>
+<h2 id="quick-facts">Quick Facts</h2>
+<table>
+<colgroup>
+<col style="width: 61%" />
+<col style="width: 38%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Document ID</td>
+<td>SDD-MRRC-FT710-2026-001</td>
+</tr>
+<tr>
+<td>SDD Version</td>
+<td>V1.3</td>
+</tr>
+<tr>
+<td>Baseline Date</td>
+<td>2026-07-08</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Production release (documentation synchronized with runtime)</td>
+</tr>
+<tr>
+<td>Project</td>
+<td>MRRC FT-710</td>
+</tr>
+<tr>
+<td>Primary Radio</td>
+<td>Yaesu FT-710 (HF/50MHz Transceiver)</td>
+</tr>
+<tr>
+<td>Runtime</td>
+<td>Python 3.12+, FastAPI, Uvicorn, NumPy, PyAudio</td>
+</tr>
+<tr>
+<td>Frontend</td>
+<td>HTML5, CSS3, vanilla JavaScript, Web Audio API</td>
+</tr>
+<tr>
+<td>Transport</td>
+<td>HTTP/WS for browser, Serial CAT for radio, FT4222 SPI for scope</td>
+</tr>
+<tr>
+<td>Default Entry</td>
+<td><code>http://localhost:8888</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="system-at-a-glance">System at a Glance</h2>
+<pre class="text"><code>Browser (iPhone / Desktop / Tablet)
+  | HTTP + WebSocket: /WSradio /WSaudioRX /WSaudioTX /WSspectrum
+  v
+FastAPI/Uvicorn MRRC FT-710 Server (server.py)
+  | Serial CAT (USB Enhanced COM Port, 38400 baud) → Yaesu FT-710
+  | FT4222 SPI (scope_pipe subprocess) → real spectrum data
+  | PyAudio (USB Audio device) → RX/TX audio capture/playback
+  | Opus codec (libopus) → compressed audio transport
+  v
+Yaesu FT-710 Radio</code></pre>
+<h2 id="capability-summary">Capability Summary</h2>
+<table>
+<colgroup>
+<col style="width: 28%" />
+<col style="width: 38%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>Area</th>
+<th>Status</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Mobile UI</td>
+<td>Implemented</td>
+<td><code>static/index.html</code>, <code>ft710.css</code>, <code>ft710_main.js</code>, <code>ft710_ui.js</code></td>
+</tr>
+<tr>
+<td>Radio control</td>
+<td>Implemented</td>
+<td>Full CAT command set: frequency, mode, filter, PTT, gains, etc.</td>
+</tr>
+<tr>
+<td>Spectrum waterfall</td>
+<td>Implemented</td>
+<td>FT4222 SPI real + S-meter fallback dual-mode</td>
+</tr>
+<tr>
+<td>RX audio</td>
+<td>Implemented</td>
+<td>PyAudio capture → Opus/PCM → /WSaudioRX → browser playback</td>
+</tr>
+<tr>
+<td>TX audio</td>
+<td>Implemented</td>
+<td>Browser mic → /WSaudioTX → Opus decode → PyAudio → radio</td>
+</tr>
+<tr>
+<td>S-meter + Multi-meter</td>
+<td>Implemented</td>
+<td>PWR, ALC, SWR, Id, Vd from CAT RM3-RM8 polling</td>
+</tr>
+<tr>
+<td>Radio telemetry (RI)</td>
+<td>Implemented</td>
+<td>Hi-SWR, recorder, RX/TX, tuner, scan, squelch-open status from <code>RI0;</code></td>
+</tr>
+<tr>
+<td>Meter display + AMC</td>
+<td>Implemented</td>
+<td><code>MS</code>/<code>AO</code> commands exposed in state and control path</td>
+</tr>
+<tr>
+<td>Memory channels</td>
+<td>Implemented</td>
+<td><code>/api/mem_channels</code> GET/POST with JSON persistence</td>
+</tr>
+<tr>
+<td>Session authentication</td>
+<td>Implemented</td>
+<td>Shared-password login; <code>_auth_tokens</code> + <code>ft710_auth</code> cookie; all WS gated</td>
+</tr>
+<tr>
+<td>PTT safety</td>
+<td>Implemented</td>
+<td>Touch-and-hold, triple TX0 verify, dead-man switch, unload beacon</td>
+</tr>
+<tr>
+<td>Scope visualization</td>
+<td>Implemented</td>
+<td>850-point FFT waterfall, frequency scale, S-meter bar</td>
+</tr>
+</tbody>
+</table>
+    </main>
+</div>
+
+<footer class="footer" style="margin-top: 0;">
+    <div class="container">
+        <div class="footer-bottom">
+            <p>&copy; 2026 MRRC FT-710 Project · SDD V1.4 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
+        </div>
+    </div>
+</footer>
+
+<script>
+function toggleMobileMenu() {
+    document.querySelector('.nav-links').classList.toggle('active');
+}
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+    a.addEventListener('click', function(e) {
+        e.preventDefault();
+        const t = document.querySelector(this.getAttribute('href'));
+        if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+});
+const nav = document.querySelector('.navbar');
+window.addEventListener('scroll', () => {
+    nav.style.background = window.scrollY > 50 ? 'rgba(0,0,0,0.95)' : 'rgba(0,0,0,0.8)';
+});
+</script>
+    <script src="../js/global-nav.js?v=2" defer data-gn="1"></script>
+</body>
+</html>

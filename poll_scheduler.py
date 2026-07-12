@@ -389,7 +389,9 @@ class PollScheduler:
                     "(is_transmitting=%s, connected=%s)",
                     failures, self.state.is_transmitting, self.cat.connected,
                 )
-            await asyncio.sleep(POLL_TX_METERS_INTERVAL * self._idle_multiplier)
+            # Fast 0.1s refresh during TX, normal 0.5s during RX
+            interval = 0.1 if self.state.is_transmitting else POLL_TX_METERS_INTERVAL
+            await asyncio.sleep(interval * self._idle_multiplier)
 
     # ── Tier 3: Settings (filter, gains, preamp, att, NR, NB, AN, tuner) ──
 

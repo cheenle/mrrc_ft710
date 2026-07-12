@@ -36,6 +36,9 @@ class RxPlayerProcessor extends AudioWorkletProcessor {
     this.priming = true;      // gate closed, accumulating
     this.gateMs = this.prebufferMs;  // active gate threshold (prebuffer vs recovery)
 
+    this._statsCounter = 0;
+    this._statsInterval = Math.round(sampleRate * 2 / 128); // report every ~2s
+
     this.port.onmessage = (event) => {
       const data = event.data;
       if (data && data.type === 'push' && data.payload instanceof Float32Array) {
@@ -115,6 +118,13 @@ class RxPlayerProcessor extends AudioWorkletProcessor {
       this.underruns++;
       this.priming = true;
       this.gateMs = this.recoveryMs;
+    }
+
+    this._statsCounter++;
+    if (this._statsCounter >= this._statsInterval) {
+      this._statsCounter = 0;
+      var bufferMs = (this.queuedSamples / sampleRate) * 1000;
+      this.port.postMessage({type: 'stats', bufferMs: Math.round(bufferMs)});
     }
 
     return true;

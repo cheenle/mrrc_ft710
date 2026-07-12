@@ -777,7 +777,7 @@ FT710_WEB_HOST=0.0.0.0
 FT710_WEB_PASSWORD=$password
 
 # ── Scope ───────────────────────────────────────────────────────────
-FT710_FT4222_CLK_DIV=5
+FT710_FT4222_CLK_DIV=6
 $( [ -d "$SCRIPT_DIR/lib" ] && echo "#FT710_FTDI_LIB_DIR=$SCRIPT_DIR/lib" || echo "#FT710_FTDI_LIB_DIR=")
 
 # ── Audio ───────────────────────────────────────────────────────────

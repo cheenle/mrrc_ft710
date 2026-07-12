@@ -3,7 +3,7 @@
 set -e
 
 # Configuration
-LOCAL_DIR="/Users/cheenle/HAM/wfview/mrrc_ft710/website"
+LOCAL_DIR="/Users/cheenle/HAM/mrrc_ft710/website"
 REMOTE_HOST="www.vlsc.net"
 REMOTE_USER="cheenle"
 REMOTE_WEBROOT="/var/www/vlsc.net/mrrc_ft710"
@@ -32,7 +32,7 @@ echo ""
 cd "$LOCAL_DIR"
 
 echo "Checking required files..."
-REQUIRED_FILES=("index.html" "zh/index.html" "css/octen.css" "css/ft710.css")
+REQUIRED_FILES=("index.html" "zh/index.html" "css/octen.css" "css/ft710.css" "sdd.html" "zh/sdd.html" "sdd/index.html" "sdd/01-executive-summary.html" "sdd/15-ptt-safety-architecture.html" "images/IMG_8888.PNG")
 for file in "${REQUIRED_FILES[@]}"; do
     if [ ! -f "$file" ]; then
         echo -e "${RED}Error: Required file missing: $file${NC}"

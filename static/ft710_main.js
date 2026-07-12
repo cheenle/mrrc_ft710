@@ -69,6 +69,8 @@ function connectWebSocket() {
         } catch(e) {
             console.debug('WS message error:', e);
         }
+        if (!window.__netBytes) window.__netBytes = { rxCtrl: 0, rxSpec: 0, rxAudio: 0, txCtrl: 0, txAudio: 0 };
+        window.__netBytes.rxCtrl += event.data.length;
     };
 
     wsRadio.onclose = function(event) {
@@ -95,6 +97,8 @@ function connectSpectrumSocket() {
     wsSpectrum.binaryType = 'arraybuffer';
     wsSpectrum.onmessage = function(event) {
         if (event.data instanceof ArrayBuffer) {
+            if (!window.__netBytes) window.__netBytes = { rxCtrl: 0, rxSpec: 0, rxAudio: 0, txCtrl: 0, txAudio: 0 };
+            window.__netBytes.rxSpec += event.data.byteLength;
             handleSpectrumBinary(event.data);
         }
     };
@@ -164,6 +168,7 @@ function scheduleReconnect() {
 function startPing() {
     stopPing();
     pingTimer = setInterval(function() {
+        window.__pingSent = performance.now();
         sendMsg({type: 'ping'});
     }, 15000);
 }
@@ -174,7 +179,10 @@ function stopPing() {
 
 function sendMsg(msg) {
     if (wsRadio && wsRadio.readyState === WebSocket.OPEN) {
-        wsRadio.send(JSON.stringify(msg));
+        var raw = JSON.stringify(msg);
+        wsRadio.send(raw);
+        if (!window.__netBytes) window.__netBytes = { rxCtrl: 0, rxSpec: 0, rxAudio: 0, txCtrl: 0, txAudio: 0 };
+        window.__netBytes.txCtrl += raw.length;
         return true;
     }
     return false;
@@ -303,7 +311,10 @@ function handleMessage(msg) {
             break;
 
         case 'pong':
-            // Latency tracking could go here
+            if (window.__pingSent) {
+                window.__lastRtt = Math.round(performance.now() - window.__pingSent);
+                window.__pingSent = 0;
+            }
             break;
 
         case 'error':
@@ -546,9 +557,9 @@ function AudioRX_start() {
     // Once the worklet is ready, they're flushed to it.
     window.__earlyAudioQueue = [];
     wsAudioRX.onmessage = function(msg) {
-        if (!window.__rxBytes) window.__rxBytes = 0;
+        if (!window.__netBytes) window.__netBytes = { rxCtrl: 0, rxSpec: 0, rxAudio: 0, txCtrl: 0, txAudio: 0 };
         if (msg && msg.data && msg.data.byteLength) {
-            window.__rxBytes += msg.data.byteLength;
+            window.__netBytes.rxAudio += msg.data.byteLength;
             var f32 = decodeRxAudioFrame(msg.data);
             if (f32) {
                 window.__earlyAudioQueue.push(f32);
@@ -601,11 +612,17 @@ function AudioRX_start() {
         if (useAudioWorklet) {
             try {
                 await AudioRX_context.audioWorklet.addModule(
-                    staticUrlWithAuth('/rx_worklet_processor.js?v=1'));
+                    staticUrlWithAuth('/rx_worklet_processor.js?v=2'));
                 const rxNode = new AudioWorkletNode(AudioRX_context, 'rx-player');
                 AudioRX_source_node = rxNode;
                 // Configure jitter buffer
                 try { rxNode.port.postMessage({type:'config', prebufferMs:120, recoveryMs:60, maxMs:300}); } catch(_){}
+                // Receive jitter buffer stats from worklet
+                rxNode.port.onmessage = function(ev) {
+                    if (ev.data && ev.data.type === 'stats') {
+                        window.__jitterMs = Math.round(ev.data.bufferMs || 0);
+                    }
+                };
                 // Wire the push callback
                 window.__pushRxFrame = function(f32) {
                     rxNode.port.postMessage({type: 'push', payload: f32});
@@ -676,9 +693,9 @@ function AudioRX_start() {
 
             // ── onmessage set AFTER processor is ready ──
             wsAudioRX.onmessage = function(msg) {
-                if (!window.__rxBytes) window.__rxBytes = 0;
+                if (!window.__netBytes) window.__netBytes = { rxCtrl: 0, rxSpec: 0, rxAudio: 0, txCtrl: 0, txAudio: 0 };
                 if (msg && msg.data && msg.data.byteLength) {
-                    window.__rxBytes += msg.data.byteLength;
+                    window.__netBytes.rxAudio += msg.data.byteLength;
                     var float32Data = decodeRxAudioFrame(msg.data);
                     if (float32Data) {
                         queue.push(float32Data);
@@ -709,6 +726,7 @@ let wsAudioTX = null;
 let txAudioStream = null;
 let txOpusWorker = null;
 let txAudioRunning = false;
+const TX_AUDIO_MAX_BUFFERED_BYTES = 4096;
 
 function connectAudioTX() {
     if (wsAudioTX && wsAudioTX.readyState === WebSocket.OPEN) return;
@@ -736,12 +754,22 @@ function ensureTXOpusWorker() {
     txOpusWorker.onmessage = function(ev) {
         const d = ev.data || {};
         if (d.type === 'tx_audio' && d.data instanceof ArrayBuffer) {
-            if (wsAudioTX && wsAudioTX.readyState === WebSocket.OPEN) {
-                wsAudioTX.send(d.data);
-            }
+            sendTXAudioFrame(d.data);
         }
     };
     return txOpusWorker;
+}
+
+function sendTXAudioFrame(buffer) {
+    if (!wsAudioTX || wsAudioTX.readyState !== WebSocket.OPEN) return false;
+    if (wsAudioTX.bufferedAmount > TX_AUDIO_MAX_BUFFERED_BYTES) {
+        window.__txAudioDroppedFrames = (window.__txAudioDroppedFrames || 0) + 1;
+        return false;
+    }
+    wsAudioTX.send(buffer);
+    if (!window.__netBytes) window.__netBytes = { rxCtrl: 0, rxSpec: 0, rxAudio: 0, txCtrl: 0, txAudio: 0 };
+    window.__netBytes.txAudio += buffer.byteLength || 0;
+    return true;
 }
 
 var _txMicStream = null;     // cached mic stream (reuse to avoid permission prompt)
@@ -781,9 +809,10 @@ function startTXAudio() {
         connectAudioTX();
     }
 
+    const worker = ensureTXOpusWorker();
     txAudioRunning = true;
     flushTXCapture();
-    if (txOpusWorker) txOpusWorker.postMessage({type: 'start'});
+    worker.postMessage({type: 'start'});
     console.log('TX audio capture started');
 
     // If we already have a cached mic stream, reuse it — no permission prompt
@@ -796,9 +825,6 @@ function startTXAudio() {
 
     // First time: get mic permission
     console.log('First TX — requesting mic permission...');
-
-    // Start Opus worker for encoding
-    ensureTXOpusWorker();
 
     navigator.mediaDevices.getUserMedia({
         audio: {
@@ -921,9 +947,7 @@ function startTXAudioFallback() {
             const tagged = new Uint8Array(1 + i16.byteLength);
             tagged[0] = 0x00;
             tagged.set(new Uint8Array(i16.buffer), 1);
-            if (wsAudioTX && wsAudioTX.readyState === WebSocket.OPEN) {
-                wsAudioTX.send(tagged.buffer);
-            }
+            sendTXAudioFrame(tagged.buffer);
         };
 
         _txMicSource.connect(_txMicSp);
@@ -962,16 +986,25 @@ window.TXDebug = {
     },
 };
 
-// ── Bandwidth display ─────────────────────────────────────────────────
+// ── Bandwidth + Latency display ─────────────────────────────────────
 (function() {
-    window.__rxBytes = 0;
-    window.__txBytes = 0;
+    window.__netBytes = { rxCtrl: 0, rxSpec: 0, rxAudio: 0, txCtrl: 0, txAudio: 0 };
     setInterval(function() {
-        const rxKbps = ((window.__rxBytes || 0) * 8) / 1000;
-        window.__rxBytes = 0;
-        const el = document.getElementById('status-bitrate');
+        var b = window.__netBytes;
+        var rxTotal = b.rxCtrl + b.rxSpec + b.rxAudio;
+        var txTotal = b.txCtrl + b.txAudio;
+        var rxKbps = (rxTotal * 8) / 1000;
+        var txKbps = (txTotal * 8) / 1000;
+        b.rxCtrl = b.rxSpec = b.rxAudio = b.txCtrl = b.txAudio = 0;
+        var el = document.getElementById('status-bitrate');
         if (el) {
-            el.textContent = 'RX ' + rxKbps.toFixed(0) + 'K';
+            el.textContent = '↓' + rxKbps.toFixed(0) + 'K ↑' + txKbps.toFixed(0) + 'K';
+        }
+        var rtt = window.__lastRtt ? window.__lastRtt + 'ms' : '--';
+        var jitter = typeof window.__jitterMs === 'number' ? window.__jitterMs + 'ms' : '--';
+        var el2 = document.getElementById('status-latency');
+        if (el2) {
+            el2.textContent = 'RTT ' + rtt + ' J' + jitter;
         }
     }, 1000);
 })();
@@ -1190,13 +1223,15 @@ var FullscreenMgr = (function () {
 
 // ── Audio gain helper ────────────────────────────────────────────────
 // Sync the Web Audio gain node from radioState.af_gain, with a
-// 1.5× boost multiplier to compensate for quiet FT-710 USB audio.
-// Clamped to [0, 1] so it never distorts.
-var AUDIO_GAIN_BOOST = 1.5;
+// 2.5× boost multiplier to compensate for quiet FT-710 USB audio.
+// Clamped to [0, 3.0] to allow real amplification while preventing
+// runaway gain from blowing out speakers.
+var AUDIO_GAIN_BOOST = 5.0;
+var AUDIO_GAIN_MAX = 5.0;
 function _applyAfGainToAudioNode() {
     if (typeof AudioRX_gain_node === 'undefined' || !AudioRX_gain_node) return;
     var raw = (radioState.af_gain || 128) / 255.0;
-    var boosted = Math.min(1.0, raw * AUDIO_GAIN_BOOST);
+    var boosted = Math.min(AUDIO_GAIN_MAX, raw * AUDIO_GAIN_BOOST);
     AudioRX_gain_node.gain.value = boosted;
 }
 

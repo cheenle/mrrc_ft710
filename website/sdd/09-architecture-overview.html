@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Architecture Overview — MRRC FT-710 SDD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../css/octen.css?v=4">
+    <link rel="stylesheet" href="../css/sunsdrmobile.css?v=1">
+    <link rel="stylesheet" href="../css/ft710.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7442510147240155" crossorigin="anonymous"></script>
+    <style>
+        .sdd-layout { display: flex; max-width: 1400px; margin: 0 auto; padding: 0 2rem; gap: 2rem; }
+        .sdd-sidebar {
+            width: 260px; flex-shrink: 0; position: sticky; top: 80px;
+            max-height: calc(100vh - 100px); overflow-y: auto;
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 0.75rem; padding: 1.25rem 0;
+        }
+        .sdd-sidebar h4 {
+            font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
+            color: var(--accent); padding: 0 1.25rem; margin-bottom: 0.75rem;
+        }
+        .sdd-sidebar ul { list-style: none; }
+        .sdd-sidebar a {
+            display: block; padding: 0.375rem 1.25rem; font-size: 0.8125rem;
+            color: var(--text-secondary); transition: all 0.15s;
+            border-left: 2px solid transparent;
+        }
+        .sdd-sidebar a:hover { color: var(--text-primary); border-left-color: var(--border-hover); }
+        .sdd-sidebar a.active {
+            color: var(--accent); background: var(--accent-glow);
+            border-left-color: var(--accent); font-weight: 500;
+        }
+        .sdd-content { flex: 1; min-width: 0; padding-bottom: 4rem; }
+        .sdd-content h1 { font-size: 2rem; font-weight: 700; margin: 2rem 0 0.5rem; letter-spacing: -0.02em; }
+        .sdd-content h2 { font-size: 1.375rem; font-weight: 600; margin: 2rem 0 0.75rem; color: var(--accent); }
+        .sdd-content h3 { font-size: 1.125rem; font-weight: 600; margin: 1.5rem 0 0.5rem; }
+        .sdd-content h4 { font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.5rem; }
+        .sdd-content p, .sdd-content li { color: var(--text-secondary); line-height: 1.7; margin-bottom: 0.75rem; }
+        .sdd-content table {
+            width: 100%; border-collapse: collapse; margin: 1.25rem 0;
+            font-size: 0.875rem;
+        }
+        .sdd-content th, .sdd-content td {
+            padding: 0.625rem 0.875rem; text-align: left;
+            border: 1px solid var(--border);
+        }
+        .sdd-content th { background: var(--bg-tertiary); color: var(--text-primary); font-weight: 600; }
+        .sdd-content td { color: var(--text-secondary); }
+        .sdd-content code {
+            font-family: var(--font-mono); font-size: 0.85em;
+            background: var(--bg-tertiary); padding: 1px 6px; border-radius: 3px;
+            color: var(--accent);
+        }
+        .sdd-content pre {
+            background: var(--bg-tertiary); border: 1px solid var(--border);
+            border-radius: 0.5rem; padding: 1rem; overflow-x: auto;
+            margin: 1rem 0; font-size: 0.8125rem; line-height: 1.6;
+        }
+        .sdd-content pre code {
+            background: none; padding: 0; color: var(--text-secondary);
+        }
+        .sdd-content blockquote {
+            border-left: 3px solid var(--accent); padding: 0.5rem 1rem;
+            margin: 1rem 0; color: var(--text-muted); font-size: 0.9375rem;
+            background: var(--bg-tertiary); border-radius: 0 0.375rem 0.375rem 0;
+        }
+        .sdd-content ul, .sdd-content ol { margin-left: 1.5rem; margin-bottom: 1rem; }
+        .sdd-content hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+        .sdd-content a { color: var(--accent); }
+        .sdd-content img { max-width: 100%; border-radius: 0.5rem; margin: 1rem 0; }
+        @media (max-width: 900px) {
+            .sdd-layout { flex-direction: column; padding: 0 1rem; }
+            .sdd-sidebar { width: 100%; position: static; max-height: none; }
+        }
+    </style>
+</head>
+<body data-site="mrrc_ft710">
+
+<nav class="navbar">
+    <div class="container navbar-content">
+        <a href="../index.html" class="logo">
+            <span class="logo-icon"><i class="fas fa-microchip"></i></span>
+            <span>MRRC FT<span style="color: var(--accent);">‑710</span></span>
+        </a>
+        <ul class="nav-links">
+            <li><a href="../index.html#features">Features</a></li>
+            <li><a href="../index.html#architecture">Architecture</a></li>
+            <li><a href="index.html">SDD Docs</a></li>
+            <li><a href="https://github.com/cheenle/mrrc_ft710" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+        </ul>
+        <div class="nav-actions">
+            <a href="../zh/index.html" class="lang-btn">中文</a>
+            <button class="mobile-menu-toggle" onclick="toggleMobileMenu()"><i class="fas fa-bars"></i></button>
+        </div>
+    </div>
+</nav>
+
+<div class="sdd-layout">
+    <aside class="sdd-sidebar">
+        <h4>SDD Chapters</h4>
+        <ul>
+            <li><a href="index.html">Overview</a></li>
+            <li><a href="01-executive-summary.html">1. Executive Summary</a></li>
+            <li><a href="02-business-direction.html">2. Business Direction</a></li>
+            <li><a href="03-project-definition.html">3. Project Definition</a></li>
+            <li><a href="04-system-context.html">4. System Context</a></li>
+            <li><a href="05-non-functional-requirements.html">5. NFRs</a></li>
+            <li><a href="06-use-case-model.html">6. Use Cases</a></li>
+            <li><a href="07-subject-area-model.html">7. Subject Model</a></li>
+            <li><a href="08-architecture-decisions.html">8. Architecture Decisions</a></li>
+            <li><a href="09-architecture-overview.html" class="active">9. Architecture Overview</a></li>
+            <li><a href="10-service-model.html">10. Service Model</a></li>
+            <li><a href="11-component-model.html">11. Component Model</a></li>
+            <li><a href="12-operational-model.html">12. Operational Model</a></li>
+            <li><a href="13-feasibility-assessment.html">13. Feasibility</a></li>
+            <li><a href="14-version-history.html">14. Version History</a></li>
+            <li><a href="15-ptt-safety-architecture.html">15. PTT Safety</a></li>
+        </ul>
+    </aside>
+    <main class="sdd-content">
+<h1 id="architecture-overview-art-0512">9. Architecture Overview (ART 0512)</h1>
+<h2 id="logical-architecture">9.1 Logical Architecture</h2>
+<pre class="text"><code>Mobile/Desktop Browser
+  index.html / ft710.css / ft710_main.js / ft710_ui.js
+  Web Audio playback, mic capture, PTT UI, waterfall canvas
+        |
+        | HTTP/WS
+        v
+FastAPI MRRC FT-710 Server (`server.py`)
+  static file serving
+  /WSradio — control (JSON)
+  /WSaudioRX — RX audio fan-out (binary tagged Opus/PCM)
+  /WSaudioTX — TX mic uplink (binary tagged → decode → PyAudio)
+  /WSspectrum — waterfall fan-out (binary)
+  /api/mem_channels — memory channel CRUD
+  /api/status — full radio state
+  /api/auth/* — session management
+        |
+        | in-process imports
+        v
+Backend Modules
+  cat_controller.py — serial CAT protocol (pyserial + asyncio threads)
+  radio_state.py — shared state with dirty-field tracking
+  poll_scheduler.py — 7-task adaptive polling with priority-command preemption
+  audio_handler.py — PyAudio capture/playback + Opus codec
+  opus_rx.py — libopus ctypes wrapper
+  scope_handler.py — spectrum data + S-meter fallback
+  scope_pipe.py — standalone FT4222 SPI subprocess
+  config.py — constants, mode/band tables, S-meter calibration
+        |
+        | Serial / SPI / USB Audio
+        v
+Yaesu FT-710</code></pre>
+<h2 id="websocket-endpoints">9.2 WebSocket Endpoints</h2>
+<h3 id="wsradio-json-text">9.2.1 /WSradio (JSON text)</h3>
+<p>Control channel. Carries all radio commands, state updates, and memory management.</p>
+<p><strong>Server → Client:</strong> - <code>{"type":"fullState","data":{...},"bands":[...],"modes":[...]}</code> — initial sync on connect - <code>{"type":"stateUpdate","fields":{...},"dirty":[...]}</code> — partial changed-field update - <code>{"type":"value","field":"...","value":...}</code> — single-value query response - <code>{"type":"memChannels","channels":[...]}</code> — memory channel broadcast - <code>{"type":"pong"}</code> — keepalive response</p>
+<p><strong>Client → Server:</strong> - <code>{"type":"set","field":"...","value":...}</code> — command (40+ supported fields) - <code>{"type":"get","field":"..."}</code> — query current value - <code>{"type":"memSave","channels":[...]}</code> — save memory channels - <code>{"type":"memDelete","index":N}</code> — delete memory slot - <code>{"type":"ping"}</code> — keepalive</p>
+<h3 id="wsaudiorx-binary">9.2.2 /WSaudioRX (binary)</h3>
+<p><strong>Format:</strong> 1-byte codec tag (0x00=PCM, 0x01=Opus) + payload.</p>
+<p>Server captures 48kHz Int16 mono from FT-710 USB audio → Opus encodes (64kbps default) → broadcasts to all <code>audio_rx_clients</code> at 20ms intervals. Browser decodes via WASM OpusDecoder (or Int16→Float32 for PCM) → AudioWorklet playback with jitter buffer.</p>
+<h3 id="wsaudiotx-binary-text">9.2.3 /WSaudioTX (binary + text)</h3>
+<p><strong>Binary:</strong> 1-byte codec tag + encoded mic audio. Server decodes (Opus→PCM or pass-through PCM) → queues to PyAudio output stream → played to FT-710 USB audio input.</p>
+<p><strong>Text:</strong> <code>"s:"</code> = stop TX; <code>"m:rate,encode,..."</code> = settings.</p>
+<h3 id="wsspectrum-binary">9.2.4 /WSspectrum (binary)</h3>
+<p><strong>v1 format:</strong> 1-byte version (0x01) + 850 bytes wf1 = 851 bytes. <strong>v2 format:</strong> 1-byte version (0x02) + 850 bytes wf1 + 850 bytes wf2 = 1701 bytes.</p>
+<p>Broadcast at ~30 fps from FT4222 data or S-meter fallback.</p>
+<h2 id="rx-audio-signal-chain">9.3 RX Audio Signal Chain</h2>
+<pre class="text"><code>FT-710 USB Audio Output
+  → PyAudio capture (48kHz, Int16, mono, 960-sample chunks = 20ms)
+    → AudioHandler.read_rx_chunk() (non-blocking poll from asyncio loop)
+      → AudioHandler.encode_rx_audio()
+        → Opus encode (RxOpusEncoder, 64kbps, 20ms frames)
+          → 1-byte tag (0x01) + Opus packet
+        → OR PCM fallback: 1-byte tag (0x00) + Int16 bytes
+          → /WSaudioRX broadcast to all audio_rx_clients
+            → Browser: decodeRxAudioFrame()
+              → Opus: WASM OpusDecoder.decode_float() → Float32Array
+              → PCM: Int16Array → Float32Array (÷32767)
+                → AudioWorklet &#39;rx-player&#39;: port.postMessage({type:&#39;push&#39;, payload})
+                  → Jitter buffer (220ms prebuffer, 90ms recovery, 800ms max)
+                    → AudioContext.destination → speakers</code></pre>
+<h2 id="tx-audio-signal-chain">9.4 TX Audio Signal Chain</h2>
+<pre class="text"><code>Browser Microphone
+  → getUserMedia({sampleRate:48000, channelCount:1})
+    → AudioContext.createMediaStreamSource → ScriptProcessor(512)  // ~10.7ms @ 48kHz
+      → Float32 → Int16 conversion (×32767)
+        → Opus Worker (tx_opus_worker.js, 48kHz):
+          → Int16 → Float32 (÷32768) → OpusEncoder.encode_float(960-sample frames)
+            → 1-byte tag (0x01) + Opus packet (28kbps CBR, complexity=3)
+          → OR PCM fallback: 1-byte tag (0x00) + Int16 bytes
+            → postMessage({type:&#39;tx_audio&#39;, data:tagged.buffer}, [tagged.buffer])
+              → main thread: wsAudioTX.send(tagged)
+                → /WSaudioTX → server
+                  → Opus: TxOpusDecoder.decode() → Int16 PCM (48kHz, 960 samples/frame)
+                  → PCM: pass-through
+                    → AudioHandler.feed_tx_audio() → _tx_queue
+                      → AudioHandler.write_tx_chunk() (10ms drain loop)
+                        → PyAudio output stream (48kHz, mono) → FT-710 USB Audio Input</code></pre>
+<p><strong>TX sample rate is unified at 48 kHz</strong> across the entire chain — browser capture, Opus encode/decode, and PyAudio playback all match. This eliminates the v1.0 sample-rate mismatch (16 kHz mic → 48 kHz playback) that caused audible crackling on transmitted audio.</p>
+<h2 id="spectrum-signal-chain">9.5 Spectrum Signal Chain</h2>
+<h3 id="ft4222-path-real-fft-data">9.5.1 FT4222 Path (Real FFT Data)</h3>
+<pre class="text"><code>FT-710 FT4222 SPI chip
+  → scope_pipe.py subprocess (ctypes → libft4222)
+    → 4096-byte SPI reads → frame sync → v2 payload
+      → stdout: [4-byte BE length][version(1B) + wf1(850B) + wf2(850B) + metadata]
+        → server.py _read_scope_pipe() (asyncio stdout reader)
+          → parse_pipe_payload() → ScopeFrame
+            → scope.spectrum_rx1 = wf1, scope.spectrum_rx2 = wf2
+            → metadata: s_meter, vfoa_freq, mode, span, preamp, att
+            → _on_scope_frame() → update RadioState, broadcast
+    → stderr: &quot;STATUS:...&quot; diagnostic lines → server logging</code></pre>
+<h3 id="s-meter-fallback-synthetic-spectrum">9.5.2 S-Meter Fallback (Synthetic Spectrum)</h3>
+<pre class="text"><code>CAT SM0; poll (100ms)
+  → radio_state.s_meter (0–255)
+    → scope_handler.update_from_radio_state(radio)
+      → generate Gaussian peaks at band edges + center
+        → scale to 850-point wf1 array
+          → scope.get_spectrum_binary() → v1 (851B) or v2 (1701B) frame
+            → /WSspectrum broadcast (same format as FT4222 path)</code></pre>
+<h2 id="cat-polling-architecture">9.6 CAT Polling Architecture</h2>
+<pre class="text"><code>PollScheduler (asyncio, 7 cooperative tasks)
+  Tier 1  (100ms):      FA; MD0; SM0;                     → vfo_a_freq, mode, s_meter
+  Tier 1b (500ms):      VS; FB;                           → active_vfo, vfo_b_freq
+  Tier 2A (500ms, TX):  RM3; RM4; RM5; RM6;              → comp, alc, power, swr
+  Tier 2B (500ms):      TX;                               → tx_status
+  Tier 3  (2s):         SH0; AG0; RG0; PC; PA0; RA0; NB0; NR0; BC; AC; SS01; AN; GT; MS;
+                        → filter/gains/preamp/att/NR/NB/AN/tuner/scope/antenna/agc/meter_display
+  Tier 4  (5s):         RM7; RM8; PR; CO; AO; RI0;       → id, vd, compressor, contour, amc, radio-info telemetry
+  Tier 5  (1s):         connection watchdog               → reconnect + full-state re-sync
+
+User commands skip next poll for affected fields (`skip_next_poll`).
+PTT/TUNE commands use priority writes (`send_priority_set_command`) and set `_cancel_polls`,
+which poll loops and read threads observe to release the serial lock quickly.
+CAT I/O remains serialized through `CatController._lock`; blocking serial work is offloaded via `asyncio.to_thread()`.</code></pre>
+<h2 id="state-broadcasting">9.7 State Broadcasting</h2>
+<pre class="text"><code>Command or Poll → RadioState.update(field=value)
+  → _dirty_fields.add(field)
+    → _broadcast_state()
+      → dirty = radio.get_and_clear_dirty()
+        → update = {type:&quot;stateUpdate&quot;, fields:radio.to_dirty_dict(dirty), dirty:list(dirty)}
+          → json.dumps → send_text to all ctrl_clients
+            → browser: handleMessage() → Object.assign(radioState, msg.fields) → renderUpdates(msg.dirty)</code></pre>
+    </main>
+</div>
+
+<footer class="footer" style="margin-top: 0;">
+    <div class="container">
+        <div class="footer-bottom">
+            <p>&copy; 2026 MRRC FT-710 Project · SDD V1.4 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
+        </div>
+    </div>
+</footer>
+
+<script>
+function toggleMobileMenu() {
+    document.querySelector('.nav-links').classList.toggle('active');
+}
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+    a.addEventListener('click', function(e) {
+        e.preventDefault();
+        const t = document.querySelector(this.getAttribute('href'));
+        if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+});
+const nav = document.querySelector('.navbar');
+window.addEventListener('scroll', () => {
+    nav.style.background = window.scrollY > 50 ? 'rgba(0,0,0,0.95)' : 'rgba(0,0,0,0.8)';
+});
+</script>
+    <script src="../js/global-nav.js?v=2" defer data-gn="1"></script>
+</body>
+</html>

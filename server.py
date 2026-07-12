@@ -233,7 +233,7 @@ async def _broadcast_spectrum_loop():
     idle wakeups.  Synthetic Gaussian generation is also skipped.
     """
     global scope, spectrum_clients
-    interval = 1.0 / 15.0     # ~66ms → 15 fps (scope_pipe gives ~21 fps native)
+    interval = 1.0 / 5.0      # ~200ms → 5 fps
     idle_interval = 0.500      # 500 ms deep-sleep when no listeners
     _first = True
     _idle_skipped = 0
@@ -403,6 +403,19 @@ async def _read_scope_pipe(proc):
                     pass
         if _scope_proc is proc:
             _scope_proc = None
+
+        # ── Auto-restart ──────────────────────────────────────────
+        # If spectrum clients are still connected when the pipe exits,
+        # restart it after a short delay (1s) so transient USB glitches
+        # don't require a manual client reconnect.
+        import asyncio as _asyncio
+        if spectrum_clients and scope_pipe_path.exists():
+            logger.info("scope_pipe exited with %d spectrum client(s) — "
+                        "will restart in 1s", len(spectrum_clients))
+            await _asyncio.sleep(1.0)
+            # Only restart if no other pipe has been started in the meantime
+            if _scope_proc is None:
+                await _ensure_scope_pipe_running()
 
 
 async def _ensure_scope_pipe_running():
@@ -847,7 +860,9 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
 
         elif field == "filter" or field == "filter_width":
             idx = int(value)
-            await cat.set_filter_width(idx)
+            logger.info("Filter set command: index=%d", idx)
+            ok = await cat.set_filter_width(idx)
+            logger.info("Filter set result: ok=%s index=%d", ok, idx)
             radio.update(filter_width=idx)
             scheduler and scheduler.skip_next_poll("filter_width", 3.0)
 

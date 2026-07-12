@@ -236,18 +236,32 @@ function getNextBand(currentBand) {
 }
 
 function getNextFilter(currentIdx, modeName) {
-    // Simple: if current is max (23 voice, 21 narrow), cycle back to 1
+    // Curated filter rotation for each mode group
     const isNarrow = ['CW-U','CW-L','RTTY-L','RTTY-U','DATA-L','DATA-U','PSK'].includes(modeName);
-    const maxIdx = isNarrow ? 21 : 23;
-    return currentIdx >= maxIdx ? 1 : currentIdx + 1;
+    // Voice: 1.8k / 2.4k / 2.7k / 3k / 4k (WIDE/"无")
+    const voiceList = [9, 13, 17, 20, 23];   // → 1800, 2400, 2700, 3000, 4000 Hz
+    // Narrow: 150 / 300 / 500 / 1200 / 2400 / 4000
+    const narrowList = [3, 6, 10, 13, 17, 21]; // → 150, 300, 500, 1200, 2400, 4000 Hz
+    const list = isNarrow ? narrowList : voiceList;
+    var pos = list.indexOf(currentIdx);
+    if (pos < 0 || pos >= list.length - 1) return list[0];
+    return list[pos + 1];
 }
 
 function getFilterLabel(idx, modeName) {
     const isNarrow = ['CW-U','CW-L','RTTY-L','RTTY-U','DATA-L','DATA-U','PSK'].includes(modeName);
-    const voiceWidths = {1:300,2:400,3:600,4:850,5:1100,6:1200,7:1500,8:1650,9:1800,10:1950,11:2100,12:2250,13:2400,14:2450,15:2500,16:2600,17:2700,18:2800,19:2900,20:3000,21:3200,22:3500,23:4000};
-    const narrowWidths = {1:50,2:100,3:150,4:200,5:250,6:300,7:350,8:400,9:450,10:500,11:600,12:800,13:1200,14:1400,15:1700,16:2000,17:2400,18:3000,19:3200,20:3500,21:4000};
+    const voiceWidths = {9:1800, 13:2400, 17:2700, 20:3000, 23:4000};
+    const narrowWidths = {3:150, 6:300, 10:500, 13:1200, 17:2400, 21:4000};
     const table = isNarrow ? narrowWidths : voiceWidths;
-    const hz = table[idx] || 2400;
+    var hz = table[idx];
+    // Fallback: if index not in curated list, look up from full table
+    if (!hz) {
+        const fullVoice = {1:300,2:400,3:600,4:850,5:1100,6:1200,7:1500,8:1650,9:1800,10:1950,11:2100,12:2250,13:2400,14:2450,15:2500,16:2600,17:2700,18:2800,19:2900,20:3000,21:3200,22:3500,23:4000};
+        const fullNarrow = {1:50,2:100,3:150,4:200,5:250,6:300,7:350,8:400,9:450,10:500,11:600,12:800,13:1200,14:1400,15:1700,16:2000,17:2400,18:3000,19:3200,20:3500,21:4000};
+        hz = (isNarrow ? fullNarrow : fullVoice)[idx];
+    }
+    if (!hz) return '--';
+    if (hz === 4000) return '无';
     if (hz >= 1000) return (hz/1000).toFixed(1) + 'k';
     return hz + 'Hz';
 }

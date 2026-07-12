@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Architecture Decisions — MRRC FT-710 SDD</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../css/octen.css?v=4">
+    <link rel="stylesheet" href="../css/sunsdrmobile.css?v=1">
+    <link rel="stylesheet" href="../css/ft710.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7442510147240155" crossorigin="anonymous"></script>
+    <style>
+        .sdd-layout { display: flex; max-width: 1400px; margin: 0 auto; padding: 0 2rem; gap: 2rem; }
+        .sdd-sidebar {
+            width: 260px; flex-shrink: 0; position: sticky; top: 80px;
+            max-height: calc(100vh - 100px); overflow-y: auto;
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 0.75rem; padding: 1.25rem 0;
+        }
+        .sdd-sidebar h4 {
+            font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
+            color: var(--accent); padding: 0 1.25rem; margin-bottom: 0.75rem;
+        }
+        .sdd-sidebar ul { list-style: none; }
+        .sdd-sidebar a {
+            display: block; padding: 0.375rem 1.25rem; font-size: 0.8125rem;
+            color: var(--text-secondary); transition: all 0.15s;
+            border-left: 2px solid transparent;
+        }
+        .sdd-sidebar a:hover { color: var(--text-primary); border-left-color: var(--border-hover); }
+        .sdd-sidebar a.active {
+            color: var(--accent); background: var(--accent-glow);
+            border-left-color: var(--accent); font-weight: 500;
+        }
+        .sdd-content { flex: 1; min-width: 0; padding-bottom: 4rem; }
+        .sdd-content h1 { font-size: 2rem; font-weight: 700; margin: 2rem 0 0.5rem; letter-spacing: -0.02em; }
+        .sdd-content h2 { font-size: 1.375rem; font-weight: 600; margin: 2rem 0 0.75rem; color: var(--accent); }
+        .sdd-content h3 { font-size: 1.125rem; font-weight: 600; margin: 1.5rem 0 0.5rem; }
+        .sdd-content h4 { font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.5rem; }
+        .sdd-content p, .sdd-content li { color: var(--text-secondary); line-height: 1.7; margin-bottom: 0.75rem; }
+        .sdd-content table {
+            width: 100%; border-collapse: collapse; margin: 1.25rem 0;
+            font-size: 0.875rem;
+        }
+        .sdd-content th, .sdd-content td {
+            padding: 0.625rem 0.875rem; text-align: left;
+            border: 1px solid var(--border);
+        }
+        .sdd-content th { background: var(--bg-tertiary); color: var(--text-primary); font-weight: 600; }
+        .sdd-content td { color: var(--text-secondary); }
+        .sdd-content code {
+            font-family: var(--font-mono); font-size: 0.85em;
+            background: var(--bg-tertiary); padding: 1px 6px; border-radius: 3px;
+            color: var(--accent);
+        }
+        .sdd-content pre {
+            background: var(--bg-tertiary); border: 1px solid var(--border);
+            border-radius: 0.5rem; padding: 1rem; overflow-x: auto;
+            margin: 1rem 0; font-size: 0.8125rem; line-height: 1.6;
+        }
+        .sdd-content pre code {
+            background: none; padding: 0; color: var(--text-secondary);
+        }
+        .sdd-content blockquote {
+            border-left: 3px solid var(--accent); padding: 0.5rem 1rem;
+            margin: 1rem 0; color: var(--text-muted); font-size: 0.9375rem;
+            background: var(--bg-tertiary); border-radius: 0 0.375rem 0.375rem 0;
+        }
+        .sdd-content ul, .sdd-content ol { margin-left: 1.5rem; margin-bottom: 1rem; }
+        .sdd-content hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+        .sdd-content a { color: var(--accent); }
+        .sdd-content img { max-width: 100%; border-radius: 0.5rem; margin: 1rem 0; }
+        @media (max-width: 900px) {
+            .sdd-layout { flex-direction: column; padding: 0 1rem; }
+            .sdd-sidebar { width: 100%; position: static; max-height: none; }
+        }
+    </style>
+</head>
+<body data-site="mrrc_ft710">
+
+<nav class="navbar">
+    <div class="container navbar-content">
+        <a href="../index.html" class="logo">
+            <span class="logo-icon"><i class="fas fa-microchip"></i></span>
+            <span>MRRC FT<span style="color: var(--accent);">‑710</span></span>
+        </a>
+        <ul class="nav-links">
+            <li><a href="../index.html#features">Features</a></li>
+            <li><a href="../index.html#architecture">Architecture</a></li>
+            <li><a href="index.html">SDD Docs</a></li>
+            <li><a href="https://github.com/cheenle/mrrc_ft710" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+        </ul>
+        <div class="nav-actions">
+            <a href="../zh/index.html" class="lang-btn">中文</a>
+            <button class="mobile-menu-toggle" onclick="toggleMobileMenu()"><i class="fas fa-bars"></i></button>
+        </div>
+    </div>
+</nav>
+
+<div class="sdd-layout">
+    <aside class="sdd-sidebar">
+        <h4>SDD Chapters</h4>
+        <ul>
+            <li><a href="index.html">Overview</a></li>
+            <li><a href="01-executive-summary.html">1. Executive Summary</a></li>
+            <li><a href="02-business-direction.html">2. Business Direction</a></li>
+            <li><a href="03-project-definition.html">3. Project Definition</a></li>
+            <li><a href="04-system-context.html">4. System Context</a></li>
+            <li><a href="05-non-functional-requirements.html">5. NFRs</a></li>
+            <li><a href="06-use-case-model.html">6. Use Cases</a></li>
+            <li><a href="07-subject-area-model.html">7. Subject Model</a></li>
+            <li><a href="08-architecture-decisions.html" class="active">8. Architecture Decisions</a></li>
+            <li><a href="09-architecture-overview.html">9. Architecture Overview</a></li>
+            <li><a href="10-service-model.html">10. Service Model</a></li>
+            <li><a href="11-component-model.html">11. Component Model</a></li>
+            <li><a href="12-operational-model.html">12. Operational Model</a></li>
+            <li><a href="13-feasibility-assessment.html">13. Feasibility</a></li>
+            <li><a href="14-version-history.html">14. Version History</a></li>
+            <li><a href="15-ptt-safety-architecture.html">15. PTT Safety</a></li>
+        </ul>
+    </aside>
+    <main class="sdd-content">
+<h1 id="architecture-decisions-art-0513">8. Architecture Decisions (ART 0513)</h1>
+<h2 id="ad-001-use-fastapiuvicorn-for-mrrc-ft-710-server">AD-001: Use FastAPI/Uvicorn for MRRC FT-710 Server</h2>
+<table>
+<colgroup>
+<col style="width: 61%" />
+<col style="width: 38%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Architectural</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>Use FastAPI with native WebSocket routes and Uvicorn runtime</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Problem</strong>: The server needs static file serving, 4 WebSocket endpoints, async serial CAT I/O, scope subprocess management, audio streaming, and auth — all in one process.</p>
+<p><strong>Rationale</strong>: FastAPI/Uvicorn provides direct async integration, lifespan management, middleware, and a small code surface. No Tornado, Flask, or Django needed.</p>
+<p><strong>Consequences</strong>: All server logic lives in <code>server.py</code> with modular imports from sibling modules. Lifecycle managed via <code>@asynccontextmanager lifespan</code>.</p>
+<h2 id="ad-002-direct-serial-cat-no-hamlibrigctld">AD-002: Direct Serial CAT — No Hamlib/Rigctld</h2>
+<table>
+<colgroup>
+<col style="width: 61%" />
+<col style="width: 38%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Architectural</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>Use <code>pyserial</code> (sync API) with <code>asyncio.to_thread()</code> for serial I/O</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Problem</strong>: Hamlib adds a large dependency and another process to manage. FT-710 CAT protocol is well-documented (Yaesu standard) and straightforward.</p>
+<p><strong>Rationale</strong>: A dedicated <code>CatController</code> class with an <code>asyncio.Lock</code> for serialized access and thread-pool offloading is simpler, more debuggable, and has fewer failure modes than Hamlib/rigctld.</p>
+<p><strong>Consequences</strong>: The codebase is FT-710 specific. Adding another radio model requires a new commander class.</p>
+<h2 id="ad-003-dirty-field-state-broadcasting">AD-003: Dirty-Field State Broadcasting</h2>
+<table>
+<colgroup>
+<col style="width: 61%" />
+<col style="width: 38%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Design</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td><code>RadioState</code> dataclass tracks changed fields via <code>_dirty_fields</code> set; broadcast only changed fields</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Problem</strong>: Full state broadcasts on every poll would be wasteful (~44 fields at 10Hz).</p>
+<p><strong>Rationale</strong>: <code>RadioState.update()</code> records which fields changed; <code>to_dirty_dict()</code> sends only those fields. Clients merge partial updates into their local state.</p>
+<p><strong>Consequences</strong>: <code>stateUpdate</code> messages are compact; clients must maintain local state mirror.</p>
+<h2 id="ad-004-tagged-dual-codec-audio-transport-opus-int16-pcm">AD-004: Tagged Dual-Codec Audio Transport (Opus + Int16 PCM)</h2>
+<table>
+<colgroup>
+<col style="width: 61%" />
+<col style="width: 38%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Architectural</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>Both <code>/WSaudioRX</code> and <code>/WSaudioTX</code> carry a 1-byte codec tag per frame: <code>0x00</code> = Int16 PCM, <code>0x01</code> = Opus. RX: 48kHz @ 64kbps (fullband, transparent for broadcast music). TX: 48kHz @ 28kbps CBR (voice-optimized, VBR/FEC/DTX/HPF disabled). Default Opus; falls back to PCM.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Problem</strong>: (RX) Int16 PCM at 48kHz mono costs ~768kbps — heavy on mobile/WiFi. Opus at 64kbps cuts that 12×. (TX) Browser mic Opus encoding saves uplink bandwidth. A per-frame tag removes negotiation races — receiver inspects tag and decodes accordingly.</p>
+<p><strong>Rationale</strong>: <code>opus_rx.py</code> (copied from sunmrrc) provides direct ctypes libopus bindings. Uses <code>max_data_bytes</code> cap on <code>opus_encode()</code> to control bitrate — avoids arm64 variadic <code>opus_encoder_ctl</code> issues. Browser uses WASM <code>OpusDecoder</code>/<code>OpusEncoder</code>. TX encoder configured for voice: complexity=3 (real-time), VBR=OFF (stable packet size), FEC=OFF (WebSocket TCP), DTX=OFF (no priming gaps), HPF=OFF (preserve low-end).</p>
+<p><strong>Consequences</strong>: Adds libopus dependency (optional — degrades gracefully to PCM). Codec is user-switchable. <code>AUDIO_TAG_PCM</code> / <code>AUDIO_TAG_OPUS</code> are constants in both Python and JavaScript.</p>
+<h2 id="ad-005-scope_pipe-as-standalone-subprocess">AD-005: scope_pipe as Standalone Subprocess</h2>
+<table>
+<colgroup>
+<col style="width: 61%" />
+<col style="width: 38%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Architectural</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>FT4222 SPI I/O runs in a separate Python process (<code>scope_pipe.py</code>), communicating with the server via stdout/stderr pipes</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Problem</strong>: FT4222 ctypes calls are blocking and can hang. Running them in the asyncio event loop would stall the entire server. Threading is fragile with FTDI D2XX driver state.</p>
+<p><strong>Rationale</strong>: A subprocess isolates the FTDI driver. If scope_pipe crashes, the server continues (falls back to S-meter). Frame format: 4-byte BE uint32 length + payload. stderr carries machine-parseable <code>STATUS:</code> lines for diagnostics. Heartbeat frames (len=0) keep pipe alive when idle.</p>
+<p><strong>Consequences</strong>: scope_pipe is independently restartable. Server handles pipe exit gracefully (marks scope disconnected, switches to fallback). Two process lifecycle to manage.</p>
+<h2 id="ad-006-dual-mode-spectrum-ft4222-s-meter-fallback">AD-006: Dual-Mode Spectrum (FT4222 + S-Meter Fallback)</h2>
+<table>
+<colgroup>
+<col style="width: 61%" />
+<col style="width: 38%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Design</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>When FT4222 is available, broadcast real 850-point FFT data. When unavailable, generate synthetic multi-peak Gaussian spectrum from CAT S-meter readings</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Problem</strong>: FT4222 requires specific libraries, D2XX driver config, and exclusive device access. It’s not always available.</p>
+<p><strong>Rationale</strong>: The S-meter fallback provides useful visual context (shows band activity) even without hardware scope. The binary frame format is identical in both modes — clients don’t care about the source.</p>
+<p><strong>Consequences</strong>: <code>ScopeHandler</code> has two code paths: <code>update_from_scope_frame()</code> (real data) and <code>update_from_radio_state()</code> (synthetic). <code>scope._connected</code> flag determines which is active.</p>
+<h2 id="ad-007-ptt-release-as-safety-critical-flow">AD-007: PTT Release as Safety-Critical Flow</h2>
+<table>
+<colgroup>
+<col style="width: 61%" />
+<col style="width: 38%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Safety</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>Multiple independent release paths: normal WebSocket command, triple TX0 verify, PTT watchdog, dead-man switch on WS disconnect, beforeunload beacon, pagehide handler</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Problem</strong>: A lost or unprocessed PTT release command can leave the radio transmitting indefinitely — a serious safety and regulatory issue.</p>
+<p><strong>Rationale</strong>: Release is more safety-critical than keying. Each layer catches a different failure mode: lost WS message, half-open socket, browser crash, tab close, app switch. See Chapter 15 for detailed PTT Safety Architecture.</p>
+<p><strong>Consequences</strong>: Frontend PTT logic is more complex; server-side release verification adds ~600ms of TX; polling skip-on-PTT ensures state consistency.</p>
+<h2 id="ad-008-pyaudio-auto-detection-of-ft-710-usb-audio">AD-008: PyAudio Auto-Detection of FT-710 USB Audio</h2>
+<table>
+<colgroup>
+<col style="width: 61%" />
+<col style="width: 38%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Design</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>Multi-layer device selection: (1) explicit <code>FT710_AUDIO_RX_DEVICE</code>/<code>FT710_AUDIO_TX_DEVICE</code> env var (index or name substring), (2) name match for “FT-710”/“FT710”/“YAESU”, (3) mono-channel heuristic (FT-710 USB audio has 1 input channel vs typical stereo USB mics), (4) full-duplex heuristic for TX (device with both input + output), (5) system default fallback</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Problem</strong>: The FT-710 USB audio device name varies by OS and driver version. Hardcoding a device index is fragile. Previous version only searched by name substring and fell back to first input device — could select webcam mic instead of FT-710.</p>
+<p><strong>Rationale</strong>: Name-based matching is more robust than index-based. The mono-channel heuristic is reliable: FT-710 provides exactly 1 input channel (mono RX), while webcams and USB mics typically offer 2 (stereo). Full-duplex preference for TX ensures the same device is used for both RX and TX paths. Logs all available devices at startup for debugging.</p>
+<p><strong>Consequences</strong>: Audio may still use wrong device if multiple mono USB audio devices are present. Configurable device override via env vars is the recommended approach for such setups.</p>
+<h2 id="ad-009-7-task-adaptive-polling-with-bounded-lock-time">AD-009: 7-Task Adaptive Polling with Bounded Lock Time</h2>
+<table>
+<colgroup>
+<col style="width: 61%" />
+<col style="width: 38%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Design</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>Background CAT polling split into 7 cooperative tasks (IF, VFO, TX status, TX meters, settings, slow telemetry, connection watchdog), with skip-on-command and short per-query timeout</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Problem</strong>: Polling too fast floods the serial port; too slow makes the UI feel unresponsive. Some fields (S-meter) change rapidly; others (filter width) rarely.</p>
+<p><strong>Rationale</strong>: Fast path keeps only <code>FA/MD0/SM0</code> at 100ms. <code>VS/FB</code> run separately at 500ms, so active-VFO tracking does not bloat the IF loop. TX status and TX meters are independent 500ms tasks; TX meter polling includes <code>RM3/RM4/RM5/RM6</code> and is TX-only. Settings (2s) include <code>RG0</code>, <code>MS</code>, and tuner state; slow telemetry (5s) includes <code>RM7/RM8</code>, <code>PR</code>, <code>AO</code>, and <code>RI0</code>. Poll query timeout is 0.25s to cap lock occupancy.</p>
+<p><strong>Consequences</strong>: <code>PollScheduler</code> owns task-level cadence and backpressure controls (<code>skip_next_poll()</code>, short pause after user command, and <code>_cancel_polls</code> awareness). CAT errors remain per-command and non-fatal.</p>
+<h2 id="ad-010-memory-channels-as-server-side-json">AD-010: Memory Channels as Server-Side JSON</h2>
+<table>
+<colgroup>
+<col style="width: 61%" />
+<col style="width: 38%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Design</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>Memory channels stored server-side in <code>mem_channels.json</code>; API: GET/POST <code>/api/mem_channels</code>; auto-broadcast to all clients on change</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Problem</strong>: Client-side-only storage loses channels across devices/browsers. Server-side persistence ensures all clients see the same channels.</p>
+<p><strong>Rationale</strong>: Simple JSON file is adequate for 6-99 channel slots. No database needed. Auto-broadcast keeps all clients in sync.</p>
+<p><strong>Consequences</strong>: Channels survive server restarts. File is human-editable. No per-user channel isolation (single shared-password model).</p>
+<h2 id="ad-011-unified-48khz-tx-audio-pipeline">AD-011: Unified 48kHz TX Audio Pipeline</h2>
+<table>
+<colgroup>
+<col style="width: 61%" />
+<col style="width: 38%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Design</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>TX audio chain runs entirely at 48 kHz: browser <code>getUserMedia({sampleRate:48000})</code> → Opus encode at 48 kHz (960-sample frames) → server <code>TxOpusDecoder</code> at 48 kHz → PyAudio playback at 48 kHz. No sample-rate conversion anywhere in the TX path.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Problem</strong>: V1.0 captured mic audio at 16 kHz (320 samples/20ms frame) but PyAudio played back at 48 kHz (expecting 960 samples/20ms). The 3:1 rate mismatch caused the output stream to underrun — every 20ms Opus frame produced 320 samples that filled only 1/3 of the 960-sample playback buffer. The remaining 2/3 was stale/residual buffer data, producing audible crackling (“咔咔咔”) on transmitted audio.</p>
+<p><strong>Rationale</strong>: Eliminating the sample-rate conversion eliminates the underrun. Opus at 48 kHz with 28 kbps CBR encodes voice-quality audio — the codec internally allocates bits to the speech band regardless of the nominal sample rate. Browser <code>getUserMedia</code> at 48 kHz works on all modern platforms (iOS 15+, Chrome, Firefox). The FT-710 USB audio interface natively operates at 48 kHz.</p>
+<p><strong>Consequences</strong>: Browser mic capture at 48 kHz uses slightly more CPU than 16 kHz (3× sample count), but the encoding cost is dominated by Opus frame processing, not sample count. Opus frames are 960 samples (still 20ms), matching the RX encoder’s frame size. PCM fallback path also unified at 48 kHz. <code>TX_RATE</code> and <code>TX_SAMPLE_RATE</code> are now identical — no future mismatch possible.</p>
+<h2 id="ad-012-active-vfo-aware-frequency-model">AD-012: Active-VFO-Aware Frequency Model</h2>
+<table>
+<colgroup>
+<col style="width: 61%" />
+<col style="width: 38%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Design</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>Poll <code>VS</code> + <code>FB</code> at 0.5s and treat <code>freq</code> set command as “apply to currently active VFO”</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Problem</strong>: Using <code>freq</code> as VFO-A-only could update the wrong oscillator when VFO-B is active.</p>
+<p><strong>Rationale</strong>: Active-VFO tracking keeps UI and CAT semantics aligned with front-panel behavior.</p>
+<p><strong>Consequences</strong>: State now carries <code>active_vfo</code>, <code>vfo_a_freq</code>, and <code>vfo_b_freq</code> continuously.</p>
+<h2 id="ad-013-ft-710-meter-calibration-tables">AD-013: FT-710 Meter Calibration Tables</h2>
+<table>
+<colgroup>
+<col style="width: 61%" />
+<col style="width: 38%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Design</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>Convert raw RM meter values (0–255) into engineering units via piecewise-linear calibration tables in <code>config.py</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Problem</strong>: Raw meter values are not user-meaningful and are non-linear.</p>
+<p><strong>Rationale</strong>: Calibration points from FT-710 rig data provide practical watt/SWR/volt/amp displays without firmware changes.</p>
+<p><strong>Consequences</strong>: UI meters show engineering units; calibration can be tuned independently of polling logic.</p>
+<h2 id="ad-014-ft-710-cat-errata-handling">AD-014: FT-710 CAT Errata Handling</h2>
+<table>
+<colgroup>
+<col style="width: 61%" />
+<col style="width: 38%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Design</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>Apply FT-710-specific command corrections: treat <code>DN</code> as step-down (never poll), use <code>PR00/PR01</code> for compressor, and map tuner control to <code>AC000/AC001/AC003</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Problem</strong>: Yaesu CAT documentation ambiguities can cause unintended RF behavior (frequency drift, invalid tuner command forms).</p>
+<p><strong>Rationale</strong>: Runtime behavior is grounded in observed FT-710 responses and cross-command consistency.</p>
+<p><strong>Consequences</strong>: Safer default control path; ambiguous commands are either corrected or intentionally omitted.</p>
+<h2 id="ad-015-priority-cat-command-preemption">AD-015: Priority CAT Command Preemption</h2>
+<table>
+<colgroup>
+<col style="width: 61%" />
+<col style="width: 38%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Safety / Responsiveness</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>Introduce <code>send_priority_set_command()</code> and <code>_cancel_polls</code> cooperative abort so latency-sensitive commands (PTT/TUNE) preempt poll queries</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Problem</strong>: User TX/RX transitions can stall behind in-flight poll cycles if every query holds the serial lock to timeout.</p>
+<p><strong>Rationale</strong>: Priority commands set a cancel flag observed by poll loops, queued query waiters, and <code>_read_until()</code> threads, reducing worst-case handoff delay.</p>
+<p><strong>Consequences</strong>: Poll loops must be cancel-aware; UX is significantly more responsive during fast PTT/tune transitions.</p>
+<h2 id="decision-summary">8.16 Decision Summary</h2>
+<table>
+<colgroup>
+<col style="width: 21%" />
+<col style="width: 36%" />
+<col style="width: 42%" />
+</colgroup>
+<thead>
+<tr>
+<th>ID</th>
+<th>Topic</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AD-001</td>
+<td>FastAPI/Uvicorn backend</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>AD-002</td>
+<td>Direct serial CAT (no Hamlib)</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>AD-003</td>
+<td>Dirty-field state broadcasting</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>AD-004</td>
+<td>Tagged dual-codec audio (Opus + PCM)</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>AD-005</td>
+<td>scope_pipe standalone subprocess</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>AD-006</td>
+<td>Dual-mode spectrum (FT4222 + fallback)</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>AD-007</td>
+<td>PTT release safety flow</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>AD-008</td>
+<td>PyAudio FT-710 auto-detection</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>AD-009</td>
+<td>7-task adaptive polling with bounded lock time</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>AD-010</td>
+<td>Memory channels as server-side JSON</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>AD-011</td>
+<td>Unified 48kHz TX audio pipeline</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>AD-012</td>
+<td>Active-VFO-aware frequency model</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>AD-013</td>
+<td>FT-710 meter calibration tables</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>AD-014</td>
+<td>FT-710 CAT errata handling</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>AD-015</td>
+<td>Priority CAT command preemption</td>
+<td>Implemented</td>
+</tr>
+</tbody>
+</table>
+    </main>
+</div>
+
+<footer class="footer" style="margin-top: 0;">
+    <div class="container">
+        <div class="footer-bottom">
+            <p>&copy; 2026 MRRC FT-710 Project · SDD V1.4 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
+        </div>
+    </div>
+</footer>
+
+<script>
+function toggleMobileMenu() {
+    document.querySelector('.nav-links').classList.toggle('active');
+}
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+    a.addEventListener('click', function(e) {
+        e.preventDefault();
+        const t = document.querySelector(this.getAttribute('href'));
+        if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+});
+const nav = document.querySelector('.navbar');
+window.addEventListener('scroll', () => {
+    nav.style.background = window.scrollY > 50 ? 'rgba(0,0,0,0.95)' : 'rgba(0,0,0,0.8)';
+});
+</script>
+    <script src="../js/global-nav.js?v=2" defer data-gn="1"></script>
+</body>
+</html>

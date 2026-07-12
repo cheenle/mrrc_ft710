@@ -184,10 +184,16 @@ def require_ftdi_libraries() -> tuple[Path, Path]:
 def get_ft4222_clock_divider() -> int:
     """Return FT4222 SPI clock divider enum value.
 
-    wfview uses CLK_DIV_64 (enum value 7) with SYS_CLK_24 for FT-710 scope.
-    Hardware experiments can override this without code edits.
+    wfview uses CLK_DIV_64 (enum value 6, 375 kHz) with SYS_CLK_24
+    for FT-710 scope.  This is the project default — matches wfview
+    exactly for proven stability and frame rate.
+
+    Hardware experiments can override this without code edits by
+    setting FT710_FT4222_CLK_DIV.
+
+    FT4222 enum: 0=NONE 1=/2 2=/4 3=/8 4=/16 5=/32 6=/64 7=/128 8=/256 9=/512
     """
-    raw = os.environ.get("FT710_FT4222_CLK_DIV", "7")  # CLK_DIV_64 (wfview default, more stable)
+    raw = os.environ.get("FT710_FT4222_CLK_DIV", "6")  # CLK_DIV_64 (375 kHz, matches wfview default)
     try:
         value = int(raw)
     except ValueError:

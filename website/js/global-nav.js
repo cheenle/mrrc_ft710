@@ -219,4 +219,13 @@
   // (links point to absolute site roots, which always show EN; that's fine
   //  — the per-site 中文 toggle lives in each site's own navbar.)
 
+  // ── 8. Google AdSense ──
+  if (location.hostname === 'www.vlsc.net' && !document.querySelector('script[src*="adsbygoogle"]')) {
+    var adsenseScript = document.createElement('script');
+    adsenseScript.async = true;
+    adsenseScript.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7442510147240155';
+    adsenseScript.crossOrigin = 'anonymous';
+    document.head.appendChild(adsenseScript);
+  }
+
 })();

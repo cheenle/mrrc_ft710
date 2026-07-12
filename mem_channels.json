@@ -6,9 +6,14 @@
       "label": "40m 7.050"
     },
     {
-      "freq": 14268600,
-      "mode": "USB",
-      "label": "20m 14.269"
+      "freq": 7050000,
+      "mode": "LSB",
+      "label": "40m 7.050"
+    },
+    {
+      "freq": 15775000,
+      "mode": "AM",
+      "label": "GEN 15.775"
     },
     {
       "freq": 14270000,
@@ -16,19 +21,14 @@
       "label": "20m 14.270"
     },
     {
-      "freq": 7290000,
-      "mode": "LSB",
-      "label": "40m 7.290"
+      "freq": 15785000,
+      "mode": "AM",
+      "label": "GEN 15.785"
     },
     {
-      "freq": 14920000,
-      "mode": "USB",
-      "label": "GEN 14.920"
-    },
-    {
-      "freq": 14920000,
-      "mode": "USB",
-      "label": "GEN 14.920"
+      "freq": 15230000,
+      "mode": "AM",
+      "label": "GEN 15.230"
     }
   ]
 }

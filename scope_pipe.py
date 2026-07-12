@@ -46,7 +46,9 @@ SYS_CLK_24 = 1
 
 MAX_SYNC_ATTEMPTS = 3
 MAX_CONSECUTIVE_ERRORS = 50
-MAX_REINIT_CYCLES = 5      # consecutive full-device reinitialisations before giving up
+MAX_REINIT_CYCLES = 5       # consecutive full-device reinitialisations before giving up
+STALL_TIMEOUT = 2.0         # seconds without a successful frame before reinit
+TRANSFER_PROGRESS_SLEEP = 0.002  # sleep between TRANSFER_IN_PROGRESS polls
 
 running = True
 
@@ -194,6 +196,7 @@ def main():
     frame_count = 0
     last_emit = time.time()
     last_heartbeat = time.time()
+    last_successful_frame = time.time()  # time-based stall detection
     consecutive_errors = 0
     consecutive_bad_frames = 0
     sync_attempts_this_device = 0
@@ -203,43 +206,65 @@ def main():
 
     try:
         while running:
-            # Periodic heartbeat (so server knows pipe is alive even with no frames)
             now = time.time()
+
+            # ── Time-based stall detection ──────────────────────────
+            # If no successful frame for STALL_TIMEOUT seconds (and we've
+            # had at least one frame to know the device was working),
+            # the SPI bus may be hung.  Re-initialize the device.
+            # Using elapsed time instead of a TRANSFER_IN_PROGRESS counter
+            # is robust regardless of SPI clock speed — a slow clock
+            # may need >100ms per frame, which the old 50-iteration
+            # counter (50ms) could never satisfy.
+            if (frame_count > 0
+                    and now - last_successful_frame > STALL_TIMEOUT
+                    and reinit_count <= MAX_REINIT_CYCLES):
+                reinit_count += 1
+                emit_status(f"spi_stalled:{now - last_successful_frame:.1f}s:"
+                            f"reinit_{reinit_count}/{MAX_REINIT_CYCLES}")
+                close_device(d2xx, f4, ft_handle)
+                ft_handle = open_device(d2xx, f4, clock_divider)
+                if ft_handle is None:
+                    emit_status("fatal:reinit_failed_after_stall")
+                    break
+                last_successful_frame = time.time()
+                consecutive_errors = 0
+                consecutive_bad_frames = 0
+                sync_attempts_this_device = 0
+                continue
+
+            # ── Heartbeat ───────────────────────────────────────────
             if now - last_heartbeat >= 2.0:
                 emit_status(f"heartbeat:frames={frame_count}:errors={consecutive_errors}")
                 last_heartbeat = now
 
+            # ── SPI read ────────────────────────────────────────────
             status = f4.FT4222_SPIMaster_SingleRead(
                 ft_handle, buf, SCOPE_FRAME_SIZE, byref(sz), False,
             )
 
             if status == FT4222_TRANSFER_IN_PROGRESS:
-                consecutive_errors += 1
-                # If stuck in TRANSFER_IN_PROGRESS for too long,
-                # the SPI bus is hung — re-initialize the device.
-                if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
-                    emit_status(f"spi_stalled:reinit_after_{consecutive_errors}_in_progress")
-                    close_device(d2xx, f4, ft_handle)
-                    ft_handle = open_device(d2xx, f4, clock_divider)
-                    if ft_handle is None:
-                        emit_status("fatal:reinit_failed_after_stall")
-                        break
-                    consecutive_errors = 0
-                    consecutive_bad_frames = 0
-                    sync_attempts_this_device = 0
-                else:
-                    time.sleep(0.001)
+                # Normal condition: data not ready yet.  Sleep briefly
+                # and retry without counting this as an error.
+                time.sleep(TRANSFER_PROGRESS_SLEEP)
                 continue
 
             if status != FT4222_OK:
                 consecutive_errors += 1
                 if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
-                    emit_status(f"too_many_errors:{consecutive_errors}:reinit")
+                    reinit_count += 1
+                    if reinit_count > MAX_REINIT_CYCLES:
+                        emit_status(f"fatal:too_many_errors:{consecutive_errors}:"
+                                    f"reinit_count_{reinit_count}")
+                        break
+                    emit_status(f"too_many_errors:{consecutive_errors}:"
+                                f"reinit_{reinit_count}/{MAX_REINIT_CYCLES}")
                     close_device(d2xx, f4, ft_handle)
                     ft_handle = open_device(d2xx, f4, clock_divider)
                     if ft_handle is None:
                         emit_status("fatal:reinit_failed")
                         break
+                    last_successful_frame = time.time()
                     consecutive_errors = 0
                     consecutive_bad_frames = 0
                     sync_attempts_this_device = 0
@@ -260,6 +285,7 @@ def main():
             # Parse frame
             try:
                 parsed = parse_scope_frame(frame)
+                last_successful_frame = time.time()
                 consecutive_bad_frames = 0
                 sync_attempts_this_device = 0
                 reinit_count = 0  # successful frame resets the reinit counter
@@ -270,6 +296,7 @@ def main():
                 # Try byte-by-byte re-sync first
                 if sync_stream(f4, ft_handle):
                     emit_status("sync_recovered")
+                    last_successful_frame = time.time()
                     consecutive_bad_frames = 0
                     sync_attempts_this_device = 0
                 else:
@@ -288,6 +315,7 @@ def main():
                         if ft_handle is None:
                             emit_status("fatal:reinit_failed_after_sync_loss")
                             break
+                        last_successful_frame = time.time()
                         consecutive_bad_frames = 0
                         sync_attempts_this_device = 0
                 continue

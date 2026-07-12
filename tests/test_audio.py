@@ -90,6 +90,21 @@ class TxFrontendContractTests(unittest.TestCase):
         self.assertIn("new AudioWorkletNode", source)
         self.assertIn("type: 'float_frame'", source)
 
+    def test_tx_start_creates_worker_before_start_command(self):
+        """First PTT must not lose mic frames because the worker missed start."""
+        source = (REPO_ROOT / "static" / "ft710_main.js").read_text()
+        start_fn = source[source.index("function startTXAudio()"):source.index("function startTXAudioFallback()")]
+        ensure_idx = start_fn.index("ensureTXOpusWorker()")
+        start_idx = start_fn.index("postMessage({type: 'start'}")
+        self.assertLess(ensure_idx, start_idx)
+
+    def test_tx_audio_send_uses_websocket_backpressure_guard(self):
+        """TX audio should drop frames under network stall instead of queuing latency."""
+        source = (REPO_ROOT / "static" / "ft710_main.js").read_text()
+        self.assertIn("TX_AUDIO_MAX_BUFFERED_BYTES", source)
+        self.assertIn("wsAudioTX.bufferedAmount", source)
+        self.assertIn("window.__txAudioDroppedFrames", source)
+
     def test_tx_static_assets_are_cache_busted(self):
         main_source = (REPO_ROOT / "static" / "ft710_main.js").read_text()
         worker_source = (REPO_ROOT / "static" / "tx_opus_worker.js").read_text()
