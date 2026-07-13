@@ -483,6 +483,127 @@ function getRxOpusDecoder() {
     return _rxOpusDecoder;
 }
 
+// ── RX MP3 Recorder (lamejs → real MP3, works in all browsers) ────────
+var RX_RECORDER_MIME = 'audio/mpeg';
+var RX_RECORDER_EXT  = 'mp3';
+var RX_MP3_BITRATE   = 128;        // kbps, good balance of quality vs size
+
+function _formatRecordingTimestamp(d) {
+    function pad(n) { return String(n).padStart(2, '0'); }
+    return d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '-' +
+        pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds());
+}
+
+function _downloadRecording(chunks) {
+    if (!chunks || chunks.length === 0) return;
+    var blob = new Blob(chunks, { type: 'audio/mpeg' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'ft710-rx-' + _formatRecordingTimestamp(new Date()) + '.mp3';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function() { URL.revokeObjectURL(url); }, 30000);
+}
+
+/** Convert float32 [-1,+1] samples → Int16Array for the MP3 encoder. */
+function _f32ToInt16(f32) {
+    var len = f32.length;
+    var out = new Int16Array(len);
+    for (var i = 0; i < len; i++) {
+        var s = f32[i];
+        // clamp to [-1, +1]
+        if (s > 1.0) s = 1.0; else if (s < -1.0) s = -1.0;
+        out[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;   // -32768 .. 32767
+    }
+    return out;
+}
+
+window.RXRecorder = (function() {
+    var encoder = null;       // lamejs.Mp3Encoder
+    var chunks = null;        // Array<Uint8Array> of encoded MP3 data
+    var active = false;
+    var totalFrames = 0;
+
+    function isSupported() {
+        return typeof lamejs !== 'undefined' &&
+               typeof lamejs.Mp3Encoder === 'function';
+    }
+
+    function _notify() {
+        if (typeof renderRecordingState === 'function') renderRecordingState();
+    }
+
+    async function start() {
+        if (active) return true;
+        if (!isSupported()) {
+            console.warn('MP3 recording not supported — lamejs missing');
+            _notify();
+            return false;
+        }
+        if (!AudioRX_context || AudioRX_context.state === 'closed') {
+            if (typeof connectAudioRX === 'function') connectAudioRX();
+        }
+        if (!AudioRX_context || AudioRX_context.state === 'closed') {
+            _notify();
+            return false;
+        }
+        if (AudioRX_context.state === 'suspended') {
+            try { await AudioRX_context.resume(); } catch(e) { /* continue anyway */ }
+        }
+
+        encoder = new lamejs.Mp3Encoder(1, AudioRX_sampleRate, RX_MP3_BITRATE);
+        chunks = [];
+        totalFrames = 0;
+        active = true;
+        _notify();
+        console.log('MP3 recording started — ' + RX_MP3_BITRATE + ' kbps, ' + AudioRX_sampleRate + ' Hz mono');
+        return true;
+    }
+
+    function stop() {
+        if (!active) return;
+        active = false;
+        if (encoder) {
+            var tail = encoder.flush();
+            if (tail && tail.length > 0) chunks.push(tail);
+            console.log('MP3 recording stopped — ' + totalFrames + ' frames, ' + chunks.length + ' mp3 chunks');
+        }
+        _downloadRecording(chunks);
+        chunks = [];
+        encoder = null;
+        totalFrames = 0;
+        _notify();
+    }
+
+    /** Feed one chunk of decoded float32 RX audio into the MP3 encoder. */
+    function feed(f32) {
+        if (!active || !encoder || !f32 || f32.length === 0) return;
+        var int16 = _f32ToInt16(f32);
+        var mp3buf = encoder.encodeBuffer(int16);
+        if (mp3buf && mp3buf.length > 0) chunks.push(mp3buf);
+        totalFrames++;
+    }
+
+    async function toggle() {
+        return active ? stop() : (await start());
+    }
+
+    return {
+        start: start,
+        stop: stop,
+        toggle: toggle,
+        feed: feed,
+        isSupported: isSupported,
+        get isActive() { return active; },
+    };
+})();
+
+function feedRXRecorderFrame(f32) {
+    if (window.RXRecorder) window.RXRecorder.feed(f32);
+}
+
 // ── Decode tagged audio frame (1-byte tag + payload) ──────────────────
 function decodeRxAudioFrame(data) {
     if (!data || data.byteLength < 1) return null;
@@ -562,6 +683,7 @@ function AudioRX_start() {
             window.__netBytes.rxAudio += msg.data.byteLength;
             var f32 = decodeRxAudioFrame(msg.data);
             if (f32) {
+                feedRXRecorderFrame(f32);
                 window.__earlyAudioQueue.push(f32);
                 // Keep queue bounded (~1 second max)
                 while (window.__earlyAudioQueue.length > 50) window.__earlyAudioQueue.shift();
@@ -698,6 +820,7 @@ function AudioRX_start() {
                     window.__netBytes.rxAudio += msg.data.byteLength;
                     var float32Data = decodeRxAudioFrame(msg.data);
                     if (float32Data) {
+                        feedRXRecorderFrame(float32Data);
                         queue.push(float32Data);
                         queuedSamples += float32Data.length;
                         while (queuedSamples > maxBufferSamples && queue.length > 1) {

@@ -364,6 +364,19 @@ function renderPTTState() {
     if (tuneBtn) {
         tuneBtn.classList.toggle('tune-active', radioState.tx_status === 2);
     }
+    renderRecordingState();
+}
+
+function renderRecordingState() {
+    const recordBtn = document.getElementById('btn-record');
+    if (!recordBtn) return;
+    const recorder = window.RXRecorder;
+    const supported = !!(recorder && recorder.isSupported && recorder.isSupported());
+    const active = !!(recorder && recorder.isActive);
+    recordBtn.disabled = !supported;
+    recordBtn.classList.toggle('record-active', active);
+    recordBtn.textContent = active ? 'STOP' : (supported ? 'REC' : 'MP3 ✗');
+    recordBtn.title = supported ? '录制接收音频为 MP3 (128kbps)' : '缺少 MP3 编码器 (lamejs)';
 }
 
 function renderFFTPlot(wf1) {
@@ -1141,6 +1154,17 @@ function initUI() {
             handleTuneStart();
         }
     });
+
+    // RX recording button
+    const recordBtn = document.getElementById('btn-record');
+    if (recordBtn) {
+        recordBtn.addEventListener('click', async function() {
+            if (window.RXRecorder) {
+                await window.RXRecorder.toggle();
+            }
+        });
+        renderRecordingState();
+    }
 
     // Memory buttons
     document.querySelectorAll('.mem-btn').forEach(btn => {

@@ -292,13 +292,24 @@ a { color: var(--accent); text-decoration: none; }
     transform: scale(0.97);
     box-shadow: 0 0 20px var(--danger-glow);
 }
-.ptt-side { display: flex; flex-direction: column; gap: 4px; }
-.tune-button {
+.ptt-side { display: flex; flex-direction: row; gap: 4px; }
+.tune-button, .record-button {
     flex: 1; min-width: 60px; font-size: 13px; font-weight: 700;
     background: var(--warning); color: #000; border-radius: var(--radius-md);
     padding: 8px 12px; min-height: 60px;
 }
 .tune-button:active, .tune-button.tune-active { background: #fbbf24; }
+.record-button {
+    background: var(--bg-card); color: var(--text-primary);
+    border: 1px solid var(--border);
+}
+.record-button:active, .record-button.record-active {
+    background: var(--danger); color: #fff; border-color: var(--danger);
+    box-shadow: 0 0 14px var(--danger-glow);
+}
+.record-button:disabled {
+    opacity: 0.45; cursor: default; box-shadow: none;
+}
 
 /* ── Off-Canvas Menu ────────────────────────────────────────────── */
 .off-canvas-menu {

@@ -112,7 +112,7 @@ class TxFrontendContractTests(unittest.TestCase):
         self.assertIn("tx_opus_worker.js?v=tx-audio-4", main_source)
         self.assertIn("tx_capture_worklet.js?v=tx-audio-4", main_source)
         self.assertIn("opus_codec.js?v=tx-audio-4", worker_source)
-        self.assertIn("ft710-v11", sw_source)
+        self.assertIn("ft710-v16", sw_source)
 
     def test_tx_debug_tone_bypasses_microphone_capture(self):
         main_source = (REPO_ROOT / "static" / "ft710_main.js").read_text()
@@ -132,6 +132,43 @@ class TxFrontendContractTests(unittest.TestCase):
         self.assertIn("_opus_encoder_ctl(this.handle, 4006, vbr_ptr)", source)
         self.assertNotIn("_opus_encoder_ctl(this.handle, 4004, vbr_ptr)", source)
         self.assertNotIn("_opus_encoder_ctl(this.handle, 4030", source)
+
+
+class RxRecordingFrontendTests(unittest.TestCase):
+    """RX recording must produce real MP3 via lamejs encoder."""
+
+    def test_record_button_sits_next_to_tune(self):
+        source = (REPO_ROOT / "static" / "index.html").read_text()
+        ptt_footer = source[source.index('<footer class="ptt-footer">'):source.index("</footer>", source.index('<footer class="ptt-footer">'))]
+        self.assertIn('id="btn-tune"', ptt_footer)
+        self.assertIn('id="btn-record"', ptt_footer)
+        self.assertLess(ptt_footer.index('id="btn-tune"'), ptt_footer.index('id="btn-record"'))
+
+    def test_recorder_uses_lamejs_for_real_mp3_encoding(self):
+        source = (REPO_ROOT / "static" / "ft710_main.js").read_text()
+        self.assertIn("window.RXRecorder", source)
+        self.assertIn("lamejs.Mp3Encoder", source)
+        self.assertIn("new lamejs.Mp3Encoder", source)
+        self.assertIn("encoder.encodeBuffer", source)
+        self.assertIn("encoder.flush", source)
+        self.assertIn("audio/mpeg", source)
+        self.assertIn(".mp3", source)
+        self.assertIn("_f32ToInt16", source)
+
+    def test_lamejs_library_is_included_in_html(self):
+        html_source = (REPO_ROOT / "static" / "index.html").read_text()
+        self.assertIn("lame.js", html_source)
+
+    def test_decoded_rx_frames_feed_recorder(self):
+        source = (REPO_ROOT / "static" / "ft710_main.js").read_text()
+        self.assertIn("function feedRXRecorderFrame(f32)", source)
+        self.assertGreaterEqual(source.count("feedRXRecorderFrame("), 3)
+
+    def test_record_button_click_is_bound_in_ui(self):
+        source = (REPO_ROOT / "static" / "ft710_ui.js").read_text()
+        self.assertIn("const recordBtn = document.getElementById('btn-record')", source)
+        self.assertIn("window.RXRecorder.toggle()", source)
+        self.assertIn("record-active", source)
 
 
 class TXBufferTests(unittest.TestCase):
