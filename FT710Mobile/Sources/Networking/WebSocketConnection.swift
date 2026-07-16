@@ -2,6 +2,8 @@ import Foundation
 
 /// Generic WebSocket wrapper using URLSessionWebSocketTask (native, iOS 13+).
 /// Handles connect / disconnect / auto-reconnect / send text & binary.
+/// Checks `session === self.session` in every delegate callback to filter out
+/// events from invalidated/old sessions.
 final class WebSocketConnection: NSObject, @unchecked Sendable {
     private let endpoint: String
     private let serverHost: String
@@ -9,7 +11,7 @@ final class WebSocketConnection: NSObject, @unchecked Sendable {
     private var password: String?
 
     private var task: URLSessionWebSocketTask?
-    private var session: URLSession!
+    private var session: URLSession?
     private var isActive = false
     private var shouldReconnect = true
 
@@ -28,17 +30,8 @@ final class WebSocketConnection: NSObject, @unchecked Sendable {
         self.endpoint = endpoint
         self.password = password
         super.init()
-        let config = URLSessionConfiguration.default
-        // Server may validate Origin header — match the web frontend
-        let scheme = "http"  // Default HTTP for self-hosted servers
-        config.httpAdditionalHeaders = [
-            "Origin": "\(scheme)://\(serverHost)",
-            "User-Agent": "FT710Mobile/1.0",
-        ]
-        session = URLSession(configuration: config, delegate: self, delegateQueue: nil)
     }
 
-    /// Update password (for reconnect after login change).
     func updatePassword(_ password: String?) {
         self.password = password
     }
@@ -53,8 +46,10 @@ final class WebSocketConnection: NSObject, @unchecked Sendable {
     func disconnect() {
         shouldReconnect = false
         isActive = false
-        task?.cancel(with: .normalClosure, reason: nil)
+        task?.cancel()
         task = nil
+        session?.invalidateAndCancel()
+        session = nil
     }
 
     func send(text: String) {
@@ -71,11 +66,23 @@ final class WebSocketConnection: NSObject, @unchecked Sendable {
 
     // MARK: - Private
 
+    private func makeSession() -> URLSession {
+        let config = URLSessionConfiguration.default
+        let scheme = "https"
+        config.httpAdditionalHeaders = [
+            "Origin": "\(scheme)://\(serverHost)",
+            "User-Agent": "FT710Mobile/1.0",
+        ]
+        return URLSession(configuration: config, delegate: self, delegateQueue: nil)
+    }
+
     private func doConnect() {
-        let scheme = "ws"  // Default WS for self-hosted servers (ATS allows via Info.plist)
+        let sess = makeSession()
+        session = sess
+
+        let scheme = "wss"
         var urlStr = "\(scheme)://\(serverHost)\(endpoint)"
 
-        // Server uses ?token= query param for WebSocket auth
         if let pass = password, !pass.isEmpty {
             let encPass = pass.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? pass
             urlStr += "?token=\(encPass)"
@@ -86,14 +93,15 @@ final class WebSocketConnection: NSObject, @unchecked Sendable {
                              userInfo: [NSLocalizedDescriptionKey: "Bad URL"]))
             return
         }
-        task = session.webSocketTask(with: url)
+        task = sess.webSocketTask(with: url)
         task?.resume()
         receive()
     }
 
     private func receive() {
+        let expectSession = session  // capture current session
         task?.receive { [weak self] result in
-            guard let self = self else { return }
+            guard let self = self, self.session === expectSession else { return }
             switch result {
             case .success(let message):
                 switch message {
@@ -106,8 +114,8 @@ final class WebSocketConnection: NSObject, @unchecked Sendable {
                 }
                 if self.isActive { self.receive() }
 
-            case .failure(let error):
-                self.onError?(error)
+            case .failure:
+                break  // disconnect handles cleanup
             }
         }
     }
@@ -124,8 +132,10 @@ final class WebSocketConnection: NSObject, @unchecked Sendable {
 // MARK: - URLSessionWebSocketDelegate
 
 extension WebSocketConnection: URLSessionWebSocketDelegate, URLSessionTaskDelegate {
+
     func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask,
                     didOpenWithProtocol protocol: String?) {
+        guard session === self.session else { return }  // ignore stale sessions
         print("🔗 WS connected: \(endpoint)")
         DispatchQueue.main.async { [weak self] in
             self?.onConnected?()
@@ -134,10 +144,11 @@ extension WebSocketConnection: URLSessionWebSocketDelegate, URLSessionTaskDelega
 
     func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask,
                     didCloseWith closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {
+        guard session === self.session else { return }  // ignore stale sessions
+
         let reasonStr = reason.flatMap { String(data: $0, encoding: .utf8) } ?? "none"
         print("🔌 WS closed: \(endpoint) code=\(closeCode.rawValue) reason=\(reasonStr)")
 
-        // Stop reconnecting on auth failure — token is wrong, retrying won't help
         if closeCode.rawValue == 4001 {
             print("🛑 Auth required — stopping reconnect for \(endpoint)")
             shouldReconnect = false
@@ -151,18 +162,18 @@ extension WebSocketConnection: URLSessionWebSocketDelegate, URLSessionTaskDelega
         }
     }
 
-    // Handle task-level errors (connection refused, TLS failures, etc.)
     func urlSession(_ session: URLSession, task: URLSessionTask,
                     didCompleteWithError error: Error?) {
-        if let err = error {
-            print("❌ WS task error [\(endpoint)]: \(err.localizedDescription)")
-            DispatchQueue.main.async { [weak self] in
-                self?.onError?(err)
-                self?.onDisconnected?(err)
-                self?.scheduleReconnect()
-            }
+        guard session === self.session, let err = error else { return }  // ignore stale sessions
+
+        let nsErr = err as NSError
+        if nsErr.domain == NSURLErrorDomain && nsErr.code == NSURLErrorCancelled { return }
+
+        print("❌ WS task error [\(endpoint)]: \(err.localizedDescription)")
+        DispatchQueue.main.async { [weak self] in
+            self?.onError?(err)
+            self?.onDisconnected?(err)
+            self?.scheduleReconnect()
         }
     }
-
-    // Use default system trust evaluation (Let's Encrypt is trusted by iOS).
 }

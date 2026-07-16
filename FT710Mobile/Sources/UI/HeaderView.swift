@@ -5,11 +5,11 @@ struct HeaderView: View {
     @EnvironmentObject var viewModel: RadioViewModel
 
     var body: some View {
-        VStack(spacing: 1) {
-            // Row 1: Status + meters
-            HStack(spacing: 10) {
+        VStack(spacing: 2) {
+            // Row 1: Status + meters (1.5× size)
+            HStack(spacing: 12) {
                 Text(viewModel.state.sUnit)
-                    .font(.caption.weight(.bold)).foregroundColor(.radioGreen)
+                    .font(.system(size: 18, weight: .bold)).foregroundColor(.radioGreen)
 
                 wsDot(viewModel.state.ctrlConnected, "C")
                 wsDot(viewModel.state.spectrumConnected, "S")
@@ -17,26 +17,33 @@ struct HeaderView: View {
                 wsDot(viewModel.state.audioTXConnected, "T")
 
                 if viewModel.state.tunerStatus == 2 {
-                    Text("TUNE").font(.caption.weight(.bold)).foregroundColor(.radioAccent)
+                    Text("TUNE").font(.system(size: 18, weight: .bold)).foregroundColor(.radioAccent)
                 }
 
                 if viewModel.state.serialConnected {
-                    Circle().fill(Color.green).frame(width: 6, height: 6)
+                    Circle().fill(Color.green).frame(width: 9, height: 9)
                 }
 
                 Spacer()
 
+                // Settings gear button
+                Button(action: { viewModel.state.showSettings = true }) {
+                    Image(systemName: "gearshape")
+                        .font(.title3)
+                        .foregroundColor(.radioMuted)
+                }
+
                 // VFO A/B toggle
                 HStack(spacing: 0) {
                     Button("A") { viewModel.setVFO("A") }
-                        .font(.caption.weight(.bold))
+                        .font(.system(size: 16, weight: .bold))
                         .foregroundColor(viewModel.state.activeVFO == "A" ? .black : .radioMuted)
-                        .frame(width: 28, height: 24)
+                        .frame(width: 42, height: 36)
                         .background(viewModel.state.activeVFO == "A" ? Color.radioAccent : Color.radioSurface)
                     Button("B") { viewModel.setVFO("B") }
-                        .font(.caption.weight(.bold))
+                        .font(.system(size: 16, weight: .bold))
                         .foregroundColor(viewModel.state.activeVFO == "B" ? .black : .radioMuted)
-                        .frame(width: 28, height: 24)
+                        .frame(width: 42, height: 36)
                         .background(viewModel.state.activeVFO == "B" ? Color.radioAccent : Color.radioSurface)
                 }.cornerRadius(5)
 
@@ -45,42 +52,28 @@ struct HeaderView: View {
                     viewModel.state.powerOn ? viewModel.powerOff() : viewModel.powerOnAsync()
                 }) {
                     Image(systemName: viewModel.state.powerOn ? "power.circle.fill" : "power.circle")
-                        .font(.body).foregroundColor(viewModel.state.powerOn ? .green : .radioMuted)
+                        .font(.title3).foregroundColor(viewModel.state.powerOn ? .green : .radioMuted)
                 }
             }
 
-            // Row 2: Frequency + step arrows
-            HStack(spacing: 6) {
-                Button(action: { viewModel.stepFrequency(up: false) }) {
-                    Image(systemName: "chevron.left")
-                        .font(.title3.weight(.bold)).foregroundColor(.radioAccent)
-                }
+            // Row 2: Frequency display (fills row)
+            FrequencyDisplayView(freqHz: viewModel.state.activeFreq)
+                .padding(.horizontal, 4)
 
-                FrequencyDisplayView(freqHz: viewModel.state.activeFreq)
-
-                Button(action: { viewModel.stepFrequency(up: true) }) {
-                    Image(systemName: "chevron.right")
-                        .font(.title3.weight(.bold)).foregroundColor(.radioAccent)
-                }
-            }.padding(.horizontal, 4)
-
-            // Row 3: Mode + Filter + Band + band name
-            HStack(spacing: 6) {
-                ModeSelectorView()
-                FilterSelectorView()
-                BandSelectorView()
+            // Row 3: Band name
+            HStack {
                 Spacer()
                 Text(viewModel.state.bandName)
-                    .font(.caption.weight(.bold)).foregroundColor(.radioAccent)
+                    .font(.system(size: 14, weight: .bold)).foregroundColor(.radioAccent)
             }.padding(.horizontal, 12)
         }
-        .padding(.vertical, 3)
+        .padding(.vertical, 4)
     }
 
     private func wsDot(_ on: Bool, _ label: String) -> some View {
-        HStack(spacing: 2) {
-            Circle().fill(on ? Color.green : Color.red).frame(width: 5, height: 5)
-            Text(label).font(.system(size: 8)).foregroundColor(.radioMuted)
+        HStack(spacing: 3) {
+            Circle().fill(on ? Color.green : Color.red).frame(width: 8, height: 8)
+            Text(label).font(.system(size: 12, weight: .bold)).foregroundColor(.radioMuted)
         }
     }
 }

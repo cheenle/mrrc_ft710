@@ -4,6 +4,8 @@ FT-710 Web Control — Configuration & Constants
 Mode tables, band definitions, filter widths, S-meter calibration, and
 environment-based configuration with sensible defaults.
 """
+from __future__ import annotations
+
 import os
 from pathlib import Path
 
@@ -48,7 +50,9 @@ SCOPE_SPANS: dict[int, dict] = {
 
 # ── Web Server Configuration ────────────────────────────────────────
 WEB_PORT = int(os.environ.get("FT710_WEB_PORT", "8888"))
-WEB_PASSWORD = os.environ.get("FT710_WEB_PASSWORD", "ft710")
+# SECURITY: Change this password in production! Use a strong, unique password.
+# Recommended: 16+ characters with mixed case, numbers, and symbols
+WEB_PASSWORD = os.environ.get("FT710_WEB_PASSWORD", "changeme_please_use_strong_password!")
 WEB_HOST = os.environ.get("FT710_WEB_HOST", "::")  # IPv6 dual-stack
 
 # SSL (Let's Encrypt certs for radio.vlsc.net)

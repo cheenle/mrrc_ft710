@@ -1,8 +1,8 @@
 """
-RX Opus encoder for SunSDR2 web audio
+RX Opus encoder for FT-710 web audio
 =====================================
-Server-side Opus encoder for the RX audio stream. Compresses the 16 kHz mono
-Int16 PCM broadcast (~256 kbit/s) down to ~16-24 kbit/s — a >10x bandwidth cut
+Server-side Opus encoder for the RX audio stream. Compresses the 48 kHz mono
+Int16 PCM broadcast (~768 kbit/s) down to ~16-24 kbit/s — a >30x bandwidth cut
 for mobile clients.
 
 WHY A DIRECT CTYPES WRAPPER (not opuslib), AND NO ctl CALLS:

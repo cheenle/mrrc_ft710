@@ -41,7 +41,7 @@ struct LoginView: View {
                     HStack {
                         Image(systemName: "network")
                             .foregroundColor(.gray)
-                        TextField("radio.vlsc.net:8889", text: $host)
+                        TextField("radio.vlsc.net:8888", text: $host)
                             .keyboardType(.URL)
                             .autocapitalization(.none)
                             .disableAutocorrection(true)

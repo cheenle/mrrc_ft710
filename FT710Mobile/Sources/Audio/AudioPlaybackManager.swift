@@ -25,21 +25,23 @@ final class AudioPlaybackManager: NSObject, ObservableObject, @unchecked Sendabl
     @Published var isMuted: Bool = false {
         didSet { applyVolume() }
     }
-    /// 0-255, mirrors the server af_gain.  Default 128 = centre.
-    @Published var afGain: Int = 128 {
+    /// Local phone volume (0.0–1.0), independent of radio's af_gain.
+    @Published var appVolume: Float = 0.5 {
         didSet { applyVolume() }
     }
     @Published var rmsLevel: Float = 0.0
     @Published var audioError: String?
 
-    /// Map af_gain (0–255) to AVAudioPlayerNode volume (0–1) with a
-    /// 1.5× boost to compensate for quiet FT-710 USB audio.
+    /// 10× boost matches web frontend AUDIO_GAIN_BOOST to compensate
+    /// for quiet FT-710 USB audio.
+    private let audioGainBoost: Float = 10.0
+    private let audioGainMax: Float = 10.0
+
     private func applyVolume() {
         if isMuted {
             playerNode.volume = 0
         } else {
-            let raw = Float(afGain) / 255.0
-            playerNode.volume = min(1.0, raw * 1.5)
+            playerNode.volume = min(audioGainMax, appVolume * audioGainBoost)
         }
     }
 
@@ -89,6 +91,7 @@ final class AudioPlaybackManager: NSObject, ObservableObject, @unchecked Sendabl
         } catch {
             audioError = "Engine start: \(error.localizedDescription)"
             print("⚠️ \(audioError!)")
+            NotificationCenter.default.post(name: .audioError, object: nil, userInfo: ["error": audioError ?? "Unknown"])
         }
     }
 
@@ -106,10 +109,10 @@ final class AudioPlaybackManager: NSObject, ObservableObject, @unchecked Sendabl
     /// Frame format: 1-byte codec tag (0x00=PCM, 0x01=Opus) + payload.
     func enqueue(int16Data: Data) {
         guard isStarted, int16Data.count >= 3 else { return }
-        let codec = int16Data[0]
+        let codec = int16Data[int16Data.startIndex]
         if codec == 0x01 {
-            // Decode Opus → PCM, then process as PCM
-            if let pcmData = opusDecoder.decode(int16Data.dropFirst()) {
+            if let pcmSamples = opusDecoder.decode(int16Data.dropFirst()) {
+                let pcmData = pcmSamples.withUnsafeBufferPointer { Data(buffer: $0) }
                 processPCM(pcmData)
             } else {
                 opusDropCount += 1
@@ -124,7 +127,7 @@ final class AudioPlaybackManager: NSObject, ObservableObject, @unchecked Sendabl
         processPCM(pcmBytes)
     }
 
-    /// Process decoded PCM data (Int16 LE) — shared by PCM and Opus paths.
+    /// Process decoded PCM data (Int16 LE).
     private func processPCM(_ pcmBytes: Data) {
         let sampleCount = pcmBytes.count / 2
         guard sampleCount > 0 else { return }
@@ -150,18 +153,21 @@ final class AudioPlaybackManager: NSObject, ObservableObject, @unchecked Sendabl
         vDSP_rmsqv(samples, 1, &rms, vDSP_Length(sampleCount))
         DispatchQueue.main.async { [weak self] in self?.rmsLevel = rms }
 
-        // ── Schedule buffer ───────────────────────────────────
-        guard let fmt = playbackFormat,
-              let buf = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: AVAudioFrameCount(sampleCount))
-        else { return }
+        // ── Schedule buffer directly ─────────────────────────
+        guard let fmt = playbackFormat else { return }
+        let frameLen = AVAudioFrameCount(sampleCount)
 
-        buf.frameLength = AVAudioFrameCount(sampleCount)
-        if let dst = buf.floatChannelData?.pointee {
-            dst.initialize(from: samples, count: sampleCount)
-        }
+        // Copy samples to a heap buffer so we can move it into ioQueue safely
+        let heapSamples = samples  // copies
 
         ioQueue.async { [weak self] in
-            self?.playerNode.scheduleBuffer(buf)
+            guard let self = self, self.isStarted else { return }
+            guard let buf = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: frameLen) else { return }
+            buf.frameLength = frameLen
+            if let dst = buf.floatChannelData?.pointee {
+                dst.initialize(from: heapSamples, count: sampleCount)
+            }
+            self.playerNode.scheduleBuffer(buf)
         }
 
         // ── 5-second diagnostic ───────────────────────────────
@@ -177,15 +183,11 @@ final class AudioPlaybackManager: NSObject, ObservableObject, @unchecked Sendabl
     // MARK: - Private
 
     private func configureSession() {
-        let session = AVAudioSession.sharedInstance()
         do {
-            try session.setCategory(.playback, mode: .default,
-                                    options: [.mixWithOthers, .allowBluetoothA2DP, .allowBluetooth])
-            // Lower IO buffer for reduced latency
-            try session.setPreferredIOBufferDuration(0.005)  // ~5ms
-            try session.setActive(true)
+            try AudioSessionManager.shared.configureForTransceiver()
         } catch {
-            print("⚠️ AudioSession: \(error)")
+            audioError = "Audio session config: \(error.localizedDescription)"
+            print("⚠️ \(audioError!)")
         }
     }
 
@@ -217,8 +219,9 @@ final class AudioPlaybackManager: NSObject, ObservableObject, @unchecked Sendabl
     }
 }
 
-// MARK: - Notification for Opus detection
+// MARK: - Notification
 
 extension Notification.Name {
     static let audioOpusDetected = Notification.Name("audioOpusDetected")
+    static let audioError = Notification.Name("audioError")
 }

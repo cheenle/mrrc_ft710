@@ -28,6 +28,7 @@ final class RadioState: ObservableObject {
     @Published var filterWidth: Int = 5
     @Published var preamp: Int = 0           // 0=OFF,1=AMP1,2=AMP2
     @Published var attenuator: Int = 0       // 0=OFF,1=6dB,2=12dB,3=18dB
+    @Published var ipo: Int = 0              // 0=OFF,1=10dB,2=20dB,3=30dB
     @Published var noiseBlanker: Bool = false
     @Published var noiseReduction: Bool = false
     @Published var autoNotch: Bool = false
@@ -37,6 +38,7 @@ final class RadioState: ObservableObject {
     @Published var nbLevel: Int = 5
     @Published var tunerStatus: Int = 0      // 0=OFF,1=ON,2=Tuning
     @Published var powerOn: Bool = true
+    @Published var showSettings: Bool = false
     @Published var squelch: Int = 0
     @Published var micGain: Int = 50
     @Published var split: Bool = false
@@ -77,6 +79,7 @@ final class RadioState: ObservableObject {
 
     // MARK: - Spectrum
     @Published var waterfallImage: UIImage?
+    @Published var fftData: [Float] = []            // current FFT line (850 bins)
 
     // MARK: - Derived properties
     var activeFreq: Int { activeVFO == "A" ? vfoAFreq : vfoBFreq }
@@ -98,6 +101,8 @@ final class RadioState: ObservableObject {
     var isTransmitting: Bool { txStatus > 0 }
     var preampLabel: String { ["OFF","AMP1","AMP2"][ preamp >= 0 && preamp <= 2 ? preamp : 0 ] }
     var attenuatorLabel: String { ["OFF","6dB","12dB","18dB"][ attenuator >= 0 && attenuator <= 3 ? attenuator : 0 ] }
+    static let ipoLabels: [Int: String] = [0: "OFF", 10: "10dB", 20: "20dB", 30: "30dB"]
+    var ipoLabel: String { Self.ipoLabels[ipo] ?? "OFF" }
     var filterHz: Int? {
         let widths = Self.filterWidthsForMode(modeName)
         return widths.first(where: { $0.0 == filterWidth })?.1
@@ -148,9 +153,12 @@ final class RadioState: ObservableObject {
     ]
 
     static let filterWidthsVoice: [(Int, Int)] = [
-        (1,300),(2,400),(3,600),(4,850),(5,1100),(6,1200),(7,1500),(8,1650),
-        (9,1800),(10,1950),(11,2100),(12,2250),(13,2400),(14,2450),(15,2500),
-        (16,2600),(17,2700),(18,2800),(19,2900),(20,3000),(21,3200),(22,3500),(23,4000),
+        (9, 1800),
+        (11, 2000),
+        (13, 2400),
+        (17, 2700),
+        (20, 3000),
+        (23, 4500),
     ]
 
     static let filterWidthsNarrow: [(Int, Int)] = [
@@ -200,6 +208,7 @@ final class RadioState: ObservableObject {
         if let v = data["filter_width"] as? Int { filterWidth = v }
         if let v = data["preamp"] as? Int { preamp = v }
         if let v = data["attenuator"] as? Int { attenuator = v }
+        if let v = data["ipo"] as? Int { ipo = v }
         if let v = data["noise_blanker"] as? Bool { noiseBlanker = v }
         if let v = data["noise_reduction"] as? Bool { noiseReduction = v }
         if let v = data["auto_notch"] as? Bool { autoNotch = v }

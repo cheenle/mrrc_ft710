@@ -113,7 +113,12 @@ class RadioState:
 
     # ── Change Tracking ───────────────────────────────────────────
     _dirty_fields: set[str] = field(default_factory=set, repr=False)
-    _lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
+    # Note: _lock is intentionally omitted. RadioState.update() is synchronous
+    # and called from the asyncio event loop, so no locking is needed.
+
+    def __post_init__(self):
+        """Initialize any state that requires an event loop."""
+        pass
 
     # ── Derived Properties ────────────────────────────────────────
 

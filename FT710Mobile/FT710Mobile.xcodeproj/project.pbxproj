@@ -8,9 +8,12 @@
 
 /* Begin PBXBuildFile section */
 		0DBAA6F90186AC5FBDF2D716 /* RadioViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D62CC7E6BFD3E507CB2FB9DB /* RadioViewModel.swift */; };
+		10B0537242FDBAC530D00D32 /* libopus.a in Resources */ = {isa = PBXBuildFile; fileRef = 43A4E12018D21FA6DA958452 /* libopus.a */; };
 		143A6B51219A6441207E4E3C /* FT710MobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DD67DEBFDB29969EAA9B3F1 /* FT710MobileApp.swift */; };
 		15597B60373BCED1D29C64EA /* ModeSelectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32918148C5CBA08CB773375B /* ModeSelectorView.swift */; };
 		19662EC4015D00FAE9325003 /* AudioCaptureManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C157EAE8C8690EF73D0880A /* AudioCaptureManager.swift */; };
+		2424B368C36976981FC6A9F3 /* FFTLineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0442B8F002C443CF467092C9 /* FFTLineView.swift */; };
+		2B271D21C0EA52DEE9081A1D /* VFOButtons.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA661AE6EF4CA39417357B46 /* VFOButtons.swift */; };
 		2F3801A2B935E53821F2F8B5 /* PTTButtonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC324FD8D979748BADC1C40B /* PTTButtonView.swift */; };
 		2FB0F597540EA56D90C06C89 /* WaterfallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCF414FDEC6980A57582ACBD /* WaterfallView.swift */; };
 		353ABF0B86F00182614C23F0 /* MainRXView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B213691E8629DDB947FFC82C /* MainRXView.swift */; };
@@ -20,52 +23,86 @@
 		648B2185BDD918B194FCA284 /* ConnectionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA35D4D362BF3B541D7EE8A5 /* ConnectionManager.swift */; };
 		801DEF3F460117D1284A1B3D /* FilterSelectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA7F707392BC5E4B981E6AFE /* FilterSelectorView.swift */; };
 		81D6FE36922533D348B8AF93 /* DSPPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C383D9A97FCEC5E407A668BD /* DSPPanelView.swift */; };
+		8219B49AE37B490BC45417E3 /* DSPQuickButtons.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC161307F2311893A0593949 /* DSPQuickButtons.swift */; };
+		981EFFF44A66747BDACCEEBD /* TuningControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E17C98D145A8D70258962D6 /* TuningControls.swift */; };
+		9F47D93C40841C1E30625DF1 /* PTTFooter.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC0772FFB0145D0BC1F9B601 /* PTTFooter.swift */; };
 		A0D5064F92F5B75ED0FA32AA /* OpusEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF74DEA1C9A60039A4A0FB54 /* OpusEncoder.swift */; };
+		A106D855410CE691B652D798 /* OpusBridge.c in Sources */ = {isa = PBXBuildFile; fileRef = D025F6543B9AF46530AD8497 /* OpusBridge.c */; };
+		A71929F7722A72CCBA789B10 /* QuickControlsRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BE7D45C1A9D7E4DA1F012B9 /* QuickControlsRow.swift */; };
 		A788C47BE4DA57142851F870 /* OpusDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1B74F206BEC73DD89D06D4F /* OpusDecoder.swift */; };
 		A98E325FD8F5503A4A87289B /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D19A5C7B47FBF5B9FEA52E12 /* SettingsView.swift */; };
 		AA416A6B341406BF483DB3C2 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5FE5EF147D278798C3667A8 /* LoginView.swift */; };
 		AC77ECA6664A3DFE3949E426 /* RadioState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79F849B007EFCA1C1B25D92F /* RadioState.swift */; };
 		B0A3E7F55E09E6C30A0BC5D5 /* AudioPlaybackManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE0A084FE2099A1A0BA6AD87 /* AudioPlaybackManager.swift */; };
+		B468A2D9A3B93CD4885C7557 /* AudioSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25941872CAA06326CD9DCA88 /* AudioSessionManager.swift */; };
+		BC3B135E1A4DD7CFC55D29C3 /* MemoryChannelsGrid.swift in Sources */ = {isa = PBXBuildFile; fileRef = 679A21D971327DED4B3700A0 /* MemoryChannelsGrid.swift */; };
 		BE31368B091EC95505CEE2C0 /* SpectrumProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 339927CA5FEABE608B6E67F6 /* SpectrumProcessor.swift */; };
 		BFDEB099AF669F554FEFD42F /* WebSocketConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 599667BB247E4B195330A60F /* WebSocketConnection.swift */; };
 		C958045326E902C993900ED6 /* SMeterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 571C8D0AF256B0A4ECC8933B /* SMeterView.swift */; };
+		C9D0B8E8C3C8FD0DD4AF6F68 /* PerformanceMonitorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF32903053E3E4C424148152 /* PerformanceMonitorView.swift */; };
 		CE1F27BAF91AA8BC6F8DD670 /* BandSelectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7749903EC42A6EF6AA18E574 /* BandSelectorView.swift */; };
 		D338B004CC9F928B74ADAEDB /* FrequencyDisplay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A206EC58D51F49CAEF76658 /* FrequencyDisplay.swift */; };
 		DC834C525888E31385236F82 /* HeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77D0287AA65811A1995AA8CB /* HeaderView.swift */; };
 		DEBBE844CE134AD603F196FB /* Colors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03A6BD94BCEF0DBF26311355 /* Colors.swift */; };
+		E413B58732338DA6F1405581 /* ErrorAlertView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 241EDD210F3B482D105688BB /* ErrorAlertView.swift */; };
 		E5330CF62CD88CD132708D12 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75A3B8FD0CC31411814FB37E /* ContentView.swift */; };
 		F3C4641C77ECF03BBF0537C9 /* MeterBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 902B42102F8B88B3287DC547 /* MeterBarView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		01531871C03097520A3500A9 /* opus_multistream.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = opus_multistream.h; sourceTree = "<group>"; };
 		03A6BD94BCEF0DBF26311355 /* Colors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Colors.swift; sourceTree = "<group>"; };
+		0442B8F002C443CF467092C9 /* FFTLineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FFTLineView.swift; sourceTree = "<group>"; };
+		15CA07577EF83D38FC3CFDD3 /* opus_projection.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = opus_projection.h; sourceTree = "<group>"; };
 		1887F7829F4094CB16B0C0DD /* TunerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TunerView.swift; sourceTree = "<group>"; };
 		1966D9EFC41E35228B8B7C83 /* MemoryChannelsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryChannelsView.swift; sourceTree = "<group>"; };
 		1A206EC58D51F49CAEF76658 /* FrequencyDisplay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrequencyDisplay.swift; sourceTree = "<group>"; };
+		1E17C98D145A8D70258962D6 /* TuningControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TuningControls.swift; sourceTree = "<group>"; };
+		241EDD210F3B482D105688BB /* ErrorAlertView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorAlertView.swift; sourceTree = "<group>"; };
+		25941872CAA06326CD9DCA88 /* AudioSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioSessionManager.swift; sourceTree = "<group>"; };
 		2DD67DEBFDB29969EAA9B3F1 /* FT710MobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FT710MobileApp.swift; sourceTree = "<group>"; };
 		32918148C5CBA08CB773375B /* ModeSelectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModeSelectorView.swift; sourceTree = "<group>"; };
 		339927CA5FEABE608B6E67F6 /* SpectrumProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpectrumProcessor.swift; sourceTree = "<group>"; };
+		35E8FD877710A13844411D09 /* opus_projection.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = opus_projection.h; sourceTree = "<group>"; };
+		394D09888010BB68309FDEBB /* opus_custom.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = opus_custom.h; sourceTree = "<group>"; };
+		43A4E12018D21FA6DA958452 /* libopus.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libopus.a; sourceTree = "<group>"; };
+		47EC6B2838249B27C3C44216 /* opus.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = opus.h; sourceTree = "<group>"; };
 		4C157EAE8C8690EF73D0880A /* AudioCaptureManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioCaptureManager.swift; sourceTree = "<group>"; };
 		571C8D0AF256B0A4ECC8933B /* SMeterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SMeterView.swift; sourceTree = "<group>"; };
 		599667BB247E4B195330A60F /* WebSocketConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSocketConnection.swift; sourceTree = "<group>"; };
+		67370F6B2FECFCCDEADEC3CD /* opus.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = opus.h; sourceTree = "<group>"; };
+		679A21D971327DED4B3700A0 /* MemoryChannelsGrid.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryChannelsGrid.swift; sourceTree = "<group>"; };
 		75A3B8FD0CC31411814FB37E /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		7749903EC42A6EF6AA18E574 /* BandSelectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BandSelectorView.swift; sourceTree = "<group>"; };
 		77D0287AA65811A1995AA8CB /* HeaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeaderView.swift; sourceTree = "<group>"; };
 		79F849B007EFCA1C1B25D92F /* RadioState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadioState.swift; sourceTree = "<group>"; };
 		7EDFB07C9535CB0D110B9863 /* FT710Mobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FT710Mobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		8BE7D45C1A9D7E4DA1F012B9 /* QuickControlsRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickControlsRow.swift; sourceTree = "<group>"; };
 		902B42102F8B88B3287DC547 /* MeterBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeterBarView.swift; sourceTree = "<group>"; };
+		92BE87E2DF877D617B8867B3 /* opus_defines.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = opus_defines.h; sourceTree = "<group>"; };
+		964477D2A43C4C0532B907AE /* opus_types.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = opus_types.h; sourceTree = "<group>"; };
 		A5FE5EF147D278798C3667A8 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
+		A81D1B0A28D6FB1CE8DE9F02 /* opus_multistream.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = opus_multistream.h; sourceTree = "<group>"; };
 		B213691E8629DDB947FFC82C /* MainRXView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainRXView.swift; sourceTree = "<group>"; };
+		BC0772FFB0145D0BC1F9B601 /* PTTFooter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PTTFooter.swift; sourceTree = "<group>"; };
 		BCF414FDEC6980A57582ACBD /* WaterfallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaterfallView.swift; sourceTree = "<group>"; };
 		BE0A084FE2099A1A0BA6AD87 /* AudioPlaybackManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlaybackManager.swift; sourceTree = "<group>"; };
 		C383D9A97FCEC5E407A668BD /* DSPPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DSPPanelView.swift; sourceTree = "<group>"; };
+		CA661AE6EF4CA39417357B46 /* VFOButtons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VFOButtons.swift; sourceTree = "<group>"; };
+		D025F6543B9AF46530AD8497 /* OpusBridge.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = OpusBridge.c; sourceTree = "<group>"; };
 		D19A5C7B47FBF5B9FEA52E12 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		D62CC7E6BFD3E507CB2FB9DB /* RadioViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadioViewModel.swift; sourceTree = "<group>"; };
 		DA7F707392BC5E4B981E6AFE /* FilterSelectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilterSelectorView.swift; sourceTree = "<group>"; };
 		DC324FD8D979748BADC1C40B /* PTTButtonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PTTButtonView.swift; sourceTree = "<group>"; };
+		E0547D2B4B7DA3E5DD5068C8 /* opus_custom.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = opus_custom.h; sourceTree = "<group>"; };
+		E58CED0EB8D22A5DB817CF32 /* OpusBridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = OpusBridge.h; sourceTree = "<group>"; };
 		EA35D4D362BF3B541D7EE8A5 /* ConnectionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionManager.swift; sourceTree = "<group>"; };
+		EBE0448E781F18CD895524B6 /* opus_defines.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = opus_defines.h; sourceTree = "<group>"; };
+		EC161307F2311893A0593949 /* DSPQuickButtons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DSPQuickButtons.swift; sourceTree = "<group>"; };
+		EF32903053E3E4C424148152 /* PerformanceMonitorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceMonitorView.swift; sourceTree = "<group>"; };
 		EF987F7D69693580D861684F /* MemoryChannelsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryChannelsManager.swift; sourceTree = "<group>"; };
 		F1B74F206BEC73DD89D06D4F /* OpusDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpusDecoder.swift; sourceTree = "<group>"; };
+		FE28F37FF739B471BB2C71E0 /* opus_types.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = opus_types.h; sourceTree = "<group>"; };
 		FF74DEA1C9A60039A4A0FB54 /* OpusEncoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpusEncoder.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -75,8 +112,12 @@
 			children = (
 				4C157EAE8C8690EF73D0880A /* AudioCaptureManager.swift */,
 				BE0A084FE2099A1A0BA6AD87 /* AudioPlaybackManager.swift */,
+				25941872CAA06326CD9DCA88 /* AudioSessionManager.swift */,
+				D025F6543B9AF46530AD8497 /* OpusBridge.c */,
+				E58CED0EB8D22A5DB817CF32 /* OpusBridge.h */,
 				F1B74F206BEC73DD89D06D4F /* OpusDecoder.swift */,
 				FF74DEA1C9A60039A4A0FB54 /* OpusEncoder.swift */,
+				826DC92E5D3A38B813222F05 /* opus-ios */,
 			);
 			path = Audio;
 			sourceTree = "<group>";
@@ -89,12 +130,42 @@
 			path = Spectrum;
 			sourceTree = "<group>";
 		};
+		7AED5CC32148CE63F0043EF4 /* opus */ = {
+			isa = PBXGroup;
+			children = (
+				394D09888010BB68309FDEBB /* opus_custom.h */,
+				EBE0448E781F18CD895524B6 /* opus_defines.h */,
+				A81D1B0A28D6FB1CE8DE9F02 /* opus_multistream.h */,
+				35E8FD877710A13844411D09 /* opus_projection.h */,
+				FE28F37FF739B471BB2C71E0 /* opus_types.h */,
+				47EC6B2838249B27C3C44216 /* opus.h */,
+			);
+			path = opus;
+			sourceTree = "<group>";
+		};
 		819C24A1DB1E5347344249F2 /* ViewModel */ = {
 			isa = PBXGroup;
 			children = (
 				D62CC7E6BFD3E507CB2FB9DB /* RadioViewModel.swift */,
 			);
 			path = ViewModel;
+			sourceTree = "<group>";
+		};
+		826DC92E5D3A38B813222F05 /* opus-ios */ = {
+			isa = PBXGroup;
+			children = (
+				A032974F0E686CE1679590F5 /* include */,
+				8ADEA7E37B131ADFBEF63F4F /* lib */,
+			);
+			path = "opus-ios";
+			sourceTree = "<group>";
+		};
+		8ADEA7E37B131ADFBEF63F4F /* lib */ = {
+			isa = PBXGroup;
+			children = (
+				43A4E12018D21FA6DA958452 /* libopus.a */,
+			);
+			path = lib;
 			sourceTree = "<group>";
 		};
 		8BF512FC5B2488D852CD90B0 /* Sources */ = {
@@ -117,6 +188,20 @@
 				7EDFB07C9535CB0D110B9863 /* FT710Mobile.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		A032974F0E686CE1679590F5 /* include */ = {
+			isa = PBXGroup;
+			children = (
+				E0547D2B4B7DA3E5DD5068C8 /* opus_custom.h */,
+				92BE87E2DF877D617B8867B3 /* opus_defines.h */,
+				01531871C03097520A3500A9 /* opus_multistream.h */,
+				15CA07577EF83D38FC3CFDD3 /* opus_projection.h */,
+				964477D2A43C4C0532B907AE /* opus_types.h */,
+				67370F6B2FECFCCDEADEC3CD /* opus.h */,
+				7AED5CC32148CE63F0043EF4 /* opus */,
+			);
+			path = include;
 			sourceTree = "<group>";
 		};
 		B13AD3A56FFAE08921C814B9 /* Networking */ = {
@@ -160,18 +245,27 @@
 				7749903EC42A6EF6AA18E574 /* BandSelectorView.swift */,
 				75A3B8FD0CC31411814FB37E /* ContentView.swift */,
 				C383D9A97FCEC5E407A668BD /* DSPPanelView.swift */,
+				EC161307F2311893A0593949 /* DSPQuickButtons.swift */,
+				241EDD210F3B482D105688BB /* ErrorAlertView.swift */,
+				0442B8F002C443CF467092C9 /* FFTLineView.swift */,
 				DA7F707392BC5E4B981E6AFE /* FilterSelectorView.swift */,
 				1A206EC58D51F49CAEF76658 /* FrequencyDisplay.swift */,
 				77D0287AA65811A1995AA8CB /* HeaderView.swift */,
 				A5FE5EF147D278798C3667A8 /* LoginView.swift */,
 				B213691E8629DDB947FFC82C /* MainRXView.swift */,
+				679A21D971327DED4B3700A0 /* MemoryChannelsGrid.swift */,
 				1966D9EFC41E35228B8B7C83 /* MemoryChannelsView.swift */,
 				902B42102F8B88B3287DC547 /* MeterBarView.swift */,
 				32918148C5CBA08CB773375B /* ModeSelectorView.swift */,
+				EF32903053E3E4C424148152 /* PerformanceMonitorView.swift */,
 				DC324FD8D979748BADC1C40B /* PTTButtonView.swift */,
+				BC0772FFB0145D0BC1F9B601 /* PTTFooter.swift */,
+				8BE7D45C1A9D7E4DA1F012B9 /* QuickControlsRow.swift */,
 				D19A5C7B47FBF5B9FEA52E12 /* SettingsView.swift */,
 				571C8D0AF256B0A4ECC8933B /* SMeterView.swift */,
 				1887F7829F4094CB16B0C0DD /* TunerView.swift */,
+				1E17C98D145A8D70258962D6 /* TuningControls.swift */,
+				CA661AE6EF4CA39417357B46 /* VFOButtons.swift */,
 				BCF414FDEC6980A57582ACBD /* WaterfallView.swift */,
 			);
 			path = UI;
@@ -185,6 +279,7 @@
 			buildConfigurationList = 426C9EE0583D768B08FED690 /* Build configuration list for PBXNativeTarget "FT710Mobile" */;
 			buildPhases = (
 				556CE73C16CDEF53F938A533 /* Sources */,
+				5BEC3312516B82E96DD26233 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -230,6 +325,17 @@
 		};
 /* End PBXProject section */
 
+/* Begin PBXResourcesBuildPhase section */
+		5BEC3312516B82E96DD26233 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				10B0537242FDBAC530D00D32 /* libopus.a in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		556CE73C16CDEF53F938A533 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -237,30 +343,41 @@
 			files = (
 				19662EC4015D00FAE9325003 /* AudioCaptureManager.swift in Sources */,
 				B0A3E7F55E09E6C30A0BC5D5 /* AudioPlaybackManager.swift in Sources */,
+				B468A2D9A3B93CD4885C7557 /* AudioSessionManager.swift in Sources */,
 				CE1F27BAF91AA8BC6F8DD670 /* BandSelectorView.swift in Sources */,
 				DEBBE844CE134AD603F196FB /* Colors.swift in Sources */,
 				648B2185BDD918B194FCA284 /* ConnectionManager.swift in Sources */,
 				E5330CF62CD88CD132708D12 /* ContentView.swift in Sources */,
 				81D6FE36922533D348B8AF93 /* DSPPanelView.swift in Sources */,
+				8219B49AE37B490BC45417E3 /* DSPQuickButtons.swift in Sources */,
+				E413B58732338DA6F1405581 /* ErrorAlertView.swift in Sources */,
+				2424B368C36976981FC6A9F3 /* FFTLineView.swift in Sources */,
 				143A6B51219A6441207E4E3C /* FT710MobileApp.swift in Sources */,
 				801DEF3F460117D1284A1B3D /* FilterSelectorView.swift in Sources */,
 				D338B004CC9F928B74ADAEDB /* FrequencyDisplay.swift in Sources */,
 				DC834C525888E31385236F82 /* HeaderView.swift in Sources */,
 				AA416A6B341406BF483DB3C2 /* LoginView.swift in Sources */,
 				353ABF0B86F00182614C23F0 /* MainRXView.swift in Sources */,
+				BC3B135E1A4DD7CFC55D29C3 /* MemoryChannelsGrid.swift in Sources */,
 				40B0A078D2B2E0EF4DA20AE5 /* MemoryChannelsManager.swift in Sources */,
 				5329F94F27C447A715A7CD11 /* MemoryChannelsView.swift in Sources */,
 				F3C4641C77ECF03BBF0537C9 /* MeterBarView.swift in Sources */,
 				15597B60373BCED1D29C64EA /* ModeSelectorView.swift in Sources */,
+				A106D855410CE691B652D798 /* OpusBridge.c in Sources */,
 				A788C47BE4DA57142851F870 /* OpusDecoder.swift in Sources */,
 				A0D5064F92F5B75ED0FA32AA /* OpusEncoder.swift in Sources */,
 				2F3801A2B935E53821F2F8B5 /* PTTButtonView.swift in Sources */,
+				9F47D93C40841C1E30625DF1 /* PTTFooter.swift in Sources */,
+				C9D0B8E8C3C8FD0DD4AF6F68 /* PerformanceMonitorView.swift in Sources */,
+				A71929F7722A72CCBA789B10 /* QuickControlsRow.swift in Sources */,
 				AC77ECA6664A3DFE3949E426 /* RadioState.swift in Sources */,
 				0DBAA6F90186AC5FBDF2D716 /* RadioViewModel.swift in Sources */,
 				C958045326E902C993900ED6 /* SMeterView.swift in Sources */,
 				A98E325FD8F5503A4A87289B /* SettingsView.swift in Sources */,
 				BE31368B091EC95505CEE2C0 /* SpectrumProcessor.swift in Sources */,
 				584908848AFDF1944FE85C6D /* TunerView.swift in Sources */,
+				981EFFF44A66747BDACCEEBD /* TuningControls.swift in Sources */,
+				2B271D21C0EA52DEE9081A1D /* VFOButtons.swift in Sources */,
 				2FB0F597540EA56D90C06C89 /* WaterfallView.swift in Sources */,
 				BFDEB099AF669F554FEFD42F /* WebSocketConnection.swift in Sources */,
 			);
@@ -276,11 +393,14 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = 5R985TLXG2;
+				HEADER_SEARCH_PATHS = "$(SRCROOT)/Sources/Audio/opus-ios/include";
 				INFOPLIST_FILE = Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				LIBRARY_SEARCH_PATHS = "$(SRCROOT)/Sources/Audio/opus-ios/lib";
+				OTHER_LDFLAGS = "-lopus";
 				PRODUCT_BUNDLE_IDENTIFIER = com.hamradio.ft710mobile;
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = iphoneos;
@@ -361,11 +481,14 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = 5R985TLXG2;
+				HEADER_SEARCH_PATHS = "$(SRCROOT)/Sources/Audio/opus-ios/include";
 				INFOPLIST_FILE = Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				LIBRARY_SEARCH_PATHS = "$(SRCROOT)/Sources/Audio/opus-ios/lib";
+				OTHER_LDFLAGS = "-lopus";
 				PRODUCT_BUNDLE_IDENTIFIER = com.hamradio.ft710mobile;
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = iphoneos;

@@ -5,7 +5,7 @@ import UIKit
 final class SpectrumProcessor: @unchecked Sendable {
     private let binCount = 850
     private let rowHistory = 100
-    private let wfDecimate = 2     // accumulate 2 frames → 1 row (~15 fps waterfall)
+    private let wfDecimate = 1     // process every frame (~30 fps waterfall)
     private let wfGain: Float = 12.0
     private let wfBias: Float = 40
     private let wfPctl: Float = 0.35
@@ -39,9 +39,15 @@ final class SpectrumProcessor: @unchecked Sendable {
     private var pixelBuffer = [UInt32]()
     private var lastDraw = Date()
     private let queue = DispatchQueue(label: "spectrum.processor", qos: .userInteractive)
+    
+    // Performance monitoring
+    private var frameCount: Int = 0
+    private var lastPerfCheck = Date()
+    private var droppedFrames: Int = 0
+    private var fftSkipCounter = 0   // emit FFT every 2nd frame (~15fps)
 
     /// Feed a raw spectrum frame (1B version + 850B wf1 + 850B wf2 = 1701 bytes).
-    func feed(data: Data, onImage: @escaping (UIImage) -> Void) {
+    func feed(data: Data, onImage: @escaping (UIImage) -> Void, onFFT: @escaping ([Float]) -> Void = { _ in }) {
         // Expect 1701 bytes: 1B version + 850B wf1 + 850B wf2
         guard data.count >= binCount + 1 else { return }
 
@@ -49,23 +55,44 @@ final class SpectrumProcessor: @unchecked Sendable {
         let version = bytes[0]
         guard version == 0x01 else { return }
 
-        // Use wf1 (bytes 1..851) for the waterfall
-        let wf1 = bytes[1...binCount]
+        // Use wf1 (bytes 1..851) for the waterfall.
+        // Copy into a fresh 0-based array — ArraySlice keeps the parent's
+        // absolute indices, so wf1[0] on bytes[1...] would crash.
+        let wf1 = Array(bytes[1...binCount])
 
         queue.async { [weak self] in
             guard let self else { return }
             for k in 0..<self.binCount { self.accum[k] += Float(wf1[k]) }
             self.accumCount += 1
+            
+            // Performance monitoring
+            self.frameCount += 1
+            let now = Date()
+            if now.timeIntervalSince(self.lastPerfCheck) >= 1.0 {
+                let fps = Double(self.frameCount) / now.timeIntervalSince(self.lastPerfCheck)
+                if fps < 14.0 {
+                    print("⚠️ Spectrum: Low FPS \(String(format:"%.1f",fps)) - dropping frames")
+                    self.droppedFrames += 1
+                }
+                self.frameCount = 0
+                self.lastPerfCheck = now
+            }
+            
             guard self.accumCount >= self.wfDecimate else { return }
 
-            let now = Date()
-            if now.timeIntervalSince(self.lastDraw) < 0.066 { return } // ~15 fps max
+            if now.timeIntervalSince(self.lastDraw) < 0.033 { return } // ~30 fps max
             self.lastDraw = now
 
             let snapshot = self.accum
             let count = self.accumCount
             self.accum = [Float](repeating: 0, count: self.binCount)
             self.accumCount = 0
+
+            // Emit FFT line data every 2nd frame (~15fps, smoother display)
+            fftSkipCounter += 1
+            if fftSkipCounter % 2 == 0 {
+                DispatchQueue.main.async { onFFT(snapshot.map { $0 / Float(count) }) }
+            }
 
             self.processFrame(snapshot: snapshot, count: count, onImage: onImage)
         }
@@ -82,7 +109,7 @@ final class SpectrumProcessor: @unchecked Sendable {
         var sorted = avg.sorted()
         let floor = sorted[Int(Float(w) * wfPctl)] + 2
 
-        // Build pixel row
+        // Build pixel row with pre-allocated buffer
         let pixels = UnsafeMutablePointer<UInt32>.allocate(capacity: w)
         let lut = Self.lut
         for x in 0..<w {
@@ -91,11 +118,11 @@ final class SpectrumProcessor: @unchecked Sendable {
             pixels[x] = lut[Int(v)]
         }
 
-        // Scroll buffer
-        var buf = pixelBuffer
-        if buf.count != w * h {
-            buf = [UInt32](repeating: 0xFF000000, count: w * h)
+        // Pre-allocate scroll buffer if needed
+        if pixelBuffer.count != w * h {
+            pixelBuffer = [UInt32](repeating: 0xFF000000, count: w * h)
         }
+        var buf = pixelBuffer
         buf.withUnsafeMutableBufferPointer { bp in
             guard let base = bp.baseAddress else { return }
             for y in stride(from: h - 1, to: 0, by: -1) {

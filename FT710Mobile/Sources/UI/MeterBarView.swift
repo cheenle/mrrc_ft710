@@ -32,22 +32,22 @@ struct MeterItem: View {
     let color: Color
 
     var body: some View {
-        VStack(spacing: 1) {
+        VStack(spacing: 2) {
             Text(label)
-                .font(.system(size: 7))
+                .font(.system(size: 11, weight: .bold))
                 .foregroundColor(.radioMuted)
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 1)
+                    RoundedRectangle(cornerRadius: 2)
                         .fill(Color.white.opacity(0.06))
-                    RoundedRectangle(cornerRadius: 1)
+                    RoundedRectangle(cornerRadius: 2)
                         .fill(color)
                         .frame(width: geo.size.width * min(1, fraction))
                 }
             }
-            .frame(height: 4)
+            .frame(height: 6)
             Text(value)
-                .font(.system(size: 7, design: .monospaced))
+                .font(.system(size: 11, design: .monospaced))
                 .foregroundColor(color)
         }
     }

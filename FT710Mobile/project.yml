@@ -38,3 +38,6 @@ targets:
         SWIFT_VERSION: "5.9"
         DEVELOPMENT_TEAM: "VQ89MM7935"
         CODE_SIGN_STYLE: Automatic
+        HEADER_SEARCH_PATHS: "$(SRCROOT)/Sources/Audio/opus-ios/include"
+        LIBRARY_SEARCH_PATHS: "$(SRCROOT)/Sources/Audio/opus-ios/lib"
+        OTHER_LDFLAGS: "-lopus"

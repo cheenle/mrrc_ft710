@@ -2,10 +2,20 @@ import SwiftUI
 
 /// FT-710 DSP panel: NB, NR, AN, COMP toggles + AGC mode + Preamp/Attenuator + Tuner.
 struct DSPPanelView: View {
+    var body: some View {
+        ScrollView {
+            DSPPanelContent()
+            Spacer(minLength: 100)
+        }
+        .background(Color.radioBg)
+    }
+}
+
+/// DSP controls without an outer ScrollView, so it can embed in the single-page layout.
+struct DSPPanelContent: View {
     @EnvironmentObject var viewModel: RadioViewModel
 
     var body: some View {
-        ScrollView {
             VStack(spacing: 10) {
                 // ── Noise Processing ─────────────────────
                 dspCard(title: "噪声处理", icon: "ear.badge.waveform") {
@@ -94,11 +104,7 @@ struct DSPPanelView: View {
                     .background(Color.white.opacity(0.04))
                     .cornerRadius(8)
                 }
-
-                Spacer(minLength: 100)
             }
-        }
-        .background(Color.radioBg)
     }
 
     private func dspCard<Content: View>(title: String, icon: String,

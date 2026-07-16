@@ -1,0 +1,20 @@
+{
+  "kind": "webpage_snapshot",
+  "url": "https://www.rfcafe.com/references/qst/ft-710-review.htm",
+  "final_url": "https://www.rfcafe.com/references/qst/ft-710-review.htm",
+  "status": 404,
+  "read_status": "http_error",
+  "content_type": "text/html; charset=UTF-8",
+  "fetched_at": "2026-07-14T05:32:56.966760+00:00",
+  "title": "Untitled webpage",
+  "description": "",
+  "site_name": null,
+  "published_at": null,
+  "source_type": "unknown",
+  "text": "",
+  "quote_candidates": [],
+  "word_count": 0,
+  "truncated": false,
+  "blocked": false,
+  "source": "direct_http"
+}

@@ -12,6 +12,12 @@ final class RadioViewModel: ObservableObject {
     let spectrumProc = SpectrumProcessor()
     let memChannels = MemoryChannelsManager()
     private var cancellables = Set<AnyCancellable>()
+    
+    // Error handling state
+    @Published var showErrorAlert = false
+    @Published var errorTitle = ""
+    @Published var errorMessage = ""
+    @Published var errorActionTitle = "确定"
 
     // MARK: - Init
 
@@ -31,7 +37,76 @@ final class RadioViewModel: ObservableObject {
         state.powerOn = true
         connection.connectAll()
         audioPlayback.start()
+        audioCapture.prepare()
         startPing()
+    }
+
+    /// Reconnect without toggling power state (used from Settings).
+    /// Disconnects cleanly, waits briefly for sockets to close,
+    /// then re-authenticates and reconnects.
+    func reconnect() {
+        connection.disconnectAll()
+        audioPlayback.stop()
+        audioCapture.stop()
+        stopPing()
+
+        Task {
+            // Brief pause to let TCP sockets fully close
+            try? await Task.sleep(nanoseconds: 600_000_000)  // 0.6s
+
+            // Re-login to get fresh token
+            let scheme = "https"
+            guard let loginURL = URL(string: "\(scheme)://\(connection.serverHost)/api/auth/login") else {
+                await MainActor.run {
+                    self.connection.connectAll()
+                    self.audioPlayback.start()
+                    self.audioCapture.prepare()
+                    self.startPing()
+                }
+                return
+            }
+
+            var req = URLRequest(url: loginURL)
+            req.httpMethod = "POST"
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            let body: [String: String] = ["password": connection.password ?? ""]
+            req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+            do {
+                let (data, response) = try await URLSession.shared.data(for: req)
+                var token: String?
+                if let httpResp = response as? HTTPURLResponse,
+                   httpResp.statusCode == 200,
+                   let headerFields = httpResp.allHeaderFields as? [String: String],
+                   let url = httpResp.url {
+                    let cookies = HTTPCookie.cookies(withResponseHeaderFields: headerFields, for: url)
+                    token = cookies.first(where: { $0.name == "ft710_auth" })?.value
+                    if token == nil,
+                       let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                        token = json["token"] as? String
+                    }
+                }
+
+                await MainActor.run {
+                    if let tok = token, !tok.isEmpty {
+                        self.connection.updateCredentials(password: tok)
+                        self.bindSockets()
+                    }
+                    self.connection.connectAll()
+                    self.audioPlayback.start()
+                    self.audioCapture.prepare()
+                    self.startPing()
+                }
+            } catch {
+                await MainActor.run {
+                    self.state.connectionError = "重连失败: \(error.localizedDescription)"
+                    self.connection.connectAll()
+                    self.audioPlayback.start()
+                    self.audioCapture.prepare()
+                    self.startPing()
+                }
+            }
+        }
     }
 
     /// Async — logs in via API, gets session token, then connects.
@@ -39,9 +114,11 @@ final class RadioViewModel: ObservableObject {
         state.powerOn = true
         startPing()
 
-        let scheme = "http"  // Default HTTP for self-hosted servers (ATS allows via Info.plist)
+        let scheme = "https"  // Production server uses HTTPS
         guard let loginURL = URL(string: "\(scheme)://\(connection.serverHost)/api/auth/login") else {
-            connection.connectAll(); return
+            connection.connectAll()
+            audioCapture.prepare()
+            return
         }
 
         var req = URLRequest(url: loginURL)
@@ -80,6 +157,7 @@ final class RadioViewModel: ObservableObject {
                     self.connection.updateCredentials(password: tok)
                     self.bindSockets()  // re-bind after socket recreation!
                     self.connection.connectAll()
+                    self.audioCapture.prepare()
                 } else {
                     self.state.connectionError = "认证失败，请检查密码"
                     self.state.powerOn = false  // Reset power state on auth failure
@@ -97,7 +175,38 @@ final class RadioViewModel: ObservableObject {
         stopPing()
         connection.disconnectAll()
         audioPlayback.stop()
-        audioCapture.stop()
+        audioCapture.shutdown()
+    }
+    
+    /// Setup error observers
+    private func setupErrorObservers() {
+        NotificationCenter.default.addObserver(
+            forName: .audioError,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            if let error = notification.userInfo?["error"] as? String {
+                self?.handleAudioError(error)
+            }
+        }
+    }
+    
+    /// Show error alert
+    func showError(title: String, message: String, actionTitle: String = "确定") {
+        errorTitle = title
+        errorMessage = message
+        errorActionTitle = actionTitle
+        showErrorAlert = true
+    }
+    
+    /// Handle audio errors
+    func handleAudioError(_ error: String) {
+        showError(title: "音频错误", message: error, actionTitle: "重试")
+    }
+    
+    /// Handle connection errors
+    func handleConnectionError(_ error: String) {
+        showError(title: "连接错误", message: error, actionTitle: "重新连接")
     }
 
     // MARK: - Control helpers
@@ -117,6 +226,23 @@ final class RadioViewModel: ObservableObject {
     func setFrequency(_ hz: Int, vfo: String? = nil) {
         let field = (vfo == "B") ? "vfo_b_freq" : "freq"
         sendSet(field, hz)
+    }
+
+    /// Recall a memory channel by index (0-9).
+    func recallMemory(_ index: Int) {
+        guard let channel = memChannels.channels[index] else { return }
+        setFrequency(channel.freq)
+        setMode(channel.mode)
+    }
+
+    /// Save current frequency to a memory channel.
+    func saveMemory(_ index: Int) {
+        memChannels.storeFrequency(index, freq: state.activeFreq, mode: state.modeName)
+    }
+
+    /// Expose memory channels for UI binding.
+    var memoryChannels: [MemoryChannelsManager.MemoryChannel?] {
+        memChannels.channels
     }
 
     /// Step frequency up or down by `step` Hz.
@@ -156,6 +282,12 @@ final class RadioViewModel: ObservableObject {
         sendSet("tune", on)
     }
 
+    /// Toggle tuner on/off.
+    func toggleTuner() {
+        let next = state.tunerStatus == 0 ? 1 : 0
+        setTuner(next)
+    }
+
     // MARK: - Gain controls
 
     /// AF (volume) gain, 0–255.
@@ -184,6 +316,9 @@ final class RadioViewModel: ObservableObject {
     /// Attenuator: 0=OFF, 1=6dB, 2=12dB, 3=18dB.
     func setAttenuator(_ v: Int) { sendSet("att", v) }
 
+    /// Set IPO (intermodulation protection optimizer) level.
+    func setIPO(_ v: Int) { sendSet("ipo", v) }
+
     /// Noise blanker on/off.
     func setNoiseBlanker(_ on: Bool) { sendSet("nb", on) }
 
@@ -207,8 +342,22 @@ final class RadioViewModel: ObservableObject {
     /// Select active VFO: "A" or "B".
     func setVFO(_ vfo: String) { sendSet("vfo", vfo.uppercased()) }
 
+    /// Copy VFO-A frequency to VFO-B.
+    func copyVFO() {
+        sendSet("vfo_b_freq", state.vfoAFreq)
+    }
+
     /// Split mode on/off.
     func setSplit(_ on: Bool) { sendSet("split", on) }
+
+    /// Toggle recording.
+    func toggleRecording() {
+        if audioCapture.isRecording {
+            audioCapture.isRecording = false
+        } else {
+            audioCapture.isRecording = true
+        }
+    }
 
     // MARK: - Scope
 
@@ -258,15 +407,11 @@ final class RadioViewModel: ObservableObject {
             self?.state.spectrumConnected = $0
         }.store(in: &cancellables)
 
-        // ── Audio gain → playback volume ───────────────────────
-        state.$afGain.receive(on: RunLoop.main).sink { [weak self] gain in
-            self?.audioPlayback.afGain = gain
-        }.store(in: &cancellables)
-
         // ── Error forwarding ───────────────────────────────────
         connection.ctrl.onError = { [weak self] err in
             Task { @MainActor [weak self] in
                 self?.state.connectionError = err.localizedDescription
+                self?.handleConnectionError(err.localizedDescription)
             }
         }
 
@@ -316,9 +461,11 @@ final class RadioViewModel: ObservableObject {
 
         // ── Spectrum → processor ──────────────────────────────
         connection.spectrum.onBinary = { [weak self] data in
-            self?.spectrumProc.feed(data: data) { img in
+            self?.spectrumProc.feed(data: data, onImage: { img in
                 self?.state.waterfallImage = img
-            }
+            }, onFFT: { fft in
+                self?.state.fftData = fft
+            })
         }
     }
 }

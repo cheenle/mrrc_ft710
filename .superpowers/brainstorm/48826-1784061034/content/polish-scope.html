@@ -1,0 +1,81 @@
+<h2>Choose the polish target</h2>
+<p class="subtitle">The current web UI is a compact mobile radio cockpit. Pick the level of change you want before I write the design spec.</p>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#111827;color:#e5e7eb;border:1px solid #374151;border-radius:10px;padding:10px;font-family:ui-sans-serif,system-ui;max-width:260px;margin:auto">
+        <div style="display:flex;align-items:center;gap:8px;border-bottom:1px solid #374151;padding-bottom:8px">
+          <div style="width:20px;height:14px;border-top:2px solid #f59e0b;border-bottom:2px solid #f59e0b"></div>
+          <div style="flex:1;text-align:center;color:#f59e0b;font-family:ui-monospace,monospace;font-size:24px;font-weight:700">14.200.00</div>
+          <div style="font-size:11px;color:#f59e0b;border:1px solid #92400e;border-radius:5px;padding:2px 5px">VFO-A</div>
+        </div>
+        <div style="height:76px;background:linear-gradient(#07111f,#0b1320 34%,#111827);border:1px solid #1f2937;border-radius:8px;margin:8px 0"></div>
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px">
+          <div style="height:24px;border:1px solid #4b5563;border-radius:5px;background:#1f2937"></div>
+          <div style="height:24px;border:1px solid #4b5563;border-radius:5px;background:#1f2937"></div>
+          <div style="height:24px;border:1px solid #4b5563;border-radius:5px;background:#1f2937"></div>
+          <div style="height:24px;border:1px solid #4b5563;border-radius:5px;background:#1f2937"></div>
+          <div style="height:24px;border:1px solid #4b5563;border-radius:5px;background:#1f2937"></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A. Conservative visual polish</h3>
+      <p>Keep the same layout and controls. Improve alignment, contrast, touch/focus states, button sizing, menu styling, and visual consistency.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#0f1217;color:#e5e7eb;border:1px solid #2f3742;border-radius:10px;padding:10px;font-family:ui-sans-serif,system-ui;max-width:260px;margin:auto">
+        <div style="display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center">
+          <div style="width:28px;height:28px;border:1px solid #4b5563;border-radius:6px"></div>
+          <div style="text-align:center;color:#f59e0b;font-family:ui-monospace,monospace;font-size:25px;font-weight:800">14.200.00</div>
+          <div style="font-size:11px;color:#d1d5db">RX</div>
+        </div>
+        <div style="display:flex;gap:5px;margin:7px 0;color:#9ca3af;font-size:10px;justify-content:center">
+          <span>20m</span><span style="color:#f59e0b">USB</span><span>Serial</span><span>RTT 22</span>
+        </div>
+        <div style="height:84px;background:#080b10;border:1px solid #2f3742;border-radius:6px;margin-bottom:7px"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:5px">
+          <div style="height:20px;background:#1a2029;border-radius:5px"></div>
+          <div style="height:20px;background:#1a2029;border-radius:5px"></div>
+        </div>
+        <div style="height:52px;background:#dc2626;border-radius:10px"></div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. Cockpit-grade polish</h3>
+      <p>Preserve the workflow but make hierarchy clearer: grouped RF status, cleaner meters, stronger PTT footer, better desktop/tablet behavior, and refined off-canvas menu.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#111827;color:#e5e7eb;border:1px solid #374151;border-radius:10px;padding:10px;font-family:ui-sans-serif,system-ui;max-width:300px;margin:auto">
+        <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px">
+          <div>
+            <div style="color:#f59e0b;font-family:ui-monospace,monospace;font-size:22px;font-weight:800">14.200.00</div>
+            <div style="height:82px;background:#05070b;border:1px solid #374151;border-radius:6px;margin-top:7px"></div>
+          </div>
+          <div style="display:grid;gap:5px">
+            <div style="height:30px;background:#1f2937;border-radius:6px"></div>
+            <div style="height:30px;background:#1f2937;border-radius:6px"></div>
+            <div style="height:30px;background:#1f2937;border-radius:6px"></div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-top:8px">
+          <div style="height:24px;background:#1f2937;border-radius:5px"></div>
+          <div style="height:24px;background:#1f2937;border-radius:5px"></div>
+          <div style="height:24px;background:#1f2937;border-radius:5px"></div>
+          <div style="height:24px;background:#1f2937;border-radius:5px"></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C. Broader layout cleanup</h3>
+      <p>Rework information architecture for desktop/tablet with a side control column, while keeping mobile compact. More impact, more regression risk.</p>
+    </div>
+  </div>
+</div>

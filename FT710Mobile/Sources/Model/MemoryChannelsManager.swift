@@ -31,4 +31,10 @@ final class MemoryChannelsManager: ObservableObject {
             }
         }
     }
+
+    func storeFrequency(_ index: Int, freq: Int, mode: String) {
+        guard index >= 0, index < 10 else { return }
+        let name = "CH\(index + 1)"
+        channels[index] = MemoryChannel(index: index, name: name, freq: freq, mode: mode)
+    }
 }

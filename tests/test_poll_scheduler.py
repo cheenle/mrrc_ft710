@@ -132,7 +132,7 @@ class TXMeterPollingPreemptionTests(unittest.IsolatedAsyncioTestCase):
 
         class FakeCat:
             connected = True
-            _cancel_polls: bool = False
+            _cancel_polls = asyncio.Event()  # Changed from bool to Event
 
             def __init__(self):
                 self.commands = []

@@ -400,31 +400,7 @@ function bodyload() {
         if (powerBtn) { powerBtn.classList.add('active'); powerBtn.textContent = '🔊'; }
         connectWebSocket();
     }
-    requestWakeLock();
 }
-
-var _wakeLock = null;
-async function requestWakeLock() {
-    if (!('wakeLock' in navigator)) return;
-    try {
-        _wakeLock = await navigator.wakeLock.request('screen');
-        console.log('Wake Lock acquired');
-        _wakeLock.addEventListener('release', function() {
-            _wakeLock = null;
-            console.log('Wake Lock released — re-requesting...');
-            requestWakeLock();
-        });
-    } catch(e) {
-        console.log('Wake Lock failed:', e.message);
-    }
-}
-
-// Re-acquire Wake Lock when page becomes visible again
-document.addEventListener('visibilitychange', function() {
-    if (document.visibilityState === 'visible' && !_wakeLock) {
-        requestWakeLock();
-    }
-});
 
 // ── Keyboard support ────────────────────────────────────────────────
 document.addEventListener('keydown', function(e) {
@@ -1278,12 +1254,15 @@ var WakeLockMgr = (function () {
 
     // ── Auto-enable on first user gesture (any tap) ────────
     // The first touch/click/key anywhere on the page auto-enables the
-    // wake lock so the operator doesn't have to remember. This fires once
-    // and never races with the button because it checks active().
+    // wake lock so the operator doesn't have to remember.
+    // Retries on subsequent gestures if initial attempt fails (e.g.
+    // browser transient-activation window expired before async
+    // completion).  A 30 s periodic refresh re-acquires silently-
+    // released sentinels (some desktop browsers release after a few
+    // minutes even with a visible foreground tab).
     function initAutoEnable() {
-        function onFirst(ev) {
-            if (_gestured || active()) return;
-            _gestured = true;
+        function onGesture(ev) {
+            if (active()) return;  // already running — nothing to do
             var hasWL = wakeLockAvailable();
             if (!hasWL) startFallback();
             requested = true;
@@ -1291,9 +1270,24 @@ var WakeLockMgr = (function () {
                 setBtn(ok || active(), hasWL ? false : 'unsupported');
             });
         }
-        document.addEventListener('touchstart', onFirst, { once: true, passive: false });
-        document.addEventListener('pointerdown', onFirst, { once: true });
-        document.addEventListener('keydown', onFirst, { once: true });
+        // Listen continuously (not {once}) so a failed attempt gets
+        // retried on the very next tap/click/key.
+        document.addEventListener('touchstart', onGesture, { passive: false });
+        document.addEventListener('pointerdown', onGesture);
+        document.addEventListener('keydown', onGesture);
+
+        // Periodic refresh: re-request if sentinel was silently released
+        // (some browsers drop it after a timeout even while visible).
+        setInterval(function () {
+            if (requested && document.visibilityState === 'visible' && !active()) {
+                console.log('WakeLockMgr: periodic refresh (sentinel lost)');
+                var hasWL = wakeLockAvailable();
+                if (!hasWL) startFallback();
+                acquireWakeLock().then(function (ok) {
+                    setBtn(ok || active(), hasWL ? false : 'unsupported');
+                });
+            }
+        }, 30000);
     }
 
     return { init: init, initAutoEnable: initAutoEnable, active: active };
@@ -1349,8 +1343,8 @@ var FullscreenMgr = (function () {
 // 2.5× boost multiplier to compensate for quiet FT-710 USB audio.
 // Clamped to [0, 3.0] to allow real amplification while preventing
 // runaway gain from blowing out speakers.
-var AUDIO_GAIN_BOOST = 5.0;
-var AUDIO_GAIN_MAX = 5.0;
+var AUDIO_GAIN_BOOST = 10.0;
+var AUDIO_GAIN_MAX = 10.0;
 function _applyAfGainToAudioNode() {
     if (typeof AudioRX_gain_node === 'undefined' || !AudioRX_gain_node) return;
     var raw = (radioState.af_gain || 128) / 255.0;

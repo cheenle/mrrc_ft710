@@ -39,7 +39,8 @@ class CatController:
         # Set by send_priority_set_command() to signal poll queries
         # (both in-progress _read_until threads and queued send_command
         # waiters) to abort so PTT/tune can grab the serial lock quickly.
-        self._cancel_polls: bool = False
+        # Using asyncio.Event for thread-safe signaling
+        self._cancel_polls: asyncio.Event = asyncio.Event()
 
     # ── Connection Management ──────────────────────────────────────
 
@@ -162,7 +163,7 @@ class CatController:
             while time.monotonic() < deadline:
                 # Priority command (PTT/tune) pending — abort early so
                 # the serial lock is released for it as soon as possible.
-                if self._cancel_polls:
+                if self._cancel_polls.is_set():
                     return None
                 waiting = self._ser.in_waiting
                 if waiting > 0:
@@ -221,7 +222,7 @@ class CatController:
         # If a priority command (PTT/tune) has signalled polls to cancel,
         # don't even try to acquire the lock — let the priority command
         # grab it with minimal delay.
-        if self._cancel_polls:
+        if self._cancel_polls.is_set():
             return None
 
         await self._lock.acquire()
@@ -229,7 +230,7 @@ class CatController:
         try:
             # Double-check after acquiring the lock: a priority command
             # may have set _cancel_polls while we were queued waiting.
-            if self._cancel_polls:
+            if self._cancel_polls.is_set():
                 return result
 
             if not self._connected or self._ser is None:
@@ -297,7 +298,7 @@ class CatController:
         Write-only (no response read) for speed — same fire-and-forget
         semantics as send_set_command.
         """
-        self._cancel_polls = True
+        self._cancel_polls.set()
         try:
             # Brief yield so any in-progress _read_until thread can see
             # the cancel flag and bail out, releasing the lock sooner.
@@ -306,7 +307,7 @@ class CatController:
             async with self._lock:
                 # Clear the cancel flag now that we hold the lock.
                 # Poll queries will resume once we release it.
-                self._cancel_polls = False
+                self._cancel_polls.clear()
 
                 if not self._connected or self._ser is None:
                     return False
@@ -320,7 +321,7 @@ class CatController:
                     self._connected = False
                     return False
         finally:
-            self._cancel_polls = False
+            self._cancel_polls.clear()
 
     async def query(self, cmd: str, timeout: Optional[float] = None) -> Optional[str]:
         """Send a query command (no value, just prefix + ';').
@@ -779,7 +780,8 @@ class CatController:
             resp = await self.query(cmd)
             if resp:
                 state[field] = resp
-            await asyncio.sleep(0.05)
+            # Reduced sleep time from 50ms to 20ms for faster initial sync
+            await asyncio.sleep(0.02)
         return state
 
     # ── Reconnect ──────────────────────────────────────────────────
