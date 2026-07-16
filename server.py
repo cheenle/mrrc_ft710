@@ -98,8 +98,6 @@ _auth_tokens: set[str] = set()
 
 # Memory channels file
 SCRIPT_DIR = Path(__file__).parent
-STATIC_DIR = SCRIPT_DIR / "static"
-MEM_FILE = SCRIPT_DIR / "mem_channels.json"
 
 
 def _runtime_dir() -> Path:
@@ -121,6 +119,10 @@ def _scope_pipe_command() -> list[str] | None:
     if scope_pipe_path.exists():
         return [sys.executable, str(scope_pipe_path)]
     return None
+
+
+STATIC_DIR = _runtime_dir() / "static"
+MEM_FILE = Path(os.environ.get("FT710_MEM_FILE", str(_runtime_dir() / "mem_channels.json")))
 
 # ── Auth Helpers ────────────────────────────────────────────────────
 
@@ -176,6 +178,7 @@ def _load_mem_channels() -> list:
 
 def _save_mem_channels(channels: list):
     """Save memory channels to disk."""
+    MEM_FILE.parent.mkdir(parents=True, exist_ok=True)
     MEM_FILE.write_text(json.dumps({"channels": channels[:MEM_CHANNEL_COUNT]}, indent=2))
 
 # ── Broadcast ───────────────────────────────────────────────────────
