@@ -13,6 +13,24 @@ import sys
 
 
 SCRIPT_DIR = Path(__file__).parent
+_DLL_DIRECTORY_HANDLES: list[object] = []
+
+
+def get_resource_roots() -> List[Path]:
+    """Return directories that may contain packaged runtime resources."""
+    roots: List[Path] = []
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        roots.append(Path(meipass))
+    if getattr(sys, "frozen", False):
+        roots.append(Path(sys.executable).resolve().parent)
+    roots.append(SCRIPT_DIR)
+
+    unique: List[Path] = []
+    for root in roots:
+        if root not in unique:
+            unique.append(root)
+    return unique
 
 
 def _platform_suffixes() -> List[str]:
@@ -113,6 +131,43 @@ def _linux_system_dirs() -> List[Path]:
     return dirs
 
 
+def get_candidate_library_dirs() -> List[Path]:
+    """Return FTDI library search directories in priority order."""
+    candidate_dirs: List[Path] = []
+
+    ftdi_dir = os.environ.get("FT710_FTDI_LIB_DIR")
+    if ftdi_dir:
+        candidate_dirs.append(Path(ftdi_dir))
+
+    for root in get_resource_roots():
+        candidate_dirs.extend([
+            root / "lib",
+            root / "vendor" / "ftdi",
+            root / "vendor" / "ftdi" / "windows" / "bin" / "x64",
+        ])
+
+    candidate_dirs.extend(_linux_system_dirs())
+
+    unique: List[Path] = []
+    for directory in candidate_dirs:
+        if directory not in unique:
+            unique.append(directory)
+    return unique
+
+
+def configure_windows_dll_search_path() -> None:
+    """Add candidate FTDI directories to the Windows DLL loader path."""
+    if sys.platform != "win32":
+        return
+    add_dll_directory = getattr(os, "add_dll_directory", None)
+    if add_dll_directory is None:
+        return
+    for directory in get_candidate_library_dirs():
+        if directory.is_dir():
+            handle = add_dll_directory(str(directory))
+            _DLL_DIRECTORY_HANDLES.append(handle)
+
+
 def find_ftdi_libraries() -> tuple[Optional[Path], Optional[Path]]:
     """Return FT4222 and FTD2XX library paths, or (None, None).
 
@@ -142,25 +197,8 @@ def find_ftdi_libraries() -> tuple[Optional[Path], Optional[Path]]:
             if ft4222.exists() and ftd2xx.exists():
                 return ft4222, ftd2xx
 
-    # ── Build search path list ────────────────────────────────────────
-    candidate_dirs: List[Path] = []
-
-    # Explicit FTDI directory env var
-    ftdi_dir = os.environ.get("FT710_FTDI_LIB_DIR")
-    if ftdi_dir:
-        candidate_dirs.append(Path(ftdi_dir))
-
-    # Project-bundled directories (highest priority after explicit)
-    candidate_dirs.extend([
-        SCRIPT_DIR / "lib",
-        SCRIPT_DIR / "vendor" / "ftdi",
-    ])
-
-    # Platform system directories
-    candidate_dirs.extend(_linux_system_dirs())
-
     # ── Search ────────────────────────────────────────────────────────
-    for directory in candidate_dirs:
+    for directory in get_candidate_library_dirs():
         if not directory.is_dir():
             continue
         ft4222, ftd2xx = _libs_in_dir(directory)

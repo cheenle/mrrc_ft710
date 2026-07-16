@@ -32,6 +32,7 @@ from scope_frame import (
     encode_pipe_payload,
     parse_scope_frame,
 )
+from scope_libraries import configure_windows_dll_search_path
 from scope_libraries import require_ftdi_libraries
 from scope_libraries import get_ft4222_clock_divider
 
@@ -153,6 +154,7 @@ def main():
     signal.signal(signal.SIGTERM, stop_running)
 
     # ── Load libraries ──────────────────────────────────────────────
+    configure_windows_dll_search_path()
     ft4222_path, ftd2xx_path = require_ftdi_libraries()
     emit_status(f"libs_loaded:ft4222={ft4222_path.name}:ftd2xx={ftd2xx_path.name}")
 

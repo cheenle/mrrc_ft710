@@ -7,6 +7,8 @@ radio via serial CAT protocol.  Provides a WebSocket endpoint for
 real-time control and state updates, plus REST APIs for memory
 channels and authentication.
 """
+from __future__ import annotations
+
 import asyncio
 import concurrent.futures
 import hashlib
@@ -99,7 +101,50 @@ SCRIPT_DIR = Path(__file__).parent
 STATIC_DIR = SCRIPT_DIR / "static"
 MEM_FILE = SCRIPT_DIR / "mem_channels.json"
 
+
+def _runtime_dir() -> Path:
+    """Return the directory containing runtime files for source or frozen mode."""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return SCRIPT_DIR
+
+
+def _scope_pipe_command() -> list[str] | None:
+    """Return the command used to start the FT4222 scope pipe."""
+    if getattr(sys, "frozen", False):
+        exe_name = "scope_pipe.exe" if sys.platform == "win32" else "scope_pipe"
+        pipe_exe = _runtime_dir() / exe_name
+        if pipe_exe.exists():
+            return [str(pipe_exe)]
+
+    scope_pipe_path = SCRIPT_DIR / "scope_pipe.py"
+    if scope_pipe_path.exists():
+        return [sys.executable, str(scope_pipe_path)]
+    return None
+
 # ── Auth Helpers ────────────────────────────────────────────────────
+
+# Rate limiting for login attempts
+_login_attempts: dict[str, list[float]] = {}
+_LOGIN_MAX_ATTEMPTS = 5
+_LOGIN_WINDOW_SECONDS = 300  # 5 minutes
+
+def _check_login_rate_limit(ip: str) -> bool:
+    """Check if IP has exceeded login attempt rate limit."""
+    import time
+    now = time.time()
+    
+    if ip not in _login_attempts:
+        _login_attempts[ip] = []
+    
+    # Clean old attempts outside the window
+    _login_attempts[ip] = [t for t in _login_attempts[ip] if now - t < _LOGIN_WINDOW_SECONDS]
+    
+    if len(_login_attempts[ip]) >= _LOGIN_MAX_ATTEMPTS:
+        return False  # Rate limited
+    
+    _login_attempts[ip].append(now)
+    return True
 
 def _make_auth_token() -> str:
     """Generate a new random session token."""
@@ -408,11 +453,10 @@ async def _read_scope_pipe(proc):
         # If spectrum clients are still connected when the pipe exits,
         # restart it after a short delay (1s) so transient USB glitches
         # don't require a manual client reconnect.
-        import asyncio as _asyncio
-        if spectrum_clients and scope_pipe_path.exists():
+        if spectrum_clients and _scope_pipe_command():
             logger.info("scope_pipe exited with %d spectrum client(s) — "
                         "will restart in 1s", len(spectrum_clients))
-            await _asyncio.sleep(1.0)
+            await asyncio.sleep(1.0)
             # Only restart if no other pipe has been started in the meantime
             if _scope_proc is None:
                 await _ensure_scope_pipe_running()
@@ -428,15 +472,14 @@ async def _ensure_scope_pipe_running():
     async with _scope_pipe_lock:
         if _scope_read_task and not _scope_read_task.done():
             return
-        scope_pipe_path = SCRIPT_DIR / "scope_pipe.py"
-        if not scope_pipe_path.exists():
-            logger.warning("scope_pipe.py not found at %s — spectrum will use S-meter fallback only",
-                           scope_pipe_path)
+        scope_pipe_cmd = _scope_pipe_command()
+        if not scope_pipe_cmd:
+            logger.warning("scope_pipe worker not found — spectrum will use S-meter fallback only")
             return
         logger.info("Starting scope_pipe subprocess for spectrum client...")
         try:
             _scope_proc = await asyncio.create_subprocess_exec(
-                sys.executable, str(scope_pipe_path),
+                *scope_pipe_cmd,
                 stdout=_subprocess.PIPE, stderr=_subprocess.PIPE,
             )
             _scope_read_task = asyncio.create_task(
@@ -872,11 +915,6 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
             radio.update(af_gain=v)
             scheduler and scheduler.skip_next_poll("af_gain", 3.0)
 
-        elif field == "rf_gain":
-            v = max(0, min(255, int(value)))
-            await cat.set_rf_gain(v)
-            radio.update(rf_gain=v)
-
         elif field == "rf_power":
             v = max(5, min(100, int(value)))
             await cat.set_rf_power(v)
@@ -1254,6 +1292,7 @@ async def lifespan(app: FastAPI):
     global _audio_rx_task, _audio_tx_task, _opus_tx_decoder
 
     # ── Startup ──
+    startup_time = time.time()
     logger.info("FT-710 Web Control starting on port %d", WEB_PORT)
     logger.info("Serial port: %s @ %d baud", SERIAL_PORT, BAUD_RATE)
 
@@ -1436,6 +1475,12 @@ async def login_page(request: Request):
 @app.post("/api/auth/login")
 async def api_login(request: Request):
     """Authenticate with password.  Sets auth cookie on success."""
+    # Check rate limit
+    client_ip = request.client.host if request.client else "unknown"
+    if not _check_login_rate_limit(client_ip):
+        logger.warning("Rate limit exceeded for login from IP: %s", client_ip)
+        return JSONResponse({"error": "Too many login attempts. Please try again later."}, status_code=429)
+    
     try:
         body = await request.json()
         password = body.get("password", "")
@@ -1444,6 +1489,10 @@ async def api_login(request: Request):
 
     if password != WEB_PASSWORD:
         return JSONResponse({"error": "Invalid password"}, status_code=401)
+
+    # Password strength validation (only on first login)
+    if len(password) < 12:
+        logger.warning("Weak password detected! Use at least 12 characters with mixed case, numbers, and symbols.")
 
     token = _make_auth_token()
     _auth_tokens.add(token)
@@ -1483,6 +1532,28 @@ async def api_auth_check(request: Request):
 async def api_status():
     """Return full radio state as JSON."""
     return JSONResponse(radio.to_dict())
+
+
+# ── Health Check API ──────────────────────────────────────────────
+
+@app.get("/api/health")
+async def api_health():
+    """Health check endpoint for monitoring/proxy setups."""
+    import time as _time
+    health_status = {
+        "status": "healthy",
+        "radio_connected": cat.connected if cat else False,
+        "audio_available": audio is not None and audio._rx_running if audio else False,
+        "scope_connected": scope.connected if scope else False,
+        "uptime_seconds": _time.time() - startup_time if 'startup_time' in globals() else 0,
+    }
+    
+    # Check if any critical components are down
+    if not health_status["radio_connected"]:
+        health_status["status"] = "degraded"
+        health_status["message"] = "Radio not connected"
+    
+    return JSONResponse(health_status)
 
 
 # ── Memory Channels API ─────────────────────────────────────────────
