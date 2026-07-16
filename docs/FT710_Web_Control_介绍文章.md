@@ -148,18 +148,30 @@ FT710_SERIAL_PORT=/dev/ttyUSB0 python server.py
 
 #### Windows 用户
 
-Windows 支持基础 CAT 控制和音频功能（频谱用 S 表推算代替）。建议有条件的用户优先使用 macOS 或 Linux 以获得完整频谱体验。
+Windows 11/12 推荐使用桌面安装包。安装包内置 Python 运行时，双击启动本地服务器并打开浏览器；关闭启动窗口即停止服务器。若构建安装包时放入 `FT4222.dll` 与 `ftd2xx.dll`，Windows 也可使用 FT4222 真频谱；缺少 DLL 或设备初始化失败时自动降级为 S 表推算频谱。
 
 ```powershell
-# 1. 安装 Python 3.12（从 python.org 下载，安装时勾选 "Add Python to PATH"）
-# 2. 安装 CP210x 驱动（从 silabs.com 下载）
-# 3. 打开 PowerShell，进入项目目录：
-cd FT710
+# 构建安装包（在 Windows 上）
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt pyinstaller
+
+# 可选但是真频谱需要：
+# 将 FT4222.dll 和 ftd2xx.dll 放到 vendor\ftdi\windows\bin\x64
+
+packaging\windows\build.ps1
+dist\windows\MRRC-FT710-Setup.exe
+```
+
+如果要用开发模式手工运行：
+
+```powershell
+cd mrrc_ft710
 python -m venv venv
 venv\Scripts\activate
 pip install -r requirements.txt
 
-# 4. 在设备管理器里找到 COM 端口号（如 COM3），然后：
+# 在设备管理器里找到 Enhanced COM 端口号（如 COM3），然后：
 set FT710_SERIAL_PORT=COM3
 python server.py
 ```

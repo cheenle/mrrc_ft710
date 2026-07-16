@@ -9,14 +9,14 @@
 | Fedora/RHEL    | amd64 / arm64  | ✅         | ✅        | ⚠️ needs libs  | `./install.sh` |
 | Arch Linux     | amd64 / arm64  | ✅         | ✅        | ⚠️ needs libs  | `./install.sh` |
 | Raspberry Pi OS| armhf / arm64  | ✅         | ✅        | ⚠️ needs libs  | `./install.sh` |
-| Windows 10/11  | amd64          | ✅         | ✅        | ❌ (no FT4222) | manual only    |
+| Windows 11/12  | amd64          | ✅         | ✅        | ✅ with FTDI DLLs | desktop installer |
 
 **Legend**: ✅ = fully supported, ⚠️ = requires manual library setup, ❌ = not available
 
 
 ## Python Version
 
-**Python 3.11+ required.**
+**Python 3.10+ required.**
 
 The server uses `asyncio.TaskGroup`-compatible patterns, `str.removeprefix`/`removesuffix`,
 and the `X | None` union syntax (`PEP 604`), all of which require Python 3.10+.
@@ -30,6 +30,8 @@ Python 3.11+ is recommended for `asyncio` performance improvements.
 | Arch | `sudo pacman -S python` (typically 3.12+) |
 | Raspberry Pi | `sudo apt install python3.11 python3.11-venv` (Bookworm) |
 | Windows | Download from [python.org](https://www.python.org/downloads/) |
+
+**Note**: Python 3.9 is NOT supported due to type hint syntax requirements.
 
 
 ## Core Python Packages
@@ -407,15 +409,21 @@ lsusb | grep "0403:601c"
 
 #### Windows
 
-**FT4222 scope capture is not supported on Windows** in this release.
-The server will start and all CAT/audio features work, but the spectrum
-waterfall will use the S-meter fallback only.
+FT4222 scope capture is supported by the Windows desktop package when the FTDI
+runtime DLLs are bundled:
 
-Windows D2XX support requires `FT4222.dll` and `ftd2xx.dll` in the project
-directory or `PATH`, and the scope read architecture needs a Windows-compatible
-subprocess model (currently uses `asyncio.create_subprocess_exec` with a
-Python script, which works on macOS/Linux but needs adaptation for Windows
-DLL loading in a subprocess).
+```text
+vendor\ftdi\windows\bin\x64\FT4222.dll
+vendor\ftdi\windows\bin\x64\ftd2xx.dll
+```
+
+The PyInstaller build produces a frozen `scope_pipe.exe` worker. At runtime the
+server starts that worker for spectrum clients, and the worker adds the bundled
+FTDI directory to the Windows DLL loader path before loading `FT4222.dll` and
+`ftd2xx.dll`.
+
+If either DLL is missing or the device cannot be initialized, the server stays
+up and the spectrum waterfall uses the S-meter fallback.
 
 ### 3.3 USB Audio Class (Audio I/O — REQUIRED for Audio)
 
@@ -619,7 +627,44 @@ FT710_SERIAL_PORT=/dev/ttyUSB0 python server.py
 - CPU usage: On Pi 4, the server (including Opus encoding + S-meter fallback
   spectrum generation) uses ~15-25% CPU. Pi Zero/1 may struggle with audio resampling.
 
-### Windows 10/11 (manual setup)
+### Windows 11/12 (desktop installer)
+
+The recommended Windows path is the desktop installer. It embeds Python and
+does not install a Windows service.
+
+Build on Windows:
+
+```powershell
+# 1. Install Python 3.11/3.12 and Inno Setup
+# 2. Install project and build dependencies
+python -m venv venv
+venv\Scripts\activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m pip install pyinstaller
+
+# 3. Optional but required for true FT4222 spectrum:
+#    place FT4222.dll and ftd2xx.dll in vendor\ftdi\windows\bin\x64
+
+# 4. Build app and installer
+packaging\windows\build.ps1
+```
+
+Install:
+
+```powershell
+dist\windows\MRRC-FT710-Setup.exe
+```
+
+Runtime configuration:
+
+```text
+%LOCALAPPDATA%\MRRC-FT710\ft710.env
+```
+
+See `docs/WINDOWS_INSTALLER_GUIDE.md` for the full Windows procedure.
+
+### Windows 10/11 (manual development setup)
 
 ```powershell
 # 1. Install Python 3.12 from python.org
@@ -642,12 +687,12 @@ set FT710_SERIAL_PORT=COM3
 python server.py
 ```
 
-**Windows limitations:**
-- Scope/waterfall uses S-meter fallback only (no FT4222 support)
-- The `start.sh`/`stop.sh` scripts don't work on Windows
+**Windows manual-mode notes:**
+- FT4222 true spectrum requires `FT4222.dll` and `ftd2xx.dll` in `vendor\ftdi\windows\bin\x64`, `lib\`, or a directory referenced by `FT710_FTDI_LIB_DIR`.
+- The `start.sh`/`stop.sh` scripts don't work on Windows.
 - Performance may be slightly lower due to the `asyncio` event loop using
-  `ProactorEventLoop` instead of `uvloop` (Linux/macOS only)
-- Audio should work with standard PyAudio (bundled PortAudio DLL)
+  `ProactorEventLoop` instead of `uvloop` (Linux/macOS only).
+- Audio should work with standard PyAudio (bundled PortAudio DLL).
 
 
 ## Audio Device Configuration
@@ -801,7 +846,7 @@ FT-710 Server
 │   ├── libftd2xx.dylib/.so/.dll (D2XX driver API)
 │   │   ├── macOS: ftd2xx.cfg at /usr/local/lib/ (DetachKernelDriver=1)
 │   │   ├── Linux: udev rules for 0403:601c
-│   │   └── Windows: FTDI D2XX driver package (not yet supported)
+│   │   └── Windows: FTDI D2XX driver + bundled ftd2xx.dll
 │   └── libft4222.dylib/.so/.dll (FT4222 SPI API)
 └── [OS] USB Audio Class 1.0 Driver (built-in all platforms)
     └── FT-710 USB Audio (44.1 kHz, 1ch in, 1ch out)

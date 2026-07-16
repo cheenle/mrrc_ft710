@@ -31,13 +31,13 @@ Yaesu FT-710
 | `FT710_SERIAL_PORT` | `/dev/cu.SLAB_USBtoUART` | CAT serial port (Enhanced COM Port) |
 | `FT710_BAUD_RATE` | `38400` | CAT serial baud rate |
 | `FT710_WEB_PORT` | `8888` | Uvicorn listen port |
-| `FT710_WEB_PASSWORD` | `ft710` | Web login password |
-| `FT710_WEB_HOST` | `0.0.0.0` | Bind address |
+| `FT710_WEB_PASSWORD` | `changeme_please_use_strong_password!` | Web login password |
+| `FT710_WEB_HOST` | `::` | Bind address |
 | `FT710_FTDI_LIB_DIR` | *(auto)* | Directory containing FTDI libraries |
-| `FT710_FT4222_CLK_DIV` | `5` | SPI clock divider (1=fastest, 9=slowest) |
+| `FT710_FT4222_CLK_DIV` | `6` | SPI clock divider (1=fastest, 9=slowest; CLK_DIV_64 default) |
 | `FT710_SCOPE_PORT` | *(optional)* | Scope serial port (Standard COM Port, SCU-LAN10) |
 | `FT710_SCOPE_BAUD` | `115200` | Scope serial baud rate |
-| `mem_channels.json` | `[null]*6` | Memory channel store (persisted) |
+| `FT710_MEM_FILE` | `mem_channels.json` | Memory channel store (Windows launcher uses `%LOCALAPPDATA%`) |
 | `.ft710-server.pid` | runtime | Process ID for start/stop scripts |
 
 ## 12.3 Startup Modes

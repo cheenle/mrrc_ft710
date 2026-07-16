@@ -6,18 +6,36 @@ Web-based remote control server for the [Yaesu FT-710](https://www.yaesu.com/) H
 
 ## Quick Start
 
+### macOS / Linux
+
 ```bash
-cd FT710
+cd mrrc_ft710
 pip install -r requirements.txt
 
 # macOS (FT-710 Enhanced COM Port):
-FT710_SERIAL_PORT=/dev/cu.usbserial-0121DB3A0 python server.py
+FT710_SERIAL_PORT=/dev/cu.usbserial-0121DB3A0 python3 server.py
 
 # Linux:
-FT710_SERIAL_PORT=/dev/ttyUSB0 python server.py
+FT710_SERIAL_PORT=/dev/ttyUSB0 python3 server.py
 ```
 
-Open `http://localhost:8888` in a browser. Default password: `ft710`.
+Open `http://localhost:8888` in a browser. **Default password: change it immediately** — see [SECURITY_GUIDE.md](SECURITY_GUIDE.md).
+
+### Windows Desktop Installer
+
+Windows 11/12 users can use the desktop installer build instead of installing
+Python manually. The installer runs a user-launched desktop app with an
+embedded Python runtime; closing the launcher window stops the server.
+
+Build and installation details are in [docs/WINDOWS_INSTALLER_GUIDE.md](docs/WINDOWS_INSTALLER_GUIDE.md).
+
+Key Windows package paths:
+
+```text
+packaging\windows\build.ps1
+dist\windows\MRRC-FT710-Setup.exe
+%LOCALAPPDATA%\MRRC-FT710\ft710.env
+```
 
 ### Environment Variables
 
@@ -26,14 +44,15 @@ Open `http://localhost:8888` in a browser. Default password: `ft710`.
 | `FT710_SERIAL_PORT` | `/dev/cu.SLAB_USBtoUART` | CAT serial port (Enhanced COM Port, 38400 baud) |
 | `FT710_BAUD_RATE` | `38400` | CAT serial baud rate |
 | `FT710_WEB_PORT` | `8888` | Web server port |
-| `FT710_WEB_PASSWORD` | `ft710` | Login password |
-| `FT710_WEB_HOST` | `0.0.0.0` | Bind address |
+| `FT710_WEB_PASSWORD` | `changeme_please_use_strong_password!` | Login password (**must change**) |
+| `FT710_WEB_HOST` | `::` | Bind address (IPv6 dual-stack) |
 | `FT710_FTDI_LIB_DIR` | *(auto)* | Directory containing FTDI libraries |
-| `FT710_FT4222_CLK_DIV` | `5` | SPI clock divider (1=fastest, 9=slowest). Default CLK_DIV_16 ≈ 21 fps |
+| `FT710_FT4222_CLK_DIV` | `6` | SPI clock divider (1=fastest, 9=slowest). Default CLK_DIV_64 matches wfview |
 | `FT710_SCOPE_PORT` | *(optional)* | Scope serial port (Standard COM Port, for SCU-LAN10 models) |
 | `FT710_SCOPE_BAUD` | `115200` | Scope serial baud rate |
 | `FT710_AUDIO_RX_DEVICE` | *(auto)* | Audio input device (index or name substring, e.g. `"FT-710"` or `"3"`) |
 | `FT710_AUDIO_TX_DEVICE` | *(auto)* | Audio output device (index or name substring) |
+| `FT710_MEM_FILE` | `mem_channels.json` | Memory-channel JSON path; Windows launcher stores this under `%LOCALAPPDATA%` |
 
 ### CLI Arguments
 
@@ -42,7 +61,7 @@ Open `http://localhost:8888` in a browser. Default password: `ft710`.
 | `--port` | `8888` | Web server port |
 | `--serial-port` | `/dev/cu.SLAB_USBtoUART` | CAT serial port |
 | `--baud` | `38400` | CAT serial baud rate |
-| `--password` | `ft710` | Login password |
+| `--password` | *(env default)* | Login password |
 | `--host` | `::` | Bind address (IPv6 dual-stack) |
 | `--ssl-cert` | `certs/fullchain.pem` | SSL certificate file |
 | `--ssl-key` | `certs/radio.vlsc.net.key` | SSL private key file |
@@ -72,7 +91,7 @@ Yaesu FT-710 Radio
 
 ### Dual-Mode Spectrum
 
-- **FT4222 SPI mode**: Reads raw 4096-byte scope frames from the FTDI FT4222 chip via `libft4222.dylib`. Provides true 850-point FFT spectrum waterfall at ~21 fps.
+- **FT4222 SPI mode**: Reads raw 4096-byte scope frames from the FTDI FT4222 chip via platform FTDI libraries (`libft4222.dylib` / `libft4222.so` / `FT4222.dll`). Provides true 850-point FFT spectrum waterfall.
 - **S-meter fallback**: When the FT4222 is unavailable, generates a synthetic multi-peak spectrum from CAT S-meter readings — still provides real-time band activity visualization.
 
 ### Audio Pipeline
@@ -110,7 +129,7 @@ Opus falls back to Int16 PCM when libopus is unavailable (server or browser).
 ## Project Structure
 
 ```
-FT710/
+mrrc_ft710/
 ├── server.py              # FastAPI app: lifespan, auth, 4 WebSockets, REST, CLI
 ├── cat_controller.py      # Serial CAT protocol (pyserial + asyncio thread pool)
 ├── radio_state.py         # RadioState dataclass with dirty-field change tracking
@@ -145,6 +164,7 @@ FT710/
 │       ├── opus_codec.js        # Browser WASM Opus encoder/decoder
 │       └── opus_wasm.js         # Emscripten-compiled libopus WASM binary
 ├── SDD/                   # Software Design Description (15-chapter TeamSD docs)
+├── docs/                  # Additional documentation
 ├── tests/                 # Unit tests
 ├── mem_channels.json      # Persistent memory channels
 └── logs/                  # Server log output
@@ -237,9 +257,18 @@ FT710/
 | `/api/status` | GET | Full radio state JSON (44+ fields) |
 | `/api/mem_channels` | GET | Memory channels |
 | `/api/mem_channels` | POST | Save memory channels `{"channels":[...]}` |
-| `/api/auth/login` | POST | Login `{"password":"..."}` → sets cookie |
+| `/api/auth/login` | POST | Login `{"password":"..."}` → sets cookie (rate-limited) |
 | `/api/auth/logout` | POST | Logout → clears cookie |
 | `/api/auth/check` | GET | Check auth status |
+| `/api/health` | GET | Health check with uptime, radio connection status |
+
+## Security
+
+- **Login rate limiting**: Max 5 attempts per 5 minutes per IP
+- **Strong password enforcement**: Warnings for weak passwords
+- **Auth tokens**: Per-session WebSocket authentication
+- **HTTPS/SSL**: Supported via Let's Encrypt or custom certs
+- **Health monitoring**: `/api/health` endpoint for uptime and connection status
 
 ## Safety
 
@@ -252,27 +281,49 @@ FT710/
 ## Tests
 
 ```bash
-cd FT710
-python -m unittest discover -s tests -v
+cd mrrc_ft710
+python3 -m pytest tests/ -v
+# Or with unittest:
+python3 -m unittest discover -s tests -v
 ```
+
+**215 tests passing** in the current local test suite.
 
 ## Requirements
 
-- **Python 3.11+** with: `fastapi`, `uvicorn[standard]`, `pyserial`, `websockets`, `pyaudio`, `numpy`
+- **Python 3.10+** (uses `from __future__ import annotations` for forward references)
+- Core: `fastapi`, `uvicorn[standard]`, `pyserial`, `websockets`, `pyaudio`, `numpy`
 - **libopus** (optional, for compressed audio): `brew install opus` (macOS) or `apt install libopus0` (Linux)
 - **FT-710** connected via USB
   - Enhanced COM Port for CAT (38400 baud)
   - FT4222 chip (internal) for real scope data
   - USB Audio interface for RX/TX audio
 - **For real FT4222 scope data**:
-  - `libft4222.dylib` from wfview app bundle in `FT710/lib/`
-  - `libftd2xx.dylib` in `FT710/lib/`
+  - `libft4222.dylib` from wfview app bundle in `mrrc_ft710/lib/`
+  - `libftd2xx.dylib` in `mrrc_ft710/lib/`
   - `ftd2xx.cfg` installed to `/usr/local/lib/` with `DetachKernelDriver=1`
 - **Browser**: Safari 15+ (iOS), Chrome, Firefox (WebSocket + Web Audio + Canvas)
 
-📦 **Complete cross-platform dependency guide:** See [`DEPENDENCIES.md`](DEPENDENCIES.md) for per-platform
-installation steps, driver setup, audio configuration, FTDI scope setup,
-troubleshooting, and a full dependency graph.
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [SECURITY_GUIDE.md](SECURITY_GUIDE.md) | Security configuration, password policies, rate limiting |
+| [QUICKSTART.md](QUICKSTART.md) | Step-by-step setup guide |
+| [DEPENDENCIES.md](DEPENDENCIES.md) | Cross-platform dependency and driver guide |
+| [docs/WINDOWS_INSTALLER_GUIDE.md](docs/WINDOWS_INSTALLER_GUIDE.md) | Windows desktop installer, FTDI DLLs, FT4222 packaging |
+| [FIXES_SUMMARY.md](FIXES_SUMMARY.md) | Detailed fix documentation (v2.0.0 + TX analysis) |
+| [FINAL_VERIFICATION.md](FINAL_VERIFICATION.md) | Verification report |
+| [EXECUTIVE_SUMMARY.md](EXECUTIVE_SUMMARY.md) | Executive summary (中文) |
+| [COMPLETION_REPORT.md](COMPLETION_REPORT.md) | Completion report (中文) |
+| [docs/TX_LINK_ANALYSIS.md](docs/TX_LINK_ANALYSIS.md) | TX audio chain deep analysis |
+| [docs/IOS_APP_ANALYSIS.md](docs/IOS_APP_ANALYSIS.md) | iOS App deep analysis |
+| [docs/IOS_APP_FIX_GUIDE.md](docs/IOS_APP_FIX_GUIDE.md) | iOS App fix guide |
+| [docs/IOS_OPUS_INTEGRATION.md](docs/IOS_OPUS_INTEGRATION.md) | iOS Opus integration guide |
+| [docs/IOS_TESTING_GUIDE.md](docs/IOS_TESTING_GUIDE.md) | iOS testing guide |
+| [IOS_FIXES_SUMMARY.md](IOS_FIXES_SUMMARY.md) | iOS fixes summary |
+| [SDD/](SDD/) | Software Design Description (15 chapters) |
+| [FT-710_CAT_Knowledge_Base.md](FT-710_CAT_Knowledge_Base.md) | CAT command reference |
 
 ## SDD Documentation
 
@@ -282,3 +333,7 @@ See [`SDD/`](SDD/) for the complete Software Design Description (15 chapters, IB
 - Architecture decisions (10 ADs), architecture overview
 - Service model, component model, operational model
 - Feasibility assessment, version history, PTT safety architecture
+
+## License
+
+Personal / hobby project. FT-710 is a trademark of Yaesu Musen Co., Ltd.
