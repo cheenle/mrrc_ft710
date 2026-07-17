@@ -3,7 +3,7 @@
 from pathlib import Path
 
 
-ROOT = Path(SPECPATH).parents[2]
+ROOT = Path(SPECPATH).parents[1]
 DIST_ROOT = ROOT / "dist" / "windows" / "_pyinstaller"
 
 

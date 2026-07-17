@@ -174,7 +174,7 @@ class StateBroadcastLogicTests(unittest.TestCase):
     """SDD §9.7: State broadcasting via dirty-field tracking."""
 
     def test_meter_broadcast_log_interval_is_half_second(self):
-        server_source = Path("server.py").read_text()
+        server_source = Path("server.py").read_text(encoding="utf-8")
         self.assertIn("METER_BROADCAST_LOG_INTERVAL_SECONDS = 0.5", server_source)
         self.assertIn(
             "now - _last_meter_broadcast_log >= METER_BROADCAST_LOG_INTERVAL_SECONDS",
@@ -182,18 +182,18 @@ class StateBroadcastLogicTests(unittest.TestCase):
         )
 
     def test_band_command_is_single_backend_transaction(self):
-        server_source = Path("server.py").read_text()
+        server_source = Path("server.py").read_text(encoding="utf-8")
         self.assertIn('await cat.set_band_stack(band["bsr"])', server_source)
         self.assertIn('await cat.set_frequency(band["default_freq"], "A")', server_source)
 
-        ui_source = Path("static/ft710_ui.js").read_text()
+        ui_source = Path("static/ft710_ui.js").read_text(encoding="utf-8")
         band_button_handler = ui_source.split("// Band button: cycles to next band", 1)[1]
         band_button_handler = band_button_handler.split("// Filter button", 1)[0]
         self.assertIn("sendCommand('band', nextBand.name)", band_button_handler)
         self.assertNotIn("sendCommand('freq'", band_button_handler)
 
     def test_band_cycle_uses_full_frontend_fallback_and_frequency_fallback(self):
-        ui_source = Path("static/ft710_ui.js").read_text()
+        ui_source = Path("static/ft710_ui.js").read_text(encoding="utf-8")
         self.assertIn("const DEFAULT_BAND_CYCLE = [", ui_source)
         for band in ("160m", "80m", "60m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m", "4m"):
             self.assertIn(f"name: '{band}'", ui_source)
@@ -202,17 +202,17 @@ class StateBroadcastLogicTests(unittest.TestCase):
         self.assertIn("const nextIdx = (idx + 1) % bandList.length;", ui_source)
 
     def test_state_update_renders_from_actual_fields_not_dirty_only(self):
-        main_source = Path("static/ft710_main.js").read_text()
+        main_source = Path("static/ft710_main.js").read_text(encoding="utf-8")
         self.assertIn("const changedFields = msg.fields ? Object.keys(msg.fields) : msg.dirty;", main_source)
         self.assertIn("renderUpdates(changedFields);", main_source)
 
     def test_static_assets_are_cache_busted_after_ui_changes(self):
-        index_source = Path("static/index.html").read_text()
+        index_source = Path("static/index.html").read_text(encoding="utf-8")
         self.assertIn('/ft710.css?v=16', index_source)
         self.assertIn('/ft710_main.js?v=16', index_source)
         self.assertIn('/ft710_ui.js?v=16', index_source)
 
-        sw_source = Path("static/sw.js").read_text()
+        sw_source = Path("static/sw.js").read_text(encoding="utf-8")
         self.assertIn("const CACHE = 'ft710-v16'", sw_source)
         self.assertIn("'/ft710_ui.js?v=16'", sw_source)
 
@@ -222,7 +222,7 @@ class StateBroadcastLogicTests(unittest.TestCase):
         # Should not broadcast when nothing changed
 
     def test_scope_pipe_starts_lazily_for_spectrum_clients(self):
-        server_source = Path("server.py").read_text()
+        server_source = Path("server.py").read_text(encoding="utf-8")
         lifespan_block = server_source.split("@asynccontextmanager", 1)[1].split("app = FastAPI", 1)[0]
         spectrum_block = server_source.split('@app.websocket("/WSspectrum")', 1)[1].split("# ── Audio RX WebSocket", 1)[0]
         self.assertNotIn("asyncio.create_subprocess_exec", lifespan_block)
@@ -250,7 +250,7 @@ class StateBroadcastLogicTests(unittest.TestCase):
     def test_skip_next_poll_before_cat_commands(self):
         """skip_next_poll must come BEFORE the CAT command to prevent
         in-flight poll results from overwriting the user's new setting."""
-        server_source = Path("server.py").read_text()
+        server_source = Path("server.py").read_text(encoding="utf-8")
         # Extract the band handler block
         band_block_start = server_source.index('elif field == "band":')
         band_block_end = server_source.index('elif field == "vfo_equal":')
@@ -288,7 +288,7 @@ class StateBroadcastLogicTests(unittest.TestCase):
     def test_poll_guards_against_stale_frequency_after_skip(self):
         """The IF poll must check _should_skip AFTER reading frequency,
         not just at the start of the loop iteration."""
-        poll_source = Path("poll_scheduler.py").read_text()
+        poll_source = Path("poll_scheduler.py").read_text(encoding="utf-8")
         self.assertIn("not await self._should_skip", poll_source)
         # Verify the guard appears AFTER get_frequency and BEFORE
         # adding to changes
@@ -340,8 +340,8 @@ class StateBroadcastLogicTests(unittest.TestCase):
         import ast
         import re as _re
 
-        config_source = Path("config.py").read_text()
-        ui_source = Path("static/ft710_ui.js").read_text()
+        config_source = Path("config.py").read_text(encoding="utf-8")
+        ui_source = Path("static/ft710_ui.js").read_text(encoding="utf-8")
 
         # Parse server BANDS — handle both plain and type-annotated assignment
         tree = ast.parse(config_source)
@@ -414,7 +414,7 @@ class StateBroadcastLogicTests(unittest.TestCase):
         """When CAT commands fail, server must log the failure and
         send an error message back to the client so it can revert
         its optimistic update."""
-        server_source = Path("server.py").read_text()
+        server_source = Path("server.py").read_text(encoding="utf-8")
         # Error message must be sent on failure
         self.assertIn(
             'Band change FAILED:',

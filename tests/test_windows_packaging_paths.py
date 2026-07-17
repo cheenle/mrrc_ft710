@@ -27,8 +27,9 @@ class WindowsPackagingPathTests(unittest.TestCase):
     def test_windows_vendor_dir_is_searched(self):
         with patch.object(scope_libraries.sys, "platform", "win32"):
             dirs = scope_libraries.get_candidate_library_dirs()
+        expected_suffix = ("vendor", "ftdi", "windows", "bin", "x64")
         self.assertTrue(
-            any(str(path).endswith("vendor/ftdi/windows/bin/x64") for path in dirs)
+            any(path.parts[-len(expected_suffix):] == expected_suffix for path in dirs)
         )
 
     def test_configure_windows_dll_search_path_calls_add_dll_directory(self):
@@ -51,7 +52,7 @@ class WindowsPackagingPathTests(unittest.TestCase):
                 "get_candidate_library_dirs",
                 return_value=[Path("/tmp/missing"), Path("/tmp/exists")],
             ),
-            patch.object(Path, "is_dir", lambda self: str(self) == "/tmp/exists"),
+            patch.object(Path, "is_dir", lambda self: self == Path("/tmp/exists")),
         ):
             scope_libraries.configure_windows_dll_search_path()
 

@@ -13,7 +13,7 @@ class WindowsPackagingFilesTests(unittest.TestCase):
             ROOT / "packaging" / "pyinstaller" / "ft710_launcher.spec",
         ):
             text = spec.read_text(encoding="utf-8")
-            self.assertIn("ROOT = Path(SPECPATH).parents[2]", text)
+            self.assertIn("ROOT = Path(SPECPATH).parents[1]", text)
 
     def test_build_script_runs_all_packaging_steps(self):
         text = (ROOT / "packaging" / "windows" / "build.ps1").read_text(

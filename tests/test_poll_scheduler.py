@@ -108,8 +108,8 @@ class PollingOrderTests(unittest.TestCase):
         self.assertFalse(should_poll)
 
     def test_user_command_temporarily_pauses_background_polling(self):
-        scheduler_source = (REPO_ROOT / "poll_scheduler.py").read_text()
-        server_source = (REPO_ROOT / "server.py").read_text()
+        scheduler_source = (REPO_ROOT / "poll_scheduler.py").read_text(encoding="utf-8")
+        server_source = (REPO_ROOT / "server.py").read_text(encoding="utf-8")
         self.assertIn("def note_user_command", scheduler_source)
         self.assertIn("await self._polling_paused()", scheduler_source)
         self.assertIn("scheduler.note_user_command", server_source)

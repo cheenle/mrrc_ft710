@@ -7,7 +7,7 @@ $PyInstallerRoot = Join-Path $DistRoot "_pyinstaller"
 
 Set-Location $RepoRoot
 
-python -m py_compile *.py
+Get-ChildItem -Filter *.py | ForEach-Object { python -m py_compile $_.FullName }
 python -m unittest discover -s tests -v
 
 $ft4222 = Join-Path $RepoRoot "vendor\ftdi\windows\bin\x64\FT4222.dll"

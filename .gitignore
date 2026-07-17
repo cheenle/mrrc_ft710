@@ -2,6 +2,10 @@
 venv/
 .venv/
 
+# Build output
+dist/
+build/
+
 # Python cache
 __pycache__/
 *.pyc

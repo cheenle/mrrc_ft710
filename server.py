@@ -167,7 +167,7 @@ def _load_mem_channels() -> list:
     """Load memory channels from disk."""
     if MEM_FILE.exists():
         try:
-            data = json.loads(MEM_FILE.read_text())
+            data = json.loads(MEM_FILE.read_text(encoding="utf-8"))
             channels = data.get("channels", [])
             # Pad to exactly MEM_CHANNEL_COUNT slots
             while len(channels) < MEM_CHANNEL_COUNT:
@@ -1484,7 +1484,7 @@ async def login_page(request: Request):
     """Serve the login page."""
     login_html = STATIC_DIR / "login.html"
     if login_html.exists():
-        return HTMLResponse(login_html.read_text())
+        return HTMLResponse(login_html.read_text(encoding="utf-8"))
     return HTMLResponse("""
     <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport"
     content="width=device-width,initial-scale=1"><title>FT-710 Login</title>
