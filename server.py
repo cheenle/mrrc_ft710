@@ -16,6 +16,7 @@ import json
 import logging
 import os
 import secrets as _secrets
+import signal
 import struct
 import subprocess as _subprocess
 import sys
@@ -329,6 +330,38 @@ async def _broadcast_spectrum_loop():
         await asyncio.sleep(interval)
 
 
+async def _stop_proc_gracefully(proc, timeout: float = 2.0):
+    """Stop a subprocess, letting it release resources (e.g. FT4222 handle) first.
+
+    On Windows, Process.terminate() calls TerminateProcess(), which kills the
+    process immediately and bypasses Python signal handlers entirely — any
+    `finally` cleanup (like FT_Close on the FT4222 handle) never runs, leaking
+    the device handle until Windows notices the process died. CTRL_BREAK_EVENT
+    is the only signal Windows subprocesses can actually catch and act on, and
+    it requires the child to have been spawned in its own process group.
+    """
+    try:
+        if sys.platform == "win32":
+            proc.send_signal(signal.CTRL_BREAK_EVENT)
+        else:
+            proc.terminate()
+    except Exception:
+        pass
+    try:
+        await asyncio.wait_for(proc.wait(), timeout=timeout)
+    except asyncio.TimeoutError:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+        try:
+            await proc.wait()
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
 async def _read_scope_pipe(proc):
     """Read binary spectrum frames from scope_pipe subprocess stdout.
 
@@ -447,21 +480,7 @@ async def _read_scope_pipe(proc):
         if scope:
             scope._connected = False
         if proc.returncode is None:
-            try:
-                proc.terminate()
-            except Exception:
-                pass
-            try:
-                await asyncio.wait_for(proc.wait(), timeout=2.0)
-            except asyncio.TimeoutError:
-                try:
-                    proc.kill()
-                except Exception:
-                    pass
-                try:
-                    await proc.wait()
-                except Exception:
-                    pass
+            await _stop_proc_gracefully(proc)
         if _scope_proc is proc:
             _scope_proc = None
         if _scope_read_task is asyncio.current_task():
@@ -495,10 +514,12 @@ async def _ensure_scope_pipe_running():
             logger.warning("scope_pipe worker not found — spectrum will use S-meter fallback only")
             return
         logger.info("Starting scope_pipe subprocess for spectrum client...")
+        creationflags = _subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0
         try:
             _scope_proc = await asyncio.create_subprocess_exec(
                 *scope_pipe_cmd,
                 stdout=_subprocess.PIPE, stderr=_subprocess.PIPE,
+                creationflags=creationflags,
             )
             _scope_read_task = asyncio.create_task(
                 _read_scope_pipe(_scope_proc), name="scope_pipe_read"
@@ -527,20 +548,7 @@ async def _stop_scope_pipe():
     proc = _scope_proc
     _scope_proc = None
     if proc and proc.returncode is None:
-        try:
-            proc.terminate()
-            await asyncio.wait_for(proc.wait(), timeout=2.0)
-        except asyncio.TimeoutError:
-            try:
-                proc.kill()
-            except Exception:
-                pass
-            try:
-                await proc.wait()
-            except Exception:
-                pass
-        except Exception:
-            pass
+        await _stop_proc_gracefully(proc)
     if scope:
         scope._connected = False
 
@@ -1636,6 +1644,7 @@ async def ws_radio(ws: WebSocket):
     # Check auth via query param (browser WebSocket doesn't support custom headers)
     token = ws.query_params.get("token", "")
     if not token or token not in _auth_tokens:
+        await ws.accept()
         await ws.close(code=4001, reason="Unauthorized")
         return
 
@@ -1696,6 +1705,7 @@ async def ws_spectrum(ws: WebSocket):
     """
     token = ws.query_params.get("token", "")
     if not token or token not in _auth_tokens:
+        await ws.accept()
         await ws.close(code=4001, reason="Unauthorized")
         return
 
@@ -1730,6 +1740,7 @@ async def ws_audio_rx(ws: WebSocket):
     """
     token = ws.query_params.get("token", "")
     if not token or token not in _auth_tokens:
+        await ws.accept()
         await ws.close(code=4001, reason="Unauthorized")
         return
 
@@ -1762,6 +1773,7 @@ async def ws_audio_tx(ws: WebSocket):
 
     token = ws.query_params.get("token", "")
     if not token or token not in _auth_tokens:
+        await ws.accept()
         await ws.close(code=4001, reason="Unauthorized")
         return
 

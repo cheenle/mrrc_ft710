@@ -3,6 +3,7 @@ Tests for server.py WebSocket protocol — SDD §9.2, §10.4.
 Verifies: message format, auth token flow, PTT safety logic, state broadcast.
 """
 import json
+import re
 from pathlib import Path
 import unittest
 
@@ -100,6 +101,25 @@ class WSAuthTests(unittest.TestCase):
         """Unauthorized WS connections close with code 4001."""
         close_code = 4001
         self.assertEqual(close_code, 4001)
+
+    def test_unauthorized_close_accepts_before_closing(self):
+        """ws.close(code=4001) must follow ws.accept().
+
+        Starlette/ASGI drops the requested close code and rejects the
+        handshake with a bare HTTP 403 if the WebSocket was never
+        accepted, so the browser's onclose handler never sees code 4001
+        and just retries forever with the same dead token instead of
+        redirecting to /login.
+        """
+        source = Path("server.py").read_text(encoding="utf-8")
+        close_positions = [m.start() for m in re.finditer(r"close\(code=4001", source)]
+        self.assertTrue(close_positions, "expected at least one close(code=4001) call")
+        for pos in close_positions:
+            preceding = source[max(0, pos - 200):pos]
+            self.assertIn(
+                "await ws.accept()", preceding,
+                "ws.close(code=4001) must be preceded by ws.accept()",
+            )
 
 
 class PTTSafetyLogicTests(unittest.TestCase):
