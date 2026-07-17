@@ -59,6 +59,17 @@ class WindowsPackagingPathTests(unittest.TestCase):
         self.assertEqual(calls, [Path("/tmp/exists")])
 
 
+class BundledDataDirTests(unittest.TestCase):
+    def test_uses_meipass_when_set(self):
+        fake_meipass = Path("/tmp/ft710_meipass")
+        with patch.object(sys, "_MEIPASS", str(fake_meipass), create=True):
+            self.assertEqual(server._bundled_data_dir(), fake_meipass)
+
+    def test_falls_back_to_runtime_dir_without_meipass(self):
+        self.assertFalse(hasattr(sys, "_MEIPASS"))
+        self.assertEqual(server._bundled_data_dir(), server._runtime_dir())
+
+
 class ScopePipeCommandTests(unittest.TestCase):
     def test_unfrozen_scope_pipe_command_uses_python_script(self):
         cmd = server._scope_pipe_command()

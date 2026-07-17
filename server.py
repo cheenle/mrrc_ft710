@@ -102,10 +102,22 @@ SCRIPT_DIR = Path(__file__).parent
 
 
 def _runtime_dir() -> Path:
-    """Return the directory containing runtime files for source or frozen mode."""
+    """Return the directory containing sibling executables (source or frozen mode)."""
     if getattr(sys, "frozen", False):
         return Path(sys.executable).resolve().parent
     return SCRIPT_DIR
+
+
+def _bundled_data_dir() -> Path:
+    """Return the directory containing PyInstaller-bundled data files (e.g. static/).
+
+    PyInstaller's onedir mode places bundled data under sys._MEIPASS, which is
+    a separate "_internal" directory from the one containing the executable.
+    """
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        return Path(meipass)
+    return _runtime_dir()
 
 
 def _scope_pipe_command() -> list[str] | None:
@@ -122,8 +134,8 @@ def _scope_pipe_command() -> list[str] | None:
     return None
 
 
-STATIC_DIR = _runtime_dir() / "static"
-MEM_FILE = Path(os.environ.get("FT710_MEM_FILE", str(_runtime_dir() / "mem_channels.json")))
+STATIC_DIR = _bundled_data_dir() / "static"
+MEM_FILE = Path(os.environ.get("FT710_MEM_FILE", str(_bundled_data_dir() / "mem_channels.json")))
 
 # ── Auth Helpers ────────────────────────────────────────────────────
 
