@@ -1897,7 +1897,7 @@ def main():
                        args.ssl_cert, args.ssl_key)
 
     uvicorn.run(
-        "server:app",
+        app,
         host=args.host,
         port=args.port,
         log_level="info",
