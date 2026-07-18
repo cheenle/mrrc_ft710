@@ -469,16 +469,18 @@ class CatController:
         return None
 
     async def set_filter_width(self, index: int) -> bool:
-        # FT-710 uses 3-digit filter index: SH0XXX (e.g. SH0009 for filter 9)
-        cmd = f"SH0{index:03d}"
+        # FT-710 SH (WIDTH) command format per CAT manual:
+        #   SH + P1(0) + P2(0) + 2-digit width index  =>  SH00NN
+        # (e.g. SH0005 for filter 5, SH0023 for filter 23).
+        cmd = f"SH00{index:02d}"
         return await self.set(cmd)
 
     async def get_filter_width(self) -> Optional[int]:
         resp = await self.query("SH0")
-        if resp and len(resp) >= 6:
-            # Response format: SH0XXX (3-digit filter index, e.g. SH0020 = filter 20)
+        # Response is "SH00NN" (P1=0, P2=0, P3=2-digit index); take last 2 digits.
+        if resp and len(resp) >= 4:
             try:
-                return int(resp[3:6])
+                return int(resp[-2:])
             except ValueError:
                 return None
         return None

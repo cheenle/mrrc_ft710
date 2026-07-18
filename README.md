@@ -180,9 +180,9 @@ mrrc_ft710/
 | Mode | Cycle button: LSB→USB→CW→AM→FM→RTTY→DATA; modal picker for all 15 modes |
 | Band | Cycle button: 160m→80m→60m→40m→30m→20m→17m→15m→12m→10m→6m→4m |
 | VFO | A/B toggle, A=B copy, Split toggle |
-| Filter | Cycle through 23 voice or 21 narrow filter widths (mode-aware) |
+| Filter | Cycle through curated voice/narrow filter widths (backend supports full 23 voice / 21 narrow CAT indices) |
 | ATT / PRE | Cycle: OFF→6dB→12dB→18dB / OFF→AMP1→AMP2 |
-| PTT | Touch-and-hold TX, release RX; triple TX0 verify; dead-man switch; graceful audio drain before RF drop |
+| PTT | Touch-and-hold TX, release RX; PTT watchdog; dead-man switch; graceful audio drain before RF drop |
 | TUNE | Toggle button for antenna tuner activation |
 | Wake Lock | ☀ toggle: screen stays on during operation (Wake Lock API + video/audio fallback for iOS) |
 | Fullscreen | ⛶ toggle: hides browser chrome for a dedicated control surface |

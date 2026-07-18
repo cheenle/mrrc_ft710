@@ -8,6 +8,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from cat_controller import CatController
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -48,10 +50,13 @@ class CatCommandFormattingTests(unittest.TestCase):
         self.assertEqual("SM0", "SM0")
 
     def test_filter_command_format(self):
-        cmd = f"SH0{5:02d}"
-        self.assertEqual(cmd, "SH005")
-        cmd = f"SH0{22:02d}"
-        self.assertEqual(cmd, "SH022")
+        # FT-710 SH (WIDTH) format: SH + P1(0) + P2(0) + 2-digit width = SH00NN
+        cmd = f"SH00{5:02d}"
+        self.assertEqual(cmd, "SH0005")
+        cmd = f"SH00{22:02d}"
+        self.assertEqual(cmd, "SH0022")
+        cmd = f"SH00{13:02d}"
+        self.assertEqual(cmd, "SH0013")
 
     def test_gain_command_format(self):
         cmd = f"AG0{128:03d}"
@@ -136,9 +141,13 @@ class CatResponseParsingTests(unittest.TestCase):
         self.assertEqual(val, 0)
 
     def test_parse_filter_response(self):
-        resp = "SH005"
-        val = int(resp[3:5])
+        # Radio responds with SH00NN format (P1=0, P2=0, P3=2-digit width).
+        resp = "SH0005"
+        val = int(resp[-2:])
         self.assertEqual(val, 5)
+        resp = "SH0013"
+        val = int(resp[-2:])
+        self.assertEqual(val, 13)
 
     def test_parse_error_response(self):
         resp = "?;"
@@ -172,6 +181,16 @@ class CatControllerMockedTests(unittest.IsolatedAsyncioTestCase):
         """All CAT commands must end with semicolon."""
         cmd = "FA014200000"
         self.assertEqual(cmd + ";", "FA014200000;")
+
+    async def test_set_filter_width_uses_two_digit_width_index(self):
+        """FT-710 SH expects SH + P1(0) + P2(0) + 2-digit width = SH00NN."""
+        cat = CatController("mock-port")
+        cat.set = AsyncMock(return_value=True)
+
+        ok = await cat.set_filter_width(13)
+
+        self.assertTrue(ok)
+        cat.set.assert_awaited_once_with("SH0013")
 
     async def test_query_command_is_send_without_value(self):
         """Query commands send prefix only (no value)."""

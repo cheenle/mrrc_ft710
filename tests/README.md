@@ -37,7 +37,7 @@ SDD coverage: AD-002, §9.6, §10.4
 
 | Class | Tests | Covers |
 |-------|-------|--------|
-| `CatCommandFormattingTests` | 16 | FA, FB, MD0, TX, SM0, SH0, AG, PC, PA0, RA0, NB0, NR0, BC, PR, PS, ST, VS, SS, AC, BS — all command formats |
+| `CatCommandFormattingTests` | 16 | FA, FB, MD0, TX, SM0, SH00, AG, PC, PA0, RA0, NB0, NR0, BC, PR, PS, ST, VS, SS, AC, BS — all command formats |
 | `CatResponseParsingTests` | 5 | Frequency parse, S-meter parse, mode parse, PTT parse, IF response parse, error detection |
 | `CatControllerMockedTests` | 5 | Command terminator (;), query vs set, ASCII encoding, triple PTT verify sequence |
 

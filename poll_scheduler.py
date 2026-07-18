@@ -396,7 +396,7 @@ class PollScheduler:
     async def _poll_settings(self):
         """Poll slowly-changing radio settings."""
         fields_to_poll = [
-            ("filter_width", "SH0", lambda r: int(r[3:]) if len(r) > 3 else None),
+            ("filter_width", "SH0", lambda r: int(r[-2:]) if len(r) >= 4 else None),
             ("af_gain", "AG0", lambda r: int(r[2:]) if len(r) > 2 else None),
             ("rf_gain", "RG0", lambda r: int(r[2:]) if len(r) > 2 else None),
             ("rf_power", "PC", lambda r: int(r[2:]) if len(r) > 2 else None),
