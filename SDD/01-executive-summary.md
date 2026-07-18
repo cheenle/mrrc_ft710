@@ -14,7 +14,7 @@ The codebase is a standalone Python FastAPI/Uvicorn service. It does not depend 
 | Full radio control | All essential CAT commands via WebSocket | `cat_controller.py` with 40+ command helpers |
 | Real-time spectrum | Waterfall from FT4222 SPI or S-meter fallback | `scope_pipe.py`, `scope_handler.py` |
 | Bidirectional audio | RX audio from radio to browser; TX audio from browser to radio | `audio_handler.py`, `/WSaudioRX`, `/WSaudioTX` |
-| Safe PTT handling | Multiple layered safeguards against stuck TX | `ptt_manager.js`, triple TX0 verify, dead-man switch |
+| Safe PTT handling | Multiple layered safeguards against stuck TX | `ptt_manager.js` watchdog, dead-man switch, unload beacon |
 | Minimal deployment | Single Python process serves UI, WS, audio, scope, radio bridge | `server.py` FastAPI lifespan |
 
 ## 1.3 Implemented Core Features
@@ -25,14 +25,14 @@ The codebase is a standalone Python FastAPI/Uvicorn service. It does not depend 
 | Control WebSocket | Implemented | `/WSradio` JSON: fullState, stateUpdate, set/get commands, auth |
 | RX audio WebSocket | Implemented | `/WSaudioRX` tagged dual-codec frames (0x00=PCM, 0x01=Opus 48kHz mono) |
 | TX audio WebSocket | Implemented | `/WSaudioTX` tagged mic frames → Opus decode → PyAudio → radio |
-| Spectrum WebSocket | Implemented | `/WSspectrum` binary: v1=850B wf1, v2=1701B wf1+wf2, ~30fps |
+| Spectrum WebSocket | Implemented | `/WSspectrum` binary: v1=851B wf1, v2=1701B wf1+wf2, ~30fps |
 | Spectrum dual-mode | Implemented | FT4222 SPI (real FFT data) + S-meter fallback (synthetic Gaussian peaks) |
 | Serial CAT protocol | Implemented | Full FT-710 CAT command set via pyserial, asyncio.to_thread() I/O |
-| 5-tier polling | Implemented | 100ms–5s adaptive polling with skip-on-command |
+| 7-task polling | Implemented | 100ms–5s adaptive polling (7 asyncio tasks) with skip-on-command |
 | S-meter + Multi-meter | Implemented | Canvas S-meter bar + PWR/ALC/SWR/Id/Vd horizontal bar meters |
 | Memory channels | Implemented | `/api/mem_channels` GET/POST with `mem_channels.json` persistence |
 | Session auth | Implemented | Password login, `ft710_auth` cookie (30-day), `?token=` on WebSocket |
-| PTT safety | Implemented | Touch-and-hold TX; triple TX0 verify; dead-man switch; unload beacon |
+| PTT safety | Implemented | Touch-and-hold TX; PTT watchdog; dead-man switch; unload beacon |
 
 ## 1.4 Architecture Layers
 

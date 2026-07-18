@@ -34,8 +34,8 @@ Runtime facts are derived from `server.py`, `cat_controller.py`, `audio_handler.
 | Attribute | Value |
 |-----------|-------|
 | Document ID | SDD-MRRC-FT710-2026-001 |
-| SDD Version | V1.3 |
-| Baseline Date | 2026-07-08 |
+| SDD Version | V1.6 |
+| Baseline Date | 2026-07-18 |
 | Status | Production release (documentation synchronized with runtime) |
 | Project | MRRC FT-710 |
 | Primary Radio | Yaesu FT-710 (HF/50MHz Transceiver) |
@@ -73,5 +73,5 @@ Yaesu FT-710 Radio
 | Meter display + AMC | Implemented | `MS`/`AO` commands exposed in state and control path |
 | Memory channels | Implemented | `/api/mem_channels` GET/POST with JSON persistence |
 | Session authentication | Implemented | Shared-password login; `_auth_tokens` + `ft710_auth` cookie; all WS gated |
-| PTT safety | Implemented | Touch-and-hold, triple TX0 verify, dead-man switch, unload beacon |
+| PTT safety | Implemented | Touch-and-hold, PTT watchdog, dead-man switch, unload beacon |
 | Scope visualization | Implemented | 850-point FFT waterfall, frequency scale, S-meter bar |

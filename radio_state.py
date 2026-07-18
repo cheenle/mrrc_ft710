@@ -109,6 +109,7 @@ class RadioState:
 
     # ── Connection State ──────────────────────────────────────────
     serial_connected: bool = False
+    rx_audio_silent: bool = False        # Watchdog: RX PCM bit-exact zero (USB audio wedged?)
     last_update: float = 0.0
 
     # ── Change Tracking ───────────────────────────────────────────
@@ -309,6 +310,7 @@ class RadioState:
             "amc_level": self.amc_level,
             # Connection
             "serial_connected": self.serial_connected,
+            "rx_audio_silent": self.rx_audio_silent,
             "last_update": self.last_update,
         }
         if include_derived:
@@ -354,7 +356,7 @@ class RadioState:
             "mode": lambda r: int(r[3:], 16) if len(r) >= 4 else 1,
             "tx_status": lambda r: int(r[2:]) if len(r) > 2 else 0,
             "s_meter": lambda r: int(r[3:]) if len(r) > 3 else 0,
-            "filter_width": lambda r: int(r[3:]) if len(r) > 3 else 1,
+            "filter_width": lambda r: int(r[-2:]) if len(r) >= 4 else 1,
             "af_gain_raw": lambda r: int(r[2:]) if len(r) > 2 else 128,
             "rf_power": lambda r: int(r[2:]) if len(r) > 2 else 100,
             "preamp": lambda r: int(r[3:]) if len(r) > 3 else 0,

@@ -79,6 +79,11 @@ class AudioHandler:
         self._tx_queued_bytes = 0
         self._tx_primed = False
 
+        # RX silence watchdog state: bit-exact zero chunks mean the radio's
+        # USB audio is muted/wedged — a quiet band is never this silent.
+        self._rx_zero_since: Optional[float] = None
+        self._rx_last_peak = 0
+
         # Opus encoder for RX audio
         self.opus_enabled = True
         self.opus_encoder: Optional[RxOpusEncoder] = None
@@ -252,6 +257,28 @@ class AudioHandler:
         except Exception as e:
             logger.debug("RX read error: %s", e)
         return None
+
+    def note_rx_chunk(self, pcm: Optional[bytes]):
+        """Feed the RX-silence watchdog: record the chunk peak and the start
+        of any continuous all-zero run. Called by _audio_rx_loop in server.py.
+        Bit-exact zeros mean the radio's USB audio is muted/wedged — even a
+        quiet band produces converter noise, never a perfect zero stream."""
+        peak = 0
+        if pcm:
+            arr = np.frombuffer(pcm, dtype=np.int16)
+            if arr.size:
+                peak = int(np.abs(arr.astype(np.int32)).max())
+        self._rx_last_peak = peak
+        if peak > 0:
+            self._rx_zero_since = None
+        elif self._rx_zero_since is None:
+            self._rx_zero_since = time.monotonic()
+
+    def rx_silent_seconds(self) -> float:
+        """Seconds of continuous bit-exact-zero RX audio (0.0 = not silent)."""
+        if self._rx_zero_since is None:
+            return 0.0
+        return time.monotonic() - self._rx_zero_since
 
     def encode_rx_audio(self, pcm: bytes) -> list[bytes]:
         """Encode RX PCM audio into tagged WebSocket frames.

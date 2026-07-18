@@ -19,7 +19,7 @@
 | R1 | Serial port not found or wrong port | Medium | High | Log available ports; env var configuration; clear error messages |
 | R2 | FT4222 scope not available | Medium | Medium | Automatic S-meter fallback; scope_pipe exits gracefully |
 | R3 | PyAudio device not matching FT-710 | Low-Medium | Medium | Name-based auto-detection; device list logging; fallback to system default |
-| R4 | TX release command lost | Low | Critical | Triple TX0 verify, watchdog, dead-man switch, unload beacon |
+| R4 | TX release command lost | Low | Critical | TX-status poll (500ms) + browser watchdog, dead-man switch, unload beacon |
 | R5 | Opus library not available | Low | Medium | Graceful PCM fallback on server and browser |
 | R6 | Audio device contention | Low | Medium | PyAudio opens/closes streams on demand; only one TX stream at a time |
 | R7 | scope_pipe subprocess crash | Low-Medium | Low | Server continues; falls back to S-meter spectrum; pipe exit handled in finally block |
@@ -45,6 +45,8 @@
 | I3 | No per-band TX power control (FT-710 uses hardware power setting) | Low | N/A | FT-710 has hardware RF POWER knob; CAT `PC;` command sets power globally |
 | I4 | No ATR-1000 / external tuner support | Low | Future | Could add via second serial port |
 | I5 | No digital mode support (CW decoder, FT8, RTTY) | Low | Future | Specialized DSP/packet decode needed |
+| I6 | No multi-client control arbitration — concurrent browsers can issue conflicting PTT/frequency commands (last-writer-wins) | Medium | Open | Define arbitration rules (e.g., single-controller lock or role-based gating) |
+| I7 | `mem_channels.json` POST has no schema validation or backup | Low | Open | Server-side payload validation; keep `.bak` copy before overwrite |
 
 ## 13.5 Dependencies
 

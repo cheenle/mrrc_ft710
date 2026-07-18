@@ -1,10 +1,13 @@
-// TX Opus Worker — reads float32 samples from SharedArrayBuffer ring,
-// encodes with Opus, and posts encoded packets to the main thread.
+// TX Opus Worker — Opus-encodes mic frames and posts packets to the main thread.
 //
-// Architecture:
-//   AudioWorklet (audio thread) → SAB ring → Opus Worker (encode)
+// Architecture (as currently wired):
+//   AudioWorklet (audio thread) → postMessage('frame') → main thread
+//        → postMessage('float_frame') → this Worker (encode)
 //        → postMessage({type:'tx_audio', data:ArrayBuffer}) → main thread
 //        → wsAudioTX.send(tagged) → server
+//
+// (A SharedArrayBuffer ring path also exists in this file — sabInit/pollSAB —
+// but the main thread never allocates the SAB, so it is currently dormant.)
 //
 // Previously the Worker had its own WebSocket.  On mobile Safari, ws.send()
 // blocks the Worker's event loop on TCP backpressure (WiFi power-save stalls),
@@ -82,8 +85,8 @@ function ensureEncoder() {
 }
 
 // Post a codec-tagged frame to the main thread for WebSocket delivery.
-// Transfers the buffer (zero-copy) so the ~40-80 byte Opus packet never
-// crosses threads — only the ArrayBuffer handle moves.
+// Transfers the buffer (zero-copy) so the ~160-byte Opus packet (64kbps CBR)
+// never crosses threads — only the ArrayBuffer handle moves.
 function postEncodedFrame(tag, payload) {
   var src = new Uint8Array(payload);
   var tagged = new Uint8Array(1 + src.length);

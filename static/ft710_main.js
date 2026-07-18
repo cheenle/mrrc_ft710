@@ -81,6 +81,13 @@ function connectWebSocket() {
             handleAuthExpired();
             return;
         }
+        if (event.code === 1006) {
+            // Handshake failed — possibly a stale token (the server replies
+            // HTTP 403 to the WS upgrade, which the browser reports as 1006).
+            // Verify the session before retrying forever.
+            checkAuthThenReconnect();
+            return;
+        }
         scheduleReconnect();
     };
 
@@ -165,6 +172,26 @@ function scheduleReconnect() {
     }, wsReconnectDelay);
 }
 
+// On WS handshake failure (1006), distinguish a stale auth token from a
+// network outage before retrying: /api/auth/check answers 401 for a bad
+// session, so we only redirect to login when the server itself says so.
+let authCheckInFlight = false;
+function checkAuthThenReconnect() {
+    if (authCheckInFlight) return;
+    authCheckInFlight = true;
+    fetch('/api/auth/check', {cache: 'no-store'}).then(function(r) {
+        if (r.status === 401) {
+            handleAuthExpired();
+        } else {
+            scheduleReconnect();
+        }
+    }).catch(function() {
+        scheduleReconnect();   // server unreachable — keep retrying
+    }).finally(function() {
+        authCheckInFlight = false;
+    });
+}
+
 function startPing() {
     stopPing();
     pingTimer = setInterval(function() {
@@ -217,6 +244,7 @@ const radioState = {
     rf_power: 100,
     filter_width: 5,
     filter_hz: 2400,
+    rx_audio_silent: false,
     preamp: 0,
     preamp_label: 'OFF',
     attenuator: 0,

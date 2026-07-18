@@ -52,13 +52,13 @@ Yaesu FT-710
 | Flow | Description |
 |------|-------------|
 | CAT control flow | UI action → `/WSradio` JSON → `CatController` serial command → radio response → `RadioState` update → broadcast |
-| RX audio flow | FT-710 USB Audio → PyAudio capture (48kHz Int16) → Opus encode → `/WSaudioRX` tagged frames → browser AudioWorklet playback |
-| TX audio flow | Browser mic → getUserMedia (16kHz) → ScriptProcessor → Opus encode (Worker) → `/WSaudioTX` tagged frames → Opus decode → PyAudio → FT-710 USB Audio |
+| RX audio flow | FT-710 USB Audio → PyAudio capture (44.1kHz Int16) → resample to 48kHz → Opus encode → `/WSaudioRX` tagged frames → browser AudioWorklet playback |
+| TX audio flow | Browser mic → getUserMedia (48kHz) → AudioWorklet → Opus encode (Worker) → `/WSaudioTX` tagged frames → Opus decode → resample 48→44.1k → PyAudio → FT-710 USB Audio |
 | Spectrum flow (FT4222) | FT-710 → FT4222 SPI → `scope_pipe.py` subprocess → stdout pipe → `_read_scope_pipe()` → parse → `/WSspectrum` binary → browser waterfall |
 | Spectrum flow (fallback) | CAT SM0; poll → `radio_state.s_meter` → `ScopeHandler.update_from_radio_state()` → synthetic Gaussian spectrum → `/WSspectrum` |
 | State broadcast flow | Poll scheduler or user command → `RadioState.update()` → dirty-field tracking → `_broadcast_state()` → `/WSradio` stateUpdate |
-| PTT safety flow | UI touch → `sendCommand('ptt', true)` → CAT `TX1;` → radio TX; release → `TX0;` → triple verify → watchdog |
-| Polling flow | `PollScheduler` 5-tier timer → CAT queries → response parse → `RadioState.update()` → broadcast if changed |
+| PTT safety flow | UI touch → `sendCommand('ptt', true)` → CAT `TX1;` → radio TX; release → `TX0;` (fire-and-forget) → watchdog |
+| Polling flow | `PollScheduler` 7-task timer → CAT queries → response parse → `RadioState.update()` → broadcast if changed |
 
 ## 4.5 System Boundaries
 

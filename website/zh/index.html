@@ -51,7 +51,7 @@
     <div class="hero-content">
         <div class="hero-badge">
             <i class="fas fa-check-circle"></i>
-            <span>v1.4 · 正式发布</span>
+            <span>v1.6 · 正式发布</span>
         </div>
         <h1 class="hero-title">
             一根 USB 线<br>
@@ -120,11 +120,12 @@
             <div class="feature-card animate">
                 <div class="icon"><i class="fas fa-headphones"></i></div>
                 <h3>双向 Opus 音频</h3>
-                <p>RX: FT-710 USB 音频 → PyAudio 采集 (48kHz Int16) → Opus 64kbps 编码 → 浏览器 AudioWorklet。TX: 浏览器麦克风 (48kHz) → Opus 64kbps CBR → 服务端 48→44.1kHz 重采样 → PyAudio → 电台。</p>
+                <p>RX: FT-710 USB 音频 → PyAudio 采集 (44.1kHz Int16) → 帧对齐重采样 48kHz → Opus 64kbps 编码 → 浏览器 AudioWorklet。TX: 浏览器麦克风 (48kHz) → Opus 64kbps CBR → 服务端 48→44.1kHz 重采样 → PyAudio → 电台。</p>
                 <ul>
                     <li>RX 48kHz 高保真 AudioWorklet 播放</li>
                     <li>TX 64kbps CBR，60ms 抖动缓冲</li>
                     <li>优雅 PTT 释放 — 话尾不被切断</li>
+                    <li>零音频看门狗：电台 USB 音频卡死时状态栏即时告警</li>
                 </ul>
             </div>
 
@@ -134,7 +135,7 @@
                 <p>通过增强型 COM 端口以 38400 baud 直驱串口 CAT。40+ 指令：频率、15 种模式、23 种滤波器宽度、VFO A/B、分频、前置放大、衰减器、NR/NB/AN、压缩器、天调、AF/RF/Mic 增益、S-meter、多表头。</p>
                 <ul>
                     <li>无需 Hamlib / wfview / 中间件 — 直驱串口</li>
-                    <li>7 层轮询 (~296 字节/秒)</li>
+                    <li>7 任务轮询 (~296 字节/秒)</li>
                     <li>脏字段变更追踪最小化 WebSocket 流量</li>
                 </ul>
             </div>
@@ -152,7 +153,7 @@
 
             <div class="feature-card animate">
                 <div class="icon"><i class="fas fa-code-branch"></i></div>
-                <h3>7 层后台轮询</h3>
+                <h3>7 任务后台轮询</h3>
                 <p>38400 baud 下 100ms→5s 智能分频，0.25s 超时上限，主动让步 PTT。轮询层级：100ms(频率/模式/S-meter)、500ms(TX 表头零化)、2s(滤波器/增益/NR/NB)、5s(电压/电流/压缩器)。</p>
                 <ul>
                     <li>~296 字节/秒总串口占用</li>
@@ -164,10 +165,10 @@
             <div class="feature-card animate">
                 <div class="icon"><i class="fas fa-shield-halved"></i></div>
                 <h3>多层 PTT 安全防护</h3>
-                <p>触控握持发射 → 松手即断。以 200ms 间隔进行三重 TX0 验证。客户端断开服务端强制 RX。浏览器卸载信标在标签页关闭时发送 TX0;。</p>
+                <p>触控握持发射 → 松手即断。TX0 即发即弃 + 500ms TX 状态轮询 + 浏览器看门狗兜底。最后一个客户端或 TX 音频属主断开时服务端强制 RX。浏览器卸载信标在标签页关闭时发送 TX0;。</p>
                 <ul>
-                    <li>每次 PTT 释放后三重 TX0 验证</li>
-                    <li>最后客户端断开时服务端强制 RX</li>
+                    <li>7 层独立释放路径——无单点失效</li>
+                    <li>客户端或 TX 属主断开时服务端强制 RX</li>
                     <li>RF 断开前优雅 TX 音频排空</li>
                 </ul>
             </div>
@@ -434,7 +435,7 @@
                 <p>
                     软件 SCU-LAN10 替代方案<br>
                     一根 USB 线，任意设备<br>
-                    v1.4 · GPLv3 协议
+                    v1.6 · GPLv3 协议
                 </p>
             </div>
             <div class="footer-section">

@@ -7,7 +7,7 @@
 | StaticUIService | Core | Implemented | Serve mobile UI assets from `static/` with MIME types |
 | ControlService | Core | Implemented | `/WSradio` JSON command dispatch, state broadcast, memory management |
 | RXAudioService | Core | Implemented | Capture FT-710 USB audio → Opus encode → `/WSaudioRX` tagged frame broadcast |
-| TXAudioService | Core | Implemented | Receive `/WSaudioTX` tagged frames → Opus decode → PyAudio → radio |
+| TXAudioService | Core | Implemented | Receive `/WSaudioTX` tagged frames → Opus decode → resample 48→44.1k → PyAudio → radio |
 | SpectrumService | Core | Implemented | FT4222 scope data + S-meter fallback → `/WSspectrum` binary broadcast |
 | CATSerialService | Core | Implemented | Serial CAT protocol over USB Enhanced COM Port (38400, 8N1) |
 | PollingService | Core | Implemented | 7-task adaptive background polling with priority-command yield |
@@ -70,7 +70,7 @@ Key commands (see `_execute_set_command` in `server.py` for complete list):
 | `mode` | "USB","LSB",... | `MD0<X>;` | Set operating mode |
 | `ptt` | true/false | `TX1;` / `TX0;` | Priority command path; preempts poll queries |
 | `tune` | true/false | `TX2;` + `AC003;` / `AC000;` + `TX0;` | Tune carrier + tuner start/stop sequence |
-| `filter` / `filter_width` | 0–22 | `SH0<NN>;` | Filter width index |
+| `filter` / `filter_width` | 00–23 | `SH00<NN>;` | Filter width index (P1=0, P2=0 fixed) |
 | `af_gain` | 0–255 | `AG0<NNN>;` | AF gain |
 | `rf_gain` | 0–255 | `RG0<NNN>;` | RF gain |
 | `meter_display` | 0–5 | `MS<P1>0;` | Radio front-panel meter selection |
@@ -82,7 +82,7 @@ Key commands (see `_execute_set_command` in `server.py` for complete list):
 | `nb` / `noise_blanker` | true/false | `NB0<0/1>;` | Noise blanker toggle |
 | `an` / `auto_notch` | true/false | `BC0<0/1>;` | Auto notch toggle |
 | `comp` / `compressor` | true/false | `PR0<0/1>;` | Compressor toggle |
-| `tuner` | 0,1,2 | `AC000;` / `AC001;` / `AC003;` | ATU OFF/ON/TUNE start |
+| `tuner` | 0,1,2 | `AC000;` / `AC001;` / `AC003;` | ATU OFF/ON/TUNE start; mapping differs from Hamlib (`AC010`/`AC011`) — see gap-analysis §1.1 note |
 | `vfo` | "A","B" | `VS0;` / `VS1;` | Active VFO switch |
 | `split` | true/false | `ST<0/1>;` | Split operation |
 | `band` | "20m","40m",... | `BS<NN>;` | Band stacking register |

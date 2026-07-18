@@ -208,6 +208,11 @@ function renderStatusBar() {
             dot.classList.remove('connected');
         }
     }
+
+    const audioWarn = document.getElementById('status-audio-warn');
+    if (audioWarn) {
+        audioWarn.style.display = radioState.rx_audio_silent ? '' : 'none';
+    }
 }
 
 // ── Button Labels ───────────────────────────────────────────────────
@@ -827,7 +832,7 @@ function renderUpdates(dirtyFields) {
         'is_transmitting', 'filter_width', 'filter_hz', 'preamp', 'preamp_label',
         'attenuator', 'attenuator_label', 'noise_blanker', 'noise_reduction',
         'auto_notch', 'compressor', 'tuner_status', 'rf_power',
-        'split', 'serial_connected', 'scope_span', 'scope_speed', 'scope_mode',
+        'split', 'serial_connected', 'rx_audio_silent', 'scope_span', 'scope_speed', 'scope_mode',
         'scope_start_freq',
     ];
 

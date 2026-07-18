@@ -61,7 +61,7 @@
 
 | ID | Requirement | Target | Priority | Verification |
 |----|-------------|--------|----------|-------------|
-| NFR-060 | RX sample rate | 48kHz mono capture from FT-710 USB audio | Critical | PyAudio stream config |
+| NFR-060 | RX sample rate | 44.1kHz native capture from FT-710 USB audio, resampled to 48kHz for Opus | Critical | PyAudio stream config |
 | NFR-061 | Opus bitrate | 64kbps default, 16-128kbps adjustable | Medium | Codec config |
 | NFR-062 | TX audio quality | Clean mic audio reaches radio without distortion | High | On-air listening test |
 | NFR-063 | AudioWorklet playback | Jitter buffer: 220ms prebuffer, 90ms recovery, 800ms max | High | Listening under network jitter |

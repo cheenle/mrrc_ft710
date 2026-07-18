@@ -163,7 +163,7 @@
 <td>TXAudioService</td>
 <td>Core</td>
 <td>Implemented</td>
-<td>Receive <code>/WSaudioTX</code> tagged frames → Opus decode → PyAudio → radio</td>
+<td>Receive <code>/WSaudioTX</code> tagged frames → Opus decode → resample 48→44.1k → PyAudio → radio</td>
 </tr>
 <tr>
 <td>SpectrumService</td>
@@ -357,9 +357,9 @@ AuthService
 </tr>
 <tr>
 <td><code>filter</code> / <code>filter_width</code></td>
-<td>0–22</td>
-<td><code>SH0&lt;NN&gt;;</code></td>
-<td>Filter width index</td>
+<td>00–23</td>
+<td><code>SH00&lt;NN&gt;;</code></td>
+<td>Filter width index (P1=0, P2=0 fixed)</td>
 </tr>
 <tr>
 <td><code>af_gain</code></td>
@@ -431,7 +431,7 @@ AuthService
 <td><code>tuner</code></td>
 <td>0,1,2</td>
 <td><code>AC000;</code> / <code>AC001;</code> / <code>AC003;</code></td>
-<td>ATU OFF/ON/TUNE start</td>
+<td>ATU OFF/ON/TUNE start; mapping differs from Hamlib (<code>AC010</code>/<code>AC011</code>) — see gap-analysis §1.1 note</td>
 </tr>
 <tr>
 <td><code>vfo</code></td>
@@ -516,7 +516,7 @@ AuthService
 <footer class="footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC FT-710 Project · SDD V1.4 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
+            <p>&copy; 2026 MRRC FT-710 Project · SDD V1.6 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
         </div>
     </div>
 </footer>

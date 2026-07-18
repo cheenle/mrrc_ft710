@@ -48,7 +48,7 @@ Deliver a pragmatic, browser-native remote control surface for FT-710 operation 
 | ID | Tactic | Implementation |
 |----|--------|----------------|
 | T1 | Touch-and-hold PTT | `mousedown`/`touchstart` → TX; `mouseup`/`touchend` → RX |
-| T2 | Triple TX0 verify | 3× CAT `TX;` query at 200ms intervals after release |
+| T2 | Fire-and-forget TX0 + poll verify | `TX0;` on release; 500ms TX-status poll + browser watchdog catch stuck keyup |
 | T3 | AudioWorklet RX | Low-latency playback with jitter buffer (prebuffer 220ms, recovery 90ms) |
 | T4 | Opus audio compression | ~64kbps Opus vs ~768kbps PCM — 12× bandwidth reduction |
 | T5 | PyAudio FT-710 detection | Auto-detect FT-710 USB audio device by name |

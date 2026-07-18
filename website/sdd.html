@@ -27,7 +27,7 @@
         </a>
         <ul class="nav-links">
             <li><a href="#overview">Overview</a></li>
-            <li><a href="#updates">V1.3</a></li>
+            <li><a href="#updates">V1.6</a></li>
             <li><a href="#chapters">Chapters</a></li>
             <li><a href="#decisions">AD Index</a></li>
             <li><a href="https://github.com/cheenle/mrrc_ft710/tree/main/SDD" target="_blank" rel="noopener">GitHub</a></li>
@@ -43,7 +43,7 @@
     <div class="hero-content">
         <div class="hero-badge">
             <i class="fas fa-book"></i>
-            <span>SDD V1.4 · 2026-07-12</span>
+            <span>SDD V1.6 · 2026-07-18</span>
         </div>
         <h1 class="hero-title">MRRC FT-710<br><span class="gradient">Software Design Description</span></h1>
         <p class="hero-subtitle">
@@ -74,8 +74,8 @@
             </thead>
             <tbody>
             <tr><td>Document ID</td><td>SDD-MRRC-FT710-2026-001</td></tr>
-            <tr><td>Version</td><td>V1.4</td></tr>
-            <tr><td>Baseline Date</td><td>2026-07-12</td></tr>
+            <tr><td>Version</td><td>V1.6</td></tr>
+            <tr><td>Baseline Date</td><td>2026-07-18</td></tr>
             <tr><td>Runtime</td><td>Python 3.12+, FastAPI, Uvicorn, PyAudio, NumPy</td></tr>
             <tr><td>Frontend</td><td>HTML5, CSS3, vanilla JavaScript, Web Audio API</td></tr>
             <tr><td>Core Interfaces</td><td>4 WebSockets + Serial CAT + FT4222 SPI + USB Audio</td></tr>
@@ -88,28 +88,28 @@
     <div class="container">
         <div class="section-header">
             <span class="section-label">Latest Update</span>
-            <h2 class="section-title">What Changed In V1.4</h2>
+            <h2 class="section-title">What Changed In V1.6</h2>
         </div>
         <div class="features-grid">
             <div class="feature-card">
-                <div class="icon"><i class="fas fa-wave-square"></i></div>
-                <h3>FFT Spectrum Line Plot</h3>
-                <p>New real-time FFT amplitude-vs-frequency polyline above the waterfall. Cyan (#06b6d4) line with EMA smoothing (α=0.30), 2× amplitude boost, horizontal + vertical grid lines. Shared Floor/Ceil controls.</p>
+                <div class="icon"><i class="fas fa-ear-listen"></i></div>
+                <h3>RX Zero-Audio Watchdog</h3>
+                <p>Server detects bit-exact-zero RX audio (≥20s with squelch open) and raises a "无声" status-bar warning plus a log entry — a wedged radio USB codec can no longer masquerade as healthy behind a CBR bitrate indicator.</p>
             </div>
             <div class="feature-card">
-                <div class="icon"><i class="fas fa-chart-line"></i></div>
-                <h3>EMA Spectrum Smoothing</h3>
-                <p>Per-bin exponential moving average buffer (Float32Array, 850 points) — 30% new data per frame gives stable, readable peaks without hiding fast transients.</p>
+                <div class="icon"><i class="fas fa-right-to-bracket"></i></div>
+                <h3>Auth-Failure Redirect</h3>
+                <p>Stale-token WebSocket handshakes fail with HTTP 403 (browsers report 1006, never 4001). The control socket now verifies via /api/auth/check and redirects to /login instead of retrying a dead token forever.</p>
             </div>
             <div class="feature-card">
-                <div class="icon"><i class="fas fa-gauge-high"></i></div>
-                <h3>VFO Line Refinements</h3>
-                <p>Waterfall VFO marker thinned to 0.2px for minimal visual obstruction. Frequency label removed from waterfall (now only on scale canvas).</p>
+                <div class="icon"><i class="fas fa-tower-broadcast"></i></div>
+                <h3>Dead-Carrier Fix</h3>
+                <p>If the TX-audio owner socket drops while the radio is keyed, the server now forces TX0 — closing the unmodulated-carrier window that previously waited for the control socket to die.</p>
             </div>
             <div class="feature-card">
-                <div class="icon"><i class="fas fa-globe"></i></div>
-                <h3>Documentation + Website</h3>
-                <p>New Chinese introduction article, project screenshot on README and website, FFT feature cards. install.sh added --dev flag for dev dependencies.</p>
+                <div class="icon"><i class="fas fa-file-lines"></i></div>
+                <h3>TX Audio Truth Sync</h3>
+                <p>Docs aligned with runtime: TX Opus is 64kbps CBR complexity=5, and AD-011 now records the real topology — 48kHz codec domain bridged to the FT-710's native 44.1kHz USB audio (960↔882 frame-aligned).</p>
             </div>
         </div>
     </div>
@@ -158,7 +158,7 @@
             <span class="tech-tag">AD-008 Audio Auto-Detection</span>
             <span class="tech-tag">AD-009 7-Task Polling</span>
             <span class="tech-tag">AD-010 JSON Memory Channels</span>
-            <span class="tech-tag">AD-011 Unified 48kHz TX Audio</span>
+            <span class="tech-tag">AD-011 48kHz Codec + 44.1kHz Bridge</span>
             <span class="tech-tag">AD-012 Active-VFO Tracking</span>
             <span class="tech-tag">AD-013 Meter Calibration</span>
             <span class="tech-tag">AD-014 CAT Errata Handling</span>

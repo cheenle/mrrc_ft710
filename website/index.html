@@ -51,7 +51,7 @@
     <div class="hero-content">
         <div class="hero-badge">
             <i class="fas fa-check-circle"></i>
-            <span>v1.4 · Production Ready</span>
+            <span>v1.6 · Production Ready</span>
         </div>
         <h1 class="hero-title">
             One USB Cable<br>
@@ -120,11 +120,12 @@
             <div class="feature-card animate">
                 <div class="icon"><i class="fas fa-headphones"></i></div>
                 <h3>Bidirectional Opus Audio</h3>
-                <p>RX: FT-710 USB Audio → PyAudio capture (48kHz Int16) → Opus 64kbps encode → browser AudioWorklet. TX: browser mic (48kHz) → Opus 64kbps CBR → server resample 48→44.1kHz → PyAudio → radio.</p>
+                <p>RX: FT-710 USB Audio → PyAudio capture (44.1kHz Int16) → frame-aligned resample to 48kHz → Opus 64kbps encode → browser AudioWorklet. TX: browser mic (48kHz) → Opus 64kbps CBR → server resample 48→44.1kHz → PyAudio → radio.</p>
                 <ul>
                     <li>RX 48kHz high-fidelity via AudioWorklet</li>
                     <li>TX 64kbps CBR with 60ms jitter buffer</li>
                     <li>Graceful PTT release — word endings preserved</li>
+                    <li>Zero-audio watchdog flags wedged radio USB audio in the status bar</li>
                 </ul>
             </div>
 
@@ -134,7 +135,7 @@
                 <p>Direct serial CAT over the Enhanced COM Port at 38400 baud. 40+ commands: frequency, 15 modes, 23 filter widths, VFO A/B, split, preamp, attenuator, NR/NB/AN, compressor, tuner, AF/RF/Mic gains, S-meter, multi-meter.</p>
                 <ul>
                     <li>No Hamlib / wfview / middleware — direct serial</li>
-                    <li>7-tier polling (~296 bytes/sec)</li>
+                    <li>7-task polling (~296 bytes/sec)</li>
                     <li>Dirty-field change tracking minimises WebSocket traffic</li>
                 </ul>
             </div>
@@ -152,7 +153,7 @@
 
             <div class="feature-card animate">
                 <div class="icon"><i class="fas fa-code-branch"></i></div>
-                <h3>7-Tier Background Polling</h3>
+                <h3>7-Task Background Polling</h3>
                 <p>100ms→5s smart intervals at 38400 baud, 0.25s timeout ceiling, active PTT yield. Poll tiers: 100ms (freq/mode/S-meter), 500ms (TX meters zeroed on RX), 2s (filters/gains/NR/NB), 5s (voltage/current/compressor).</p>
                 <ul>
                     <li>~296 bytes/sec total serial utilisation</li>
@@ -164,10 +165,10 @@
             <div class="feature-card animate">
                 <div class="icon"><i class="fas fa-shield-halved"></i></div>
                 <h3>Multi-Layer PTT Safety</h3>
-                <p>Touch-and-hold TX → instant release on touch-end. Triple TX0 verify at 200ms intervals. Server-side forced RX on last-client-disconnect. Browser unload beacon sends TX0; on tab close.</p>
+                <p>Touch-and-hold TX → instant release on touch-end. Fire-and-forget TX0 with 500ms TX-status poll + browser watchdog. Server-side forced RX when the last client — or the TX-audio owner — disconnects. Browser unload beacon sends TX0 on tab close.</p>
                 <ul>
-                    <li>Triple TX0 verify after every PTT release</li>
-                    <li>Server force-RX when last client disconnects</li>
+                    <li>7 independent release layers — no single point of failure</li>
+                    <li>Server force-RX on last-client or TX-owner disconnect</li>
                     <li>Graceful TX audio drain before RF drop</li>
                 </ul>
             </div>
@@ -434,7 +435,7 @@
                 <p>
                     Software SCU-LAN10 Replacement<br>
                     One USB Cable, Any Device<br>
-                    v1.4 · GPLv3 License
+                    v1.6 · GPLv3 License
                 </p>
             </div>
             <div class="footer-section">

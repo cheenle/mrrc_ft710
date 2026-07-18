@@ -27,7 +27,7 @@
         </a>
         <ul class="nav-links">
             <li><a href="#overview">总览</a></li>
-            <li><a href="#updates">V1.4 更新</a></li>
+            <li><a href="#updates">V1.6 更新</a></li>
             <li><a href="#chapters">章节目录</a></li>
             <li><a href="#decisions">AD 索引</a></li>
             <li><a href="https://github.com/cheenle/mrrc_ft710/tree/main/SDD" target="_blank" rel="noopener">GitHub</a></li>
@@ -43,7 +43,7 @@
     <div class="hero-content">
         <div class="hero-badge">
             <i class="fas fa-book"></i>
-            <span>SDD V1.4 · 2026-07-12</span>
+            <span>SDD V1.6 · 2026-07-18</span>
         </div>
         <h1 class="hero-title">MRRC FT-710<br><span class="gradient">软件设计说明书</span></h1>
         <p class="hero-subtitle">
@@ -74,8 +74,8 @@
             </thead>
             <tbody>
             <tr><td>文档 ID</td><td>SDD-MRRC-FT710-2026-001</td></tr>
-            <tr><td>版本</td><td>V1.4</td></tr>
-            <tr><td>基线日期</td><td>2026-07-12</td></tr>
+            <tr><td>版本</td><td>V1.6</td></tr>
+            <tr><td>基线日期</td><td>2026-07-18</td></tr>
             <tr><td>后端运行时</td><td>Python 3.12+, FastAPI, Uvicorn, PyAudio, NumPy</td></tr>
             <tr><td>前端技术</td><td>HTML5, CSS3, 原生 JavaScript, Web Audio API</td></tr>
             <tr><td>核心接口</td><td>4 路 WebSocket + 串口 CAT + FT4222 SPI + USB 音频</td></tr>
@@ -88,28 +88,28 @@
     <div class="container">
         <div class="section-header">
             <span class="section-label">最新更新</span>
-            <h2 class="section-title">V1.4 变更重点</h2>
+            <h2 class="section-title">V1.6 变更重点</h2>
         </div>
         <div class="features-grid">
             <div class="feature-card">
-                <div class="icon"><i class="fas fa-wave-square"></i></div>
-                <h3>FFT 频谱折线图</h3>
-                <p>瀑布图上方新增 33px 实时 FFT 幅度-频率折线图。青色 (#06b6d4) 折线 + 微辉光，EMA 平滑 (α=0.30)，2× 幅度增益，水平 + 垂直网格线。共用 Floor/Ceil 控件。</p>
+                <div class="icon"><i class="fas fa-ear-listen"></i></div>
+                <h3>RX 零音频看门狗</h3>
+                <p>服务端检测到位精确全零的 RX 音频（静噪开启下持续 ≥20 秒）即在状态栏亮出"无声"警告并写日志——电台 USB 音频卡死再也无法躲在 CBR 码率指示后面装正常。</p>
             </div>
             <div class="feature-card">
-                <div class="icon"><i class="fas fa-chart-line"></i></div>
-                <h3>EMA 频谱平滑</h3>
-                <p>逐点指数移动平均缓冲区 (Float32Array, 850 点) — 每帧 30% 新数据，峰值稳定可读且不掩盖快速变化。</p>
+                <div class="icon"><i class="fas fa-right-to-bracket"></i></div>
+                <h3>鉴权失效自动跳登录</h3>
+                <p>过期 token 的 WebSocket 握手被 HTTP 403 拒绝（浏览器只收到 1006，永远不是 4001）。控制通道现在先查 /api/auth/check，确认失效后跳转登录页，不再拿着死 token 无限重试。</p>
             </div>
             <div class="feature-card">
-                <div class="icon"><i class="fas fa-gauge-high"></i></div>
-                <h3>VFO 红线优化</h3>
-                <p>瀑布图 VFO 标记线宽减至 0.2px，去除频率文字标注（仅保留在频率刻度上），减少视觉干扰。</p>
+                <div class="icon"><i class="fas fa-tower-broadcast"></i></div>
+                <h3>死载波修复</h3>
+                <p>TX 音频属主连接在发射中断开时，服务端现在强制 TX0——关闭了此前只能等控制通道断开的无调制载波窗口。</p>
             </div>
             <div class="feature-card">
-                <div class="icon"><i class="fas fa-globe"></i></div>
-                <h3>文档与官网更新</h3>
-                <p>新增中文介绍文章（含非技术用户安装指南）、截图加入 README 和产品页面、FFT 功能卡片、FAQ 章节。</p>
+                <div class="icon"><i class="fas fa-file-lines"></i></div>
+                <h3>TX 音频文档归真</h3>
+                <p>文档与运行时对齐：TX Opus 实为 64kbps CBR complexity=5；AD-011 重写——48kHz 编解码域经帧对齐桥接（960↔882）到 FT-710 原生 44.1kHz USB 音频。</p>
             </div>
         </div>
     </div>
@@ -158,7 +158,7 @@
             <span class="tech-tag">AD-008 音频设备自动检测</span>
             <span class="tech-tag">AD-009 7 任务轮询</span>
             <span class="tech-tag">AD-010 JSON 记忆信道</span>
-            <span class="tech-tag">AD-011 48kHz TX 音频统一</span>
+            <span class="tech-tag">AD-011 48kHz 编解码 + 44.1kHz 桥接</span>
             <span class="tech-tag">AD-012 Active-VFO 跟踪</span>
             <span class="tech-tag">AD-013 表头校准</span>
             <span class="tech-tag">AD-014 CAT 勘误处理</span>

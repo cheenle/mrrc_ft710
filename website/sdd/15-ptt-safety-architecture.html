@@ -128,7 +128,7 @@
 <p><strong>Principle</strong>: Release is more safety-critical than keying. A lost PTT release command can leave a radio transmitting indefinitely — causing harmful interference, overheating the radio, and violating spectrum regulations. Every layer must have an independent path to force RX.</p>
 </blockquote>
 <h2 id="safety-model-defense-in-depth">15.1 Safety Model — Defense in Depth</h2>
-<p>The MRRC FT-710 PTT safety architecture provides <strong>8 independent layers of defense</strong> against stuck-TX scenarios.</p>
+<p>The MRRC FT-710 PTT safety architecture provides <strong>7 independent layers of defense</strong> against stuck-TX scenarios.</p>
 <table>
 <colgroup>
 <col style="width: 14%" />
@@ -159,42 +159,37 @@
 </tr>
 <tr>
 <td>3</td>
-<td>Server</td>
-<td>Triple <code>TX;</code> query at 200ms intervals; re-send <code>TX0;</code> on non-zero</td>
-<td>CAT command lost/not acknowledged</td>
+<td>Browser</td>
+<td>PTT Watchdog: 500ms interval checks <code>radioState.tx_status</code>; up to 3 retries</td>
+<td>TX0 command or state broadcast lost</td>
 </tr>
 <tr>
 <td>4</td>
-<td>Browser</td>
-<td>PTT Watchdog: 500ms interval checks <code>radioState.tx_status</code>; up to 3 retries</td>
-<td>State broadcast lost</td>
+<td>Server</td>
+<td>Dead-man switch: force <code>TX0;</code> when the last control client disconnects during TX, or when the TX-audio owner disconnects during TX</td>
+<td>Browser crash, tab close, network loss, audio socket drop</td>
 </tr>
 <tr>
 <td>5</td>
-<td>Server</td>
-<td>Dead-man switch: force <code>TX0;</code> when last WS client disconnects during TX</td>
-<td>Browser crash, tab close, network loss</td>
-</tr>
-<tr>
-<td>6</td>
 <td>Browser</td>
 <td><code>beforeunload</code> → <code>navigator.sendBeacon()</code> with TX0</td>
 <td>Tab/browser close during TX</td>
 </tr>
 <tr>
-<td>7</td>
+<td>6</td>
 <td>Browser</td>
 <td><code>pagehide</code> → <code>sendCommand('ptt', false)</code></td>
 <td>Mobile app switch / backgrounding</td>
 </tr>
 <tr>
-<td>8</td>
+<td>7</td>
 <td>Server + Browser</td>
 <td>Stop TX audio stream; clear audio queue; <code>wsAudioTX.send('s:')</code></td>
 <td>Audio continuing to feed radio after release</td>
 </tr>
 </tbody>
 </table>
+<p><strong>Removed layer — Triple TX0 Verify (removed in V1.2, 2026-07-08):</strong> earlier releases queried <code>TX;</code> three times at 200ms intervals after every release and re-sent <code>TX0;</code> on non-zero. This added ~600ms to every release, and field observation showed the radio obeys <code>TX0;</code> on the first write (fire-and-forget). Stuck-keyup detection is now covered by the server-side TX-status poll (500ms) feeding the browser PTT watchdog (Layer 3).</p>
 <h2 id="layer-details">15.2 Layer Details</h2>
 <h3 id="layer-1-touch-and-hold-ux">Layer 1: Touch-and-Hold UX</h3>
 <p>PTT only transmits while the user is actively touching the PTT button:</p>
@@ -209,19 +204,8 @@ pttBtn.addEventListener(&#39;touchcancel&#39;, handlePTTEnd);</code></pre>
     sendCommand(&#39;ptt&#39;, false);
     // ...
 }</code></pre>
-<p>Server receives <code>{"type":"set","field":"ptt","value":false}</code> → sends CAT <code>TX0;</code>.</p>
-<h3 id="layer-3-triple-tx0-verify">Layer 3: Triple TX0 Verify</h3>
-<pre class="python"><code># In server.py _execute_set_command, ptt field:
-await cat.set_ptt(False)
-# Verify with 3 retries at 200ms intervals
-for _ in range(3):
-    await asyncio.sleep(0.2)
-    ptt = await cat.get_ptt()
-    if ptt == 0:
-        break
-    await cat.set_ptt(False)
-radio.update(tx_status=0)</code></pre>
-<h3 id="layer-4-ptt-watchdog-browser">Layer 4: PTT Watchdog (Browser)</h3>
+<p>Server receives <code>{"type":"set","field":"ptt","value":false}</code> → sends CAT <code>TX0;</code> (fire-and-forget; see removal note in §15.1).</p>
+<h3 id="layer-3-ptt-watchdog-browser">Layer 3: PTT Watchdog (Browser)</h3>
 <pre class="javascript"><code>// ptt_manager.js
 pttVerifyTimer = setInterval(function() {
     if (!pttActive &amp;&amp; !tuneActive) {
@@ -241,7 +225,8 @@ pttVerifyTimer = setInterval(function() {
         }
     }
 }, 500);</code></pre>
-<h3 id="layer-5-dead-man-switch-server">Layer 5: Dead-Man Switch (Server)</h3>
+<p>The watchdog’s input is the server-side TX-status poll (500ms), which keeps <code>radioState.tx_status</code> fresh even if the release command’s state update was lost.</p>
+<h3 id="layer-4-dead-man-switch-server">Layer 4: Dead-Man Switch (Server)</h3>
 <pre class="python"><code># In /WSradio disconnect handler:
 if not ctrl_clients and radio.is_transmitting and cat and cat.connected:
     logger.warning(&quot;Last client disconnected during TX! Forcing RX.&quot;)
@@ -249,7 +234,7 @@ if not ctrl_clients and radio.is_transmitting and cat and cat.connected:
     radio.update(tx_status=0)
     if audio:
         audio.stop_tx()</code></pre>
-<h3 id="layer-6-beforeunload-beacon">Layer 6: Beforeunload Beacon</h3>
+<h3 id="layer-5-beforeunload-beacon">Layer 5: Beforeunload Beacon</h3>
 <pre class="javascript"><code>window.addEventListener(&#39;beforeunload&#39;, function() {
     if (pttActive || tuneActive) {
         if (navigator.sendBeacon) {
@@ -260,13 +245,13 @@ if not ctrl_clients and radio.is_transmitting and cat and cat.connected:
         }
     }
 });</code></pre>
-<h3 id="layer-7-pagehide-handler">Layer 7: Pagehide Handler</h3>
+<h3 id="layer-6-pagehide-handler">Layer 6: Pagehide Handler</h3>
 <pre class="javascript"><code>window.addEventListener(&#39;pagehide&#39;, function() {
     if (pttActive || tuneActive) {
         sendCommand(&#39;ptt&#39;, false);
     }
 });</code></pre>
-<h3 id="layer-8-tx-audio-stream-stop">Layer 8: TX Audio Stream Stop</h3>
+<h3 id="layer-7-tx-audio-stream-stop">Layer 7: TX Audio Stream Stop</h3>
 <p>Server-side on PTT release:</p>
 <pre class="python"><code>if audio:
     audio.stop_tx()</code></pre>
@@ -283,21 +268,21 @@ if not ctrl_clients and radio.is_transmitting and cat and cat.connected:
   PTT Button Release (any trigger)
     → handlePTTEnd()
       → sendCommand(&#39;ptt&#39;, false)          [Layers 1+2]
-      → stopTXAudio() + wsAudioTX.send(&#39;s:&#39;) [Layer 8]
-      → Server: CAT TX0;
-      → Server: triple TX; verify           [Layer 3]
-      → PTT Watchdog starts                 [Layer 4]
+      → stopTXAudio() + wsAudioTX.send(&#39;s:&#39;) [Layer 7]
+      → Server: CAT TX0; (fire-and-forget)
+      → Server: TX-status poll (500ms) tracks RX
+      → PTT Watchdog starts                 [Layer 3]
 
 Emergency Paths:
   Browser crash / tab close:
-    → beforeunload → sendBeacon TX0;        [Layer 6]
-    → pagehide → sendCommand TX0;           [Layer 7]
-    → WS disconnect → server dead-man switch [Layer 5]
-    → Server stops TX audio                 [Layer 8]
+    → beforeunload → sendBeacon TX0;        [Layer 5]
+    → pagehide → sendCommand TX0;           [Layer 6]
+    → WS disconnect → server dead-man switch [Layer 4]
+    → Server stops TX audio                 [Layer 7]
 
   Network loss during TX:
-    → WS disconnect → server dead-man switch [Layer 5]
-    → Server stops TX audio                 [Layer 8]
+    → WS disconnect → server dead-man switch [Layer 4]
+    → Server stops TX audio                 [Layer 7]
     → Radio returns to RX (CAT timeout)</code></pre>
 <h2 id="testing-the-safety-layers">15.4 Testing the Safety Layers</h2>
 <table>
@@ -322,27 +307,27 @@ Emergency Paths:
 <tr>
 <td>Force-close browser during TX</td>
 <td>Radio returns to RX</td>
-<td>5, 6, 7</td>
-</tr>
-<tr>
-<td>Pull USB cable during TX</td>
-<td>Radio returns to RX (no CAT response)</td>
-<td>3</td>
+<td>4, 5, 6</td>
 </tr>
 <tr>
 <td>Network packet loss during release</td>
-<td>Triple TX0 verify catches it</td>
+<td>Browser watchdog re-sends <code>ptt=false</code> (state via 500ms TX-status poll)</td>
 <td>3</td>
 </tr>
 <tr>
 <td>Tab background on iOS during TX</td>
 <td>pagehide sends TX0</td>
-<td>7</td>
+<td>6</td>
 </tr>
 <tr>
 <td>Multiple rapid PTT toggles</td>
 <td>Each release properly processed</td>
 <td>All</td>
+</tr>
+<tr>
+<td>Pull USB cable during TX</td>
+<td>No software path can reach the radio; server marks CAT disconnected and forces RX state on reconnect</td>
+<td>— (hardware)</td>
 </tr>
 <tr>
 <td>Server kill -9 during TX</td>
@@ -354,10 +339,10 @@ Emergency Paths:
 <h2 id="safety-design-principles">15.5 Safety Design Principles</h2>
 <ol type="1">
 <li><strong>Release is more important than keying.</strong> Every release path must work even if the keying path is broken.</li>
-<li><strong>No single point of failure.</strong> 8 independent layers catch different failure modes.</li>
+<li><strong>No single point of failure.</strong> 7 independent layers catch different failure modes.</li>
 <li><strong>Fail safe, not fail dangerous.</strong> If in doubt, force RX.</li>
-<li><strong>Server has final authority.</strong> Even if the browser is completely gone, the server forces RX (Layer 5).</li>
-<li><strong>Verify, don’t assume.</strong> Always read back TX state after sending TX0; (Layer 3).</li>
+<li><strong>Server has final authority.</strong> Even if the browser is completely gone, the server forces RX (Layer 4).</li>
+<li><strong>Verify, don’t assume.</strong> TX state is read back continuously via the 500ms TX-status poll, and the browser watchdog acts on any stuck-TX indication (Layer 3). The per-release triple readback was removed in V1.2 — see §15.1.</li>
 <li><strong>Stop audio before RF.</strong> Audio stream stops before the RF carrier drops, preventing hot-switching noise.</li>
 </ol>
     </main>
@@ -366,7 +351,7 @@ Emergency Paths:
 <footer class="footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC FT-710 Project · SDD V1.4 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
+            <p>&copy; 2026 MRRC FT-710 Project · SDD V1.6 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
         </div>
     </div>
 </footer>

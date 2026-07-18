@@ -327,7 +327,7 @@
 </tr>
 <tr>
 <td>Basic Flow</td>
-<td>User touches-and-holds PTT button; <code>handlePTTStart()</code> → <code>sendCommand('ptt', true)</code>; server sends CAT <code>TX1;</code>; radio keys TX; server starts TX audio stream; user releases; <code>handlePTTEnd()</code> → <code>sendCommand('ptt', false)</code>; server sends CAT <code>TX0;</code>; triple verify (3× <code>TX;</code> at 200ms); stop TX audio stream</td>
+<td>User touches-and-holds PTT button; <code>handlePTTStart()</code> → <code>sendCommand('ptt', true)</code>; server sends CAT <code>TX1;</code>; radio keys TX; server starts TX audio stream; user releases; <code>handlePTTEnd()</code> → <code>sendCommand('ptt', false)</code>; server sends CAT <code>TX0;</code> (fire-and-forget); stop TX audio stream; TX-status poll + PTT watchdog confirm RX</td>
 </tr>
 <tr>
 <td>Tune Flow</td>
@@ -442,7 +442,7 @@
 <footer class="footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC FT-710 Project · SDD V1.4 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
+            <p>&copy; 2026 MRRC FT-710 Project · SDD V1.6 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
         </div>
     </div>
 </footer>

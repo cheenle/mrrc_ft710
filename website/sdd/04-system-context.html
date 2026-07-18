@@ -296,11 +296,11 @@ Yaesu FT-710</code></pre>
 </tr>
 <tr>
 <td>RX audio flow</td>
-<td>FT-710 USB Audio → PyAudio capture (48kHz Int16) → Opus encode → <code>/WSaudioRX</code> tagged frames → browser AudioWorklet playback</td>
+<td>FT-710 USB Audio → PyAudio capture (44.1kHz Int16) → resample to 48kHz → Opus encode → <code>/WSaudioRX</code> tagged frames → browser AudioWorklet playback</td>
 </tr>
 <tr>
 <td>TX audio flow</td>
-<td>Browser mic → getUserMedia (16kHz) → ScriptProcessor → Opus encode (Worker) → <code>/WSaudioTX</code> tagged frames → Opus decode → PyAudio → FT-710 USB Audio</td>
+<td>Browser mic → getUserMedia (48kHz) → AudioWorklet → Opus encode (Worker) → <code>/WSaudioTX</code> tagged frames → Opus decode → resample 48→44.1k → PyAudio → FT-710 USB Audio</td>
 </tr>
 <tr>
 <td>Spectrum flow (FT4222)</td>
@@ -316,11 +316,11 @@ Yaesu FT-710</code></pre>
 </tr>
 <tr>
 <td>PTT safety flow</td>
-<td>UI touch → <code>sendCommand('ptt', true)</code> → CAT <code>TX1;</code> → radio TX; release → <code>TX0;</code> → triple verify → watchdog</td>
+<td>UI touch → <code>sendCommand('ptt', true)</code> → CAT <code>TX1;</code> → radio TX; release → <code>TX0;</code> (fire-and-forget) → watchdog</td>
 </tr>
 <tr>
 <td>Polling flow</td>
-<td><code>PollScheduler</code> 5-tier timer → CAT queries → response parse → <code>RadioState.update()</code> → broadcast if changed</td>
+<td><code>PollScheduler</code> 7-task timer → CAT queries → response parse → <code>RadioState.update()</code> → broadcast if changed</td>
 </tr>
 </tbody>
 </table>
@@ -376,7 +376,7 @@ Yaesu FT-710</code></pre>
 <footer class="footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC FT-710 Project · SDD V1.4 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
+            <p>&copy; 2026 MRRC FT-710 Project · SDD V1.6 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
         </div>
     </div>
 </footer>

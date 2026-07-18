@@ -141,6 +141,18 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V1.6</td>
+<td>2026-07-18</td>
+<td>Kimi</td>
+<td>TX-chain documentation synchronization after end-to-end TX analysis, plus runtime fixes from the “SSB filter no effect” investigation. <strong>TX Opus params corrected</strong>: AD-004/Ch9.4/Ch11 said 28kbps CBR complexity=3; actual <code>opus_codec.js</code> config is 64kbps CBR complexity=5 (fidelity-priority voice). <strong>44.1kHz device reality</strong>: AD-011 rewritten — the FT-710 USB audio interface is 44.1kHz native; <code>audio_resample.py</code> bridges the 48kHz codec domain ↔︎ 44.1kHz device domain (960↔︎882 frame-aligned). Ch9.3/9.4 chain diagrams, Ch4.4 flows, NFR-060, Ch10 TXAudioService, Ch11 component rows and AGENTS.md module table updated; stale docstrings/comments fixed in <code>opus_rx.py</code> (16kHz remnants), <code>tx_opus_worker.js</code> (SAB marked dormant, packet size), <code>tx_capture_worklet.js</code> (header). <code>tx-gain-staging.svg</code> documented as sunmrrc-lineage (its preamp/EQ/tanh gain staging does not exist in this codebase) — retained for reference only. <strong>RX zero-audio watchdog</strong>: <code>AudioHandler.note_rx_chunk()</code> tracks bit-exact-zero RX runs; ≥20s silent with squelch open → WARNING + new <code>rx_audio_silent</code> state field → status-bar “无声” indicator; “Audio loop” log now includes chunk peak. (Root cause of the filter report: the FT-710 USB audio was streaming digital zeros — wedged codec — so no filter change was ever audible; the watchdog makes this class of failure visible.) <strong>WS auth-failure redirect</strong>: the server rejects bad-token WS upgrades with HTTP 403 before accept, so browsers see 1006, never 4001 — <code>/WSradio</code> onclose now verifies via <code>/api/auth/check</code> and redirects to <code>/login</code> instead of retrying a stale token forever. <strong>TX-owner dead-carrier fix</strong>: <code>/WSaudioTX</code> owner disconnect during TX now forces <code>TX0;</code> (previously only stopped audio); Ch15 Layer 4 updated.</td>
+</tr>
+<tr>
+<td>SDD V1.5</td>
+<td>2026-07-18</td>
+<td>Kimi</td>
+<td>Documentation synchronization after deep SDD review. <strong>PTT safety chapters aligned with runtime</strong>: the triple TX0 verify loop was removed in V1.2 but Ch1/Ch2/Ch3/Ch4/Ch6/Ch8/Ch13/Ch15/README still described it — all updated to the actual 7-layer model (fire-and-forget <code>TX0;</code> + 500ms TX-status poll + browser watchdog). Ch15 rewritten with layer renumbering and a removal note. <strong>Polling naming</strong>: “5-tier” corrected to 7-task polling in Ch1/Ch3/Ch4/Ch7 and AGENTS.md. <strong>TX audio</strong>: Ch4.4 TX flow corrected to 48kHz (was 16kHz, pre-AD-011); <code>tx-gain-staging.svg</code> Opus label likewise. <strong>Scope clarified</strong> (Ch3.3): <code>FT710Mobile/</code> iOS app and <code>website/</code> noted as in-repo but outside this SDD’s scope. <strong>Tuner AC discrepancy flagged</strong>: gap-analysis §1.1 now notes this codebase’s deliberate <code>AC000/AC001/AC003</code> mapping contradicts the Hamlib <code>AC010/AC011</code> claim — pending radio re-verification; cross-reference added in Ch10.4. <strong>Frame size fix</strong>: Ch1 spectrum v1 frame 850B→851B. <strong>New open issues</strong> (Ch13.4): I6 multi-client control arbitration, I7 <code>mem_channels.json</code> validation/backup. README Quick Facts bumped to V1.5.</td>
+</tr>
+<tr>
 <td>SDD V1.4</td>
 <td>2026-07-12</td>
 <td>Claude</td>
@@ -177,7 +189,7 @@
 <li><strong>Radio</strong>: Yaesu FT-710 superheterodyne transceiver (not an SDR).</li>
 <li><strong>CAT Protocol</strong>: Direct serial CAT via pyserial — no Hamlib, no rigctld, no TCI.</li>
 <li><strong>Scope</strong>: FTDI FT4222 SPI chip provides 850-point FFT data. Falls back to synthetic S-meter Gaussian spectrum when unavailable.</li>
-<li><strong>Audio</strong>: Bidirectional through FT-710’s built-in USB audio interface via PyAudio. Opus codec (RX 64kbps, TX 28kbps CBR, both 48kHz) with Int16 PCM fallback. TX chain unified at 48 kHz — no sample-rate mismatch.</li>
+<li><strong>Audio</strong>: Bidirectional through FT-710’s built-in USB audio interface via PyAudio (44.1kHz native device rate). Opus codec (RX 64kbps, TX 64kbps CBR, both 48kHz) with Int16 PCM fallback. <code>audio_resample.py</code> bridges the 48kHz codec domain ↔︎ 44.1kHz device domain (960↔︎882 frame-aligned).</li>
 <li><strong>Auth</strong>: Shared-password session auth (<code>ft710_auth</code> cookie, 30-day, <code>?token=</code> on WebSocket).</li>
 <li><strong>PTT Safety</strong>: Client-side PTT watchdog (500ms) + dead-man switch (WS disconnect) + beforeunload beacon + pagehide handler + server-side TX status poll (0.5s). No TX0 verify loop on release (radio obeys TX0 fire-and-forget). TX audio drain=50ms.</li>
 <li><strong>Polling</strong>: 7-task adaptive scheduler: IF 0.1s (FA/MD0/SM0), VFO 0.5s (VS/FB), TX status 0.5s, TX meters 0.5s (RM3/4/5/6, TX only), settings 2s, slow 5s, connection watchdog 1s. Poll queries use 0.25s timeout and cooperate with priority-command preemption (<code>_cancel_polls</code>).</li>
@@ -265,7 +277,7 @@
 <footer class="footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC FT-710 Project · SDD V1.4 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
+            <p>&copy; 2026 MRRC FT-710 Project · SDD V1.6 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
         </div>
     </div>
 </footer>

@@ -172,9 +172,10 @@ Yaesu FT-710</code></pre>
 <p>Broadcast at ~30 fps from FT4222 data or S-meter fallback.</p>
 <h2 id="rx-audio-signal-chain">9.3 RX Audio Signal Chain</h2>
 <pre class="text"><code>FT-710 USB Audio Output
-  → PyAudio capture (48kHz, Int16, mono, 960-sample chunks = 20ms)
+  → PyAudio capture (44.1kHz, Int16, mono, 882-sample chunks = 20ms)
     → AudioHandler.read_rx_chunk() (non-blocking poll from asyncio loop)
-      → AudioHandler.encode_rx_audio()
+      → resample_441_to_48 (882→960 samples, frame-aligned)
+        → AudioHandler.encode_rx_audio()
         → Opus encode (RxOpusEncoder, 64kbps, 20ms frames)
           → 1-byte tag (0x01) + Opus packet
         → OR PCM fallback: 1-byte tag (0x00) + Int16 bytes
@@ -188,21 +189,21 @@ Yaesu FT-710</code></pre>
 <h2 id="tx-audio-signal-chain">9.4 TX Audio Signal Chain</h2>
 <pre class="text"><code>Browser Microphone
   → getUserMedia({sampleRate:48000, channelCount:1})
-    → AudioContext.createMediaStreamSource → ScriptProcessor(512)  // ~10.7ms @ 48kHz
-      → Float32 → Int16 conversion (×32767)
+    → AudioContext.createMediaStreamSource → AudioWorklet &#39;tx-capture&#39; (ScriptProcessor fallback)
+      → 48kHz float32 20ms frames → postMessage → main thread → Worker (&#39;float_frame&#39;)
         → Opus Worker (tx_opus_worker.js, 48kHz):
-          → Int16 → Float32 (÷32768) → OpusEncoder.encode_float(960-sample frames)
-            → 1-byte tag (0x01) + Opus packet (28kbps CBR, complexity=3)
+          → OpusEncoder.encode_float(960-sample frames)
+            → 1-byte tag (0x01) + Opus packet (64kbps CBR, complexity=5)
           → OR PCM fallback: 1-byte tag (0x00) + Int16 bytes
             → postMessage({type:&#39;tx_audio&#39;, data:tagged.buffer}, [tagged.buffer])
               → main thread: wsAudioTX.send(tagged)
                 → /WSaudioTX → server
                   → Opus: TxOpusDecoder.decode() → Int16 PCM (48kHz, 960 samples/frame)
                   → PCM: pass-through
-                    → AudioHandler.feed_tx_audio() → _tx_queue
+                    → AudioHandler.feed_tx_audio() → resample_48_to_441 (960→882, frame-aligned) → _tx_queue
                       → AudioHandler.write_tx_chunk() (10ms drain loop)
-                        → PyAudio output stream (48kHz, mono) → FT-710 USB Audio Input</code></pre>
-<p><strong>TX sample rate is unified at 48 kHz</strong> across the entire chain — browser capture, Opus encode/decode, and PyAudio playback all match. This eliminates the v1.0 sample-rate mismatch (16 kHz mic → 48 kHz playback) that caused audible crackling on transmitted audio.</p>
+                        → PyAudio output stream (44.1kHz, mono) → FT-710 USB Audio Input</code></pre>
+<p><strong>TX runs at 48 kHz throughout the codec domain</strong> — browser capture and Opus encode/decode — and the server bridges to the FT-710’s native 44.1 kHz USB audio via frame-aligned resampling (960↔︎882 = exactly 20 ms, ratio 160:147). This eliminates the v1.0 sample-rate mismatch (16 kHz mic → 48 kHz playback) that caused audible crackling on transmitted audio.</p>
 <h2 id="spectrum-signal-chain">9.5 Spectrum Signal Chain</h2>
 <h3 id="ft4222-path-real-fft-data">9.5.1 FT4222 Path (Real FFT Data)</h3>
 <pre class="text"><code>FT-710 FT4222 SPI chip
@@ -252,7 +253,7 @@ CAT I/O remains serialized through `CatController._lock`; blocking serial work i
 <footer class="footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC FT-710 Project · SDD V1.4 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
+            <p>&copy; 2026 MRRC FT-710 Project · SDD V1.6 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
         </div>
     </div>
 </footer>

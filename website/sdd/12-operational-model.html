@@ -176,12 +176,12 @@ Yaesu FT-710
 </tr>
 <tr>
 <td><code>FT710_WEB_PASSWORD</code></td>
-<td><code>ft710</code></td>
+<td><code>changeme_please_use_strong_password!</code></td>
 <td>Web login password</td>
 </tr>
 <tr>
 <td><code>FT710_WEB_HOST</code></td>
-<td><code>0.0.0.0</code></td>
+<td><code>::</code></td>
 <td>Bind address</td>
 </tr>
 <tr>
@@ -191,8 +191,8 @@ Yaesu FT-710
 </tr>
 <tr>
 <td><code>FT710_FT4222_CLK_DIV</code></td>
-<td><code>5</code></td>
-<td>SPI clock divider (1=fastest, 9=slowest)</td>
+<td><code>6</code></td>
+<td>SPI clock divider (1=fastest, 9=slowest; CLK_DIV_64 default)</td>
 </tr>
 <tr>
 <td><code>FT710_SCOPE_PORT</code></td>
@@ -205,9 +205,9 @@ Yaesu FT-710
 <td>Scope serial baud rate</td>
 </tr>
 <tr>
+<td><code>FT710_MEM_FILE</code></td>
 <td><code>mem_channels.json</code></td>
-<td><code>[null]*6</code></td>
-<td>Memory channel store (persisted)</td>
+<td>Memory channel store (Windows launcher uses <code>%LOCALAPPDATA%</code>)</td>
 </tr>
 <tr>
 <td><code>.ft710-server.pid</code></td>
@@ -510,7 +510,7 @@ Yaesu FT-710
 <footer class="footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC FT-710 Project · SDD V1.4 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
+            <p>&copy; 2026 MRRC FT-710 Project · SDD V1.6 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
         </div>
     </div>
 </footer>

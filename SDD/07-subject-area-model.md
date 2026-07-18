@@ -22,7 +22,7 @@ RadioState
   owns all mirrored radio state with dirty-field change tracking
 
 PollingSystem
-  owns 5-tier adaptive background polling cadence
+  owns 7-task adaptive background polling cadence
 
 OperationalConfig
   owns serial port, web port, auth, host/port config
@@ -42,7 +42,7 @@ OperationalConfig
 | AudioFrame | tag_byte, payload_bytes | Tagged dual-codec frame (0x00=PCM, 0x01=Opus) broadcast via `/WSaudioRX` |
 | OpusEncoder | bitrate, frame_size, cap_bytes | Server-side libopus encoder via ctypes |
 | OpusDecoder | sample_rate, channels | WASM Opus decoder in browser |
-| PollTier | interval, commands, fields | One tier of the 5-tier polling scheduler |
+| PollTier | interval, commands, fields | One tier of the 7-task polling scheduler |
 | MemoryChannel | index, frequency, mode, label | Memory record persisted in `mem_channels.json` |
 | AuthToken | token_hex, created_at | 32-byte random hex session token |
 | SCOPE_PIPE_Process | pid, stdout, stderr | Subprocess running `scope_pipe.py` for FT4222 SPI I/O |

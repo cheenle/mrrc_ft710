@@ -25,17 +25,17 @@
 - Maintain spectrum channel `/WSspectrum` with binary 850/1701-byte frames at ~30 fps.
 - Implement dual-mode spectrum: FT4222 SPI (real FFT) + S-meter Gaussian fallback.
 - Implement full FT-710 CAT command set via serial port with threaded I/O.
-- 5-tier background polling with adaptive skip-on-command.
+- 7-task background polling with adaptive skip-on-command.
 - Multi-meter: PWR, ALC, SWR, Id, Vd from CAT RM3-RM8.
 - S-meter from both CAT SM0 and scope frame metadata.
 - Persist and serve memory channels via `/api/mem_channels`.
 - Session authentication: shared-password login, cookie + token, all WS gated.
-- PTT safety: touch-and-hold, triple TX0 verify, dead-man switch, unload beacon.
+- PTT safety: touch-and-hold, browser watchdog, dead-man switch, unload beacon.
 - Scope pipe protocol for FT4222 subprocess communication.
 
 ## 3.3 Out of Scope
 
-- Native iOS/Android application.
+- Native iOS/Android application **as a deliverable of this SDD**. A separate native iOS client (`FT710Mobile/`) and a marketing/documentation site (`website/`) live in this repository but are documented independently (`docs/IOS_*.md`, `FT710Mobile/CLAUDE.md`) — they are outside this SDD's scope.
 - Cloud-hosted multi-tenant service.
 - Multi-user / per-user authentication (current auth is single shared password).
 - Digital modes (CW decoder, FT8, RTTY decode).

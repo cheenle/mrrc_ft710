@@ -2,8 +2,8 @@
 RX Opus encoder for FT-710 web audio
 =====================================
 Server-side Opus encoder for the RX audio stream. Compresses the 48 kHz mono
-Int16 PCM broadcast (~768 kbit/s) down to ~16-24 kbit/s — a >30x bandwidth cut
-for mobile clients.
+Int16 PCM broadcast (~768 kbit/s) down to 64 kbit/s by default — a 12x
+bandwidth cut for mobile clients.
 
 WHY A DIRECT CTYPES WRAPPER (not opuslib), AND NO ctl CALLS:
   `opus_encoder_ctl` is a C variadic function. On arm64 (Apple Silicon) the
@@ -133,9 +133,10 @@ _DecoderPtr = ctypes.POINTER(_OpusDecoder)
 
 
 class TxOpusDecoder:
-    """Stateful 16 kHz mono Opus decoder for TX mic uplink.
+    """Stateful 48 kHz mono Opus decoder for TX mic uplink.
 
-    Feed it Opus packets via ``decode(data)``; returns Int16 PCM bytes.
+    Feed it Opus packets via ``decode(data)``; returns Int16 PCM bytes
+    (resampled 48→44.1 kHz by audio_handler before playback).
     """
 
     def __init__(self):
@@ -168,10 +169,10 @@ class TxOpusDecoder:
 
 
 class RxOpusEncoder:
-    """Stateful 16 kHz mono Opus encoder with a sample accumulator.
+    """Stateful 48 kHz mono Opus encoder with a sample accumulator.
 
     Feed it arbitrary-length Int16 PCM via `push()`; it returns a list of Opus
-    packets (one per complete 320-sample / 20 ms frame). Partial tails are kept
+    packets (one per complete 960-sample / 20 ms frame). Partial tails are kept
     buffered for the next call so frame boundaries stay continuous.
     """
 

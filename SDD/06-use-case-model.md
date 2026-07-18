@@ -59,7 +59,7 @@
 |-------|-------------|
 | Goal | Key/de-key transmitter safely |
 | Preconditions | `/WSradio` connected; CAT serial connected |
-| Basic Flow | User touches-and-holds PTT button; `handlePTTStart()` → `sendCommand('ptt', true)`; server sends CAT `TX1;`; radio keys TX; server starts TX audio stream; user releases; `handlePTTEnd()` → `sendCommand('ptt', false)`; server sends CAT `TX0;`; triple verify (3× `TX;` at 200ms); stop TX audio stream |
+| Basic Flow | User touches-and-holds PTT button; `handlePTTStart()` → `sendCommand('ptt', true)`; server sends CAT `TX1;`; radio keys TX; server starts TX audio stream; user releases; `handlePTTEnd()` → `sendCommand('ptt', false)`; server sends CAT `TX0;` (fire-and-forget); stop TX audio stream; TX-status poll + PTT watchdog confirm RX |
 | Tune Flow | User taps TUNE; `sendCommand('tune', true)` → CAT `TX2;`; tap again → `TX0;` + verify |
 | Safety | Touch cancel (touchcancel/mouseleave) → release; dead-man switch on WS disconnect; beforeunload beacon; PTT watchdog 500ms interval |
 | Postconditions | Radio returns to RX |

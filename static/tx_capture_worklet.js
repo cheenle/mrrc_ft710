@@ -1,6 +1,8 @@
-// AudioWorklet TX capture → SharedArrayBuffer (zero main-thread path)
-// =====================================================================
-// Resamples the browser's actual capture rate to 48 kHz float32 and posts
+// AudioWorklet TX capture → 48 kHz float32 frames for the Opus worker.
+// Active path: port.postMessage('frame') to the main thread, which forwards
+// them to the Opus worker as 'float_frame'. The SharedArrayBuffer ring below
+// (_writeRing) is dormant — the main thread never allocates the SAB.
+//// Resamples the browser's actual capture rate to 48 kHz float32 and posts
 // exact 20 ms frames to the main thread for Opus worker encoding.
 //
 // Ring buffer layout (same as modules/tx_sab_ring.js):

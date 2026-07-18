@@ -165,7 +165,7 @@
 <tr>
 <td>Safe PTT handling</td>
 <td>Multiple layered safeguards against stuck TX</td>
-<td><code>ptt_manager.js</code>, triple TX0 verify, dead-man switch</td>
+<td><code>ptt_manager.js</code> watchdog, dead-man switch, unload beacon</td>
 </tr>
 <tr>
 <td>Minimal deployment</td>
@@ -212,7 +212,7 @@
 <tr>
 <td>Spectrum WebSocket</td>
 <td>Implemented</td>
-<td><code>/WSspectrum</code> binary: v1=850B wf1, v2=1701B wf1+wf2, ~30fps</td>
+<td><code>/WSspectrum</code> binary: v1=851B wf1, v2=1701B wf1+wf2, ~30fps</td>
 </tr>
 <tr>
 <td>Spectrum dual-mode</td>
@@ -225,9 +225,9 @@
 <td>Full FT-710 CAT command set via pyserial, asyncio.to_thread() I/O</td>
 </tr>
 <tr>
-<td>5-tier polling</td>
+<td>7-task polling</td>
 <td>Implemented</td>
-<td>100ms–5s adaptive polling with skip-on-command</td>
+<td>100ms–5s adaptive polling (7 asyncio tasks) with skip-on-command</td>
 </tr>
 <tr>
 <td>S-meter + Multi-meter</td>
@@ -247,7 +247,7 @@
 <tr>
 <td>PTT safety</td>
 <td>Implemented</td>
-<td>Touch-and-hold TX; triple TX0 verify; dead-man switch; unload beacon</td>
+<td>Touch-and-hold TX; PTT watchdog; dead-man switch; unload beacon</td>
 </tr>
 </tbody>
 </table>
@@ -274,7 +274,7 @@ Device Layer
 <footer class="footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC FT-710 Project · SDD V1.4 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
+            <p>&copy; 2026 MRRC FT-710 Project · SDD V1.6 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
         </div>
     </div>
 </footer>

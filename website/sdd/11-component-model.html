@@ -331,13 +331,13 @@
 <td>TxCaptureWorklet</td>
 <td>Frontend audio</td>
 <td><code>static/tx_capture_worklet.js</code></td>
-<td>AudioWorklet: mic capture (48kHz), SAB ring buffer write or postMessage fallback</td>
+<td>AudioWorklet: mic capture → 48kHz float32 resample → 20ms frames via postMessage (SAB ring code present but currently unwired)</td>
 </tr>
 <tr>
 <td>TxOpusWorker</td>
 <td>Frontend audio</td>
 <td><code>static/tx_opus_worker.js</code></td>
-<td>Web Worker: SAB ring consumer, Opus encoder (48kHz, 960-sample frames, 28kbps CBR), postMessage to main thread for WS send (transferable buffers)</td>
+<td>Web Worker: Opus encoder (48kHz, 960-sample frames, 64kbps CBR, complexity=5); frames arrive via postMessage (SAB path dormant); posts to main thread for WS send (transferable buffers)</td>
 </tr>
 <tr>
 <td>ServiceWorker</td>
@@ -380,8 +380,8 @@
       → startTXAudio()
         → new Worker(&#39;tx_opus_worker.js&#39;) (if not cached)
         → navigator.mediaDevices.getUserMedia({audio:{sampleRate:48000}})  // 48kHz
-        → AudioContext({sampleRate:48000}) + createScriptProcessor(512)
-        → Float32→Int16→Worker→Opus encode (48kHz, 960-sample frames)→wsAudioTX.send()
+        → AudioContext({sampleRate:48000}) + AudioWorklet &#39;tx-capture&#39; (ScriptProcessor fallback)
+        → float32 20ms frames → Worker → Opus encode (48kHz, 960-sample frames, 64kbps CBR) → wsAudioTX.send()
 
 PTT button touchend/mouseup:
   → PTTManager.pttEnd()
@@ -398,7 +398,7 @@ PTT button touchend/mouseup:
 <footer class="footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC FT-710 Project · SDD V1.4 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
+            <p>&copy; 2026 MRRC FT-710 Project · SDD V1.6 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
         </div>
     </div>
 </footer>

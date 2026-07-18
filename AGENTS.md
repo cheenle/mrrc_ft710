@@ -9,9 +9,10 @@ This repository contains a Python FastAPI server for Yaesu FT-710 web control pl
 | `server.py` | FastAPI app, auth, 4 WebSocket endpoints, REST APIs, lifespan management |
 | `cat_controller.py` | Serial CAT protocol (pyserial + asyncio.to_thread), 40+ command helpers |
 | `radio_state.py` | `RadioState` dataclass with dirty-field change tracking and derived properties |
-| `poll_scheduler.py` | 5-tier adaptive background polling (100ms→5s) with skip-on-command |
-| `audio_handler.py` | PyAudio sound card capture/playback, Opus encode, FT-710 device auto-detection (name + mono-channel heuristic) |
-| `opus_rx.py` | libopus ctypes wrapper: `RxOpusEncoder` (48kHz), `TxOpusDecoder` (48kHz, unified with TX sample rate) |
+| `poll_scheduler.py` | 7-task adaptive background polling (100ms→5s) with skip-on-command |
+| `audio_handler.py` | PyAudio sound card capture/playback (44.1kHz native device rate), Opus encode, FT-710 device auto-detection (name + mono-channel heuristic) |
+| `audio_resample.py` | 44.1kHz ↔ 48kHz frame-aligned SRC (numpy linear interp; 882↔960 = 20ms) |
+| `opus_rx.py` | libopus ctypes wrapper: `RxOpusEncoder` (48kHz), `TxOpusDecoder` (48kHz) |
 | `scope_handler.py` | Spectrum data container: FT4222 real FFT + S-meter Gaussian fallback |
 | `scope_pipe.py` | Standalone subprocess for FT4222 SPI I/O (avoids asyncio/ctypes conflicts) |
 | `scope_frame.py` | Shared frame parsing, pipe payload encode/decode, quality metrics |

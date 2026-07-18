@@ -48,11 +48,11 @@
 |-----------|-------|
 | Type | Architectural |
 | Status | Implemented |
-| Decision | Both `/WSaudioRX` and `/WSaudioTX` carry a 1-byte codec tag per frame: `0x00` = Int16 PCM, `0x01` = Opus. RX: 48kHz @ 64kbps (fullband, transparent for broadcast music). TX: 48kHz @ 28kbps CBR (voice-optimized, VBR/FEC/DTX/HPF disabled). Default Opus; falls back to PCM. |
+| Decision | Both `/WSaudioRX` and `/WSaudioTX` carry a 1-byte codec tag per frame: `0x00` = Int16 PCM, `0x01` = Opus. RX: 48kHz @ 64kbps (fullband, transparent for broadcast music). TX: 48kHz @ 64kbps CBR (voice with fidelity priority: complexity=5, SIGNAL=VOICE, VBR/FEC/DTX disabled). Default Opus; falls back to PCM. |
 
 **Problem**: (RX) Int16 PCM at 48kHz mono costs ~768kbps — heavy on mobile/WiFi. Opus at 64kbps cuts that 12×. (TX) Browser mic Opus encoding saves uplink bandwidth. A per-frame tag removes negotiation races — receiver inspects tag and decodes accordingly.
 
-**Rationale**: `opus_rx.py` (copied from sunmrrc) provides direct ctypes libopus bindings. Uses `max_data_bytes` cap on `opus_encode()` to control bitrate — avoids arm64 variadic `opus_encoder_ctl` issues. Browser uses WASM `OpusDecoder`/`OpusEncoder`. TX encoder configured for voice: complexity=3 (real-time), VBR=OFF (stable packet size), FEC=OFF (WebSocket TCP), DTX=OFF (no priming gaps), HPF=OFF (preserve low-end).
+**Rationale**: `opus_rx.py` (copied from sunmrrc) provides direct ctypes libopus bindings. Uses `max_data_bytes` cap on `opus_encode()` to control bitrate — avoids arm64 variadic `opus_encoder_ctl` issues. Browser uses WASM `OpusDecoder`/`OpusEncoder`. TX encoder configured for voice with fidelity priority (`static/modules/opus_codec.js`): complexity=5, 64kbps CBR (stable packet size), FEC=OFF (WebSocket TCP is reliable), DTX=OFF (no priming gaps), fullband, SIGNAL=VOICE, LSB depth 16. (Raised from the original 28kbps/complexity=3 for transmit-fidelity headroom.)
 
 **Consequences**: Adds libopus dependency (optional — degrades gracefully to PCM). Codec is user-switchable. `AUDIO_TAG_PCM` / `AUDIO_TAG_OPUS` are constants in both Python and JavaScript.
 
@@ -90,13 +90,13 @@
 |-----------|-------|
 | Type | Safety |
 | Status | Implemented |
-| Decision | Multiple independent release paths: normal WebSocket command, triple TX0 verify, PTT watchdog, dead-man switch on WS disconnect, beforeunload beacon, pagehide handler |
+| Decision | Multiple independent release paths: normal WebSocket command (fire-and-forget TX0), PTT watchdog, dead-man switch on WS disconnect, beforeunload beacon, pagehide handler |
 
 **Problem**: A lost or unprocessed PTT release command can leave the radio transmitting indefinitely — a serious safety and regulatory issue.
 
 **Rationale**: Release is more safety-critical than keying. Each layer catches a different failure mode: lost WS message, half-open socket, browser crash, tab close, app switch. See Chapter 15 for detailed PTT Safety Architecture.
 
-**Consequences**: Frontend PTT logic is more complex; server-side release verification adds ~600ms of TX; polling skip-on-PTT ensures state consistency.
+**Consequences**: Frontend PTT logic is more complex; polling skip-on-PTT ensures state consistency. (V1.2 removed the 3×200ms post-release verify loop — it added ~600ms to every release; stuck-keyup detection now relies on the 500ms TX-status poll plus the browser watchdog.)
 
 ## AD-008: PyAudio Auto-Detection of FT-710 USB Audio
 
@@ -140,19 +140,19 @@
 
 **Consequences**: Channels survive server restarts. File is human-editable. No per-user channel isolation (single shared-password model).
 
-## AD-011: Unified 48kHz TX Audio Pipeline
+## AD-011: 48kHz Codec Domain with 44.1kHz Device Bridge
 
 | Attribute | Value |
 |-----------|-------|
 | Type | Design |
 | Status | Implemented |
-| Decision | TX audio chain runs entirely at 48 kHz: browser `getUserMedia({sampleRate:48000})` → Opus encode at 48 kHz (960-sample frames) → server `TxOpusDecoder` at 48 kHz → PyAudio playback at 48 kHz. No sample-rate conversion anywhere in the TX path. |
+| Decision | TX audio chain runs at 48 kHz in the codec domain (browser capture → Opus encode → server decode) and plays to the radio at 44.1 kHz — the FT-710 USB audio native rate — via a frame-aligned resample bridge (`audio_resample.py`, numpy linear interp; 960↔882 samples = exactly 20 ms, ratio 160:147). RX uses the inverse bridge (44.1k capture → 48k Opus encode). |
 
-**Problem**: V1.0 captured mic audio at 16 kHz (320 samples/20ms frame) but PyAudio played back at 48 kHz (expecting 960 samples/20ms). The 3:1 rate mismatch caused the output stream to underrun — every 20ms Opus frame produced 320 samples that filled only 1/3 of the 960-sample playback buffer. The remaining 2/3 was stale/residual buffer data, producing audible crackling ("咔咔咔") on transmitted audio.
+**Problem**: V1.0 captured mic audio at 16 kHz (320 samples/20ms frame) but PyAudio played back at 48 kHz (expecting 960 samples/20ms). The 3:1 rate mismatch caused the output stream to underrun — every 20ms Opus frame produced 320 samples that filled only 1/3 of the 960-sample playback buffer. The remaining 2/3 was stale/residual buffer data, producing audible crackling ("咔咔咔") on transmitted audio. The first fix unified everything at 48 kHz — but later measurement showed the FT-710 USB audio interface natively runs at **44.1 kHz**, so 48 kHz PCM still could not be written straight to the device stream.
 
-**Rationale**: Eliminating the sample-rate conversion eliminates the underrun. Opus at 48 kHz with 28 kbps CBR encodes voice-quality audio — the codec internally allocates bits to the speech band regardless of the nominal sample rate. Browser `getUserMedia` at 48 kHz works on all modern platforms (iOS 15+, Chrome, Firefox). The FT-710 USB audio interface natively operates at 48 kHz.
+**Rationale**: Opus mandates 48 kHz; the FT-710 mandates 44.1 kHz. A stateless numpy linear-interp resampler bridges the two domains per 20 ms frame with exact integer alignment (960→882), costing ~µs per call with zero phase drift. Browser capture at 48 kHz works on all modern platforms (iOS 15+, Chrome, Firefox).
 
-**Consequences**: Browser mic capture at 48 kHz uses slightly more CPU than 16 kHz (3× sample count), but the encoding cost is dominated by Opus frame processing, not sample count. Opus frames are 960 samples (still 20ms), matching the RX encoder's frame size. PCM fallback path also unified at 48 kHz. `TX_RATE` and `TX_SAMPLE_RATE` are now identical — no future mismatch possible.
+**Consequences**: Each direction has exactly one SRC step at the server boundary, owned by `audio_resample.py`. Browser and codec stay at 48 kHz; both PyAudio streams run at 44.1 kHz. The v1.0 underrun class of bug is impossible in both domains.
 
 ## AD-012: Active-VFO-Aware Frequency Model
 

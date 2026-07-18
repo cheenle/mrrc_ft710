@@ -192,17 +192,17 @@
 <li>Maintain spectrum channel <code>/WSspectrum</code> with binary 850/1701-byte frames at ~30 fps.</li>
 <li>Implement dual-mode spectrum: FT4222 SPI (real FFT) + S-meter Gaussian fallback.</li>
 <li>Implement full FT-710 CAT command set via serial port with threaded I/O.</li>
-<li>5-tier background polling with adaptive skip-on-command.</li>
+<li>7-task background polling with adaptive skip-on-command.</li>
 <li>Multi-meter: PWR, ALC, SWR, Id, Vd from CAT RM3-RM8.</li>
 <li>S-meter from both CAT SM0 and scope frame metadata.</li>
 <li>Persist and serve memory channels via <code>/api/mem_channels</code>.</li>
 <li>Session authentication: shared-password login, cookie + token, all WS gated.</li>
-<li>PTT safety: touch-and-hold, triple TX0 verify, dead-man switch, unload beacon.</li>
+<li>PTT safety: touch-and-hold, browser watchdog, dead-man switch, unload beacon.</li>
 <li>Scope pipe protocol for FT4222 subprocess communication.</li>
 </ul>
 <h2 id="out-of-scope">3.3 Out of Scope</h2>
 <ul>
-<li>Native iOS/Android application.</li>
+<li>Native iOS/Android application <strong>as a deliverable of this SDD</strong>. A separate native iOS client (<code>FT710Mobile/</code>) and a marketing/documentation site (<code>website/</code>) live in this repository but are documented independently (<code>docs/IOS_*.md</code>, <code>FT710Mobile/CLAUDE.md</code>) — they are outside this SDD’s scope.</li>
 <li>Cloud-hosted multi-tenant service.</li>
 <li>Multi-user / per-user authentication (current auth is single shared password).</li>
 <li>Digital modes (CW decoder, FT8, RTTY decode).</li>
@@ -337,7 +337,7 @@
 <footer class="footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC FT-710 Project · SDD V1.4 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
+            <p>&copy; 2026 MRRC FT-710 Project · SDD V1.6 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
         </div>
     </div>
 </footer>

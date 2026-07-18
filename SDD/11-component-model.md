@@ -35,8 +35,8 @@
 | OpusWASM | Frontend audio | `static/modules/opus_wasm.js` | Emscripten-compiled libopus WASM binary |
 | OpusCodecJS | Frontend audio | `static/modules/opus_codec.js` | JavaScript OpusEncoder/OpusDecoder classes wrapping WASM |
 | RxWorklet | Frontend audio | `static/rx_worklet_processor.js` | AudioWorklet: queue-based playback with time-based jitter buffer (prebuffer 220ms, recovery 90ms, max 800ms) |
-| TxCaptureWorklet | Frontend audio | `static/tx_capture_worklet.js` | AudioWorklet: mic capture (48kHz), SAB ring buffer write or postMessage fallback |
-| TxOpusWorker | Frontend audio | `static/tx_opus_worker.js` | Web Worker: SAB ring consumer, Opus encoder (48kHz, 960-sample frames, 28kbps CBR), postMessage to main thread for WS send (transferable buffers) |
+| TxCaptureWorklet | Frontend audio | `static/tx_capture_worklet.js` | AudioWorklet: mic capture → 48kHz float32 resample → 20ms frames via postMessage (SAB ring code present but currently unwired) |
+| TxOpusWorker | Frontend audio | `static/tx_opus_worker.js` | Web Worker: Opus encoder (48kHz, 960-sample frames, 64kbps CBR, complexity=5); frames arrive via postMessage (SAB path dormant); posts to main thread for WS send (transferable buffers) |
 | ServiceWorker | Frontend support | `static/sw.js` | Cache static assets; bypass JS/HTML to prevent stale cache |
 
 ## 11.2 Backend Component Collaboration (Startup)
@@ -82,8 +82,8 @@ PTT button touchstart/mousedown:
       → startTXAudio()
         → new Worker('tx_opus_worker.js') (if not cached)
         → navigator.mediaDevices.getUserMedia({audio:{sampleRate:48000}})  // 48kHz
-        → AudioContext({sampleRate:48000}) + createScriptProcessor(512)
-        → Float32→Int16→Worker→Opus encode (48kHz, 960-sample frames)→wsAudioTX.send()
+        → AudioContext({sampleRate:48000}) + AudioWorklet 'tx-capture' (ScriptProcessor fallback)
+        → float32 20ms frames → Worker → Opus encode (48kHz, 960-sample frames, 64kbps CBR) → wsAudioTX.send()
 
 PTT button touchend/mouseup:
   → PTTManager.pttEnd()

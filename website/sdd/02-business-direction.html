@@ -311,8 +311,8 @@
 </tr>
 <tr>
 <td>T2</td>
-<td>Triple TX0 verify</td>
-<td>3× CAT <code>TX;</code> query at 200ms intervals after release</td>
+<td>Fire-and-forget TX0 + poll verify</td>
+<td><code>TX0;</code> on release; 500ms TX-status poll + browser watchdog catch stuck keyup</td>
 </tr>
 <tr>
 <td>T3</td>
@@ -342,7 +342,7 @@
 <footer class="footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC FT-710 Project · SDD V1.4 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
+            <p>&copy; 2026 MRRC FT-710 Project · SDD V1.6 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
         </div>
     </div>
 </footer>

@@ -44,6 +44,8 @@ case 1: payload.append(QString::number(10).rightJustified(3, QChar('0')).toLatin
 case 2: payload.append(QString::number(11).rightJustified(3, QChar('0')).toLatin1()); break;  // "011"
 ```
 
+> **Note — mrrc_ft710 (this codebase) deliberately differs:** `cat_controller.py::set_tuner()` maps tuner control to `AC000/AC001/AC003` (P2=0, P3=state), citing the FT-710 CAT spec that P2=1 is invalid for the standard tuner, and SDD V1.3 records this mapping as empirically corrected against the real radio. That contradicts the Hamlib-derived `AC010;`/`AC011;` recommendation above. The discrepancy is unresolved — re-verify against actual FT-710 hardware before changing either side.
+
 ---
 
 ### 1.2 Hardware Flow Control Causes Communication Failures

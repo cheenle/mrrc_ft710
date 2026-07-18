@@ -91,6 +91,7 @@ _opus_tx_decoder: TxOpusDecoder | None = None
 # RX broadcast pacing/guard rails
 AUDIO_RX_SEND_TIMEOUT = 0.012          # per-frame per-client timeout (seconds)
 AUDIO_RX_MAX_FRAMES_PER_CYCLE = 2      # cap burst send when loop catches up
+RX_SILENCE_ALERT_S = 20                # zero-audio watchdog: alert after this many seconds of bit-exact silence
 METER_BROADCAST_LOG_INTERVAL_SECONDS = 0.5
 
 # Auth: valid session tokens (server-side, cleared on restart)
@@ -598,6 +599,7 @@ async def _audio_rx_loop():
                     continue
 
                 pcm = audio.read_rx_chunk()
+                audio.note_rx_chunk(pcm)
                 if pcm:
                     _idle_skipped = 0
                     _pcm_count += 1
@@ -632,10 +634,28 @@ async def _audio_rx_loop():
                             audio_rx_clients -= dead
             # Periodic health log
             if _loop_count % 250 == 0 and _idle_skipped == 0:  # Every ~5s when active
-                logger.info("Audio loop: loops=%d pcm_chunks=%d sends=%d trimmed=%d clients=%d running=%s",
+                logger.info("Audio loop: loops=%d pcm_chunks=%d sends=%d trimmed=%d clients=%d running=%s peak=%d",
                            _loop_count, _pcm_count, _send_count,
                            _trimmed_bursts,
-                           len(audio_rx_clients), audio._rx_running if audio else False)
+                           len(audio_rx_clients), audio._rx_running if audio else False,
+                           audio._rx_last_peak if audio else 0)
+                # RX silence watchdog: bit-exact zeros while the squelch is
+                # open mean the FT-710 USB audio is muted/wedged (a quiet band
+                # is never bit-exact silent). Flag it so the UI can warn.
+                if audio and radio and cat and cat.connected:
+                    _silent_s = audio.rx_silent_seconds()
+                    if (_silent_s >= RX_SILENCE_ALERT_S and radio.squelch_open
+                            and not radio.rx_audio_silent):
+                        radio.update(rx_audio_silent=True)
+                        logger.warning(
+                            "RX audio bit-exact silent for %.0fs with squelch open — "
+                            "FT-710 USB audio may be wedged; power-cycle the radio "
+                            "or re-plug its USB cable", _silent_s)
+                        await _broadcast_state()
+                    elif _silent_s < 1.0 and radio.rx_audio_silent:
+                        radio.update(rx_audio_silent=False)
+                        logger.info("RX audio recovered (non-zero samples)")
+                        await _broadcast_state()
         except asyncio.CancelledError:
             return
         except Exception as e:
@@ -1777,7 +1797,16 @@ async def ws_audio_tx(ws: WebSocket):
         audio_tx_clients.discard(ws)
         if ws is _tx_owner_ws:
             _tx_owner_ws = None
-            # Force RX on TX owner disconnect (safety)
+            # Force RX if the TX-audio owner vanishes while keyed — otherwise
+            # the radio sits on a dead carrier until the control socket also
+            # drops (dead-man switch) or the user releases PTT.
+            if radio.is_transmitting and cat and cat.connected:
+                logger.warning("TX audio owner disconnected during TX! Forcing RX.")
+                try:
+                    await cat.set_ptt(False)
+                    radio.update(tx_status=0)
+                except Exception:
+                    pass
             if audio:
                 await asyncio.to_thread(audio.stop_tx)
         logger.info("Audio TX client disconnected (%d remain, owner=%s)",

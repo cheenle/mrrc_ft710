@@ -79,9 +79,10 @@ Broadcast at ~30 fps from FT4222 data or S-meter fallback.
 
 ```text
 FT-710 USB Audio Output
-  → PyAudio capture (48kHz, Int16, mono, 960-sample chunks = 20ms)
+  → PyAudio capture (44.1kHz, Int16, mono, 882-sample chunks = 20ms)
     → AudioHandler.read_rx_chunk() (non-blocking poll from asyncio loop)
-      → AudioHandler.encode_rx_audio()
+      → resample_441_to_48 (882→960 samples, frame-aligned)
+        → AudioHandler.encode_rx_audio()
         → Opus encode (RxOpusEncoder, 64kbps, 20ms frames)
           → 1-byte tag (0x01) + Opus packet
         → OR PCM fallback: 1-byte tag (0x00) + Int16 bytes
@@ -99,23 +100,23 @@ FT-710 USB Audio Output
 ```text
 Browser Microphone
   → getUserMedia({sampleRate:48000, channelCount:1})
-    → AudioContext.createMediaStreamSource → ScriptProcessor(512)  // ~10.7ms @ 48kHz
-      → Float32 → Int16 conversion (×32767)
+    → AudioContext.createMediaStreamSource → AudioWorklet 'tx-capture' (ScriptProcessor fallback)
+      → 48kHz float32 20ms frames → postMessage → main thread → Worker ('float_frame')
         → Opus Worker (tx_opus_worker.js, 48kHz):
-          → Int16 → Float32 (÷32768) → OpusEncoder.encode_float(960-sample frames)
-            → 1-byte tag (0x01) + Opus packet (28kbps CBR, complexity=3)
+          → OpusEncoder.encode_float(960-sample frames)
+            → 1-byte tag (0x01) + Opus packet (64kbps CBR, complexity=5)
           → OR PCM fallback: 1-byte tag (0x00) + Int16 bytes
             → postMessage({type:'tx_audio', data:tagged.buffer}, [tagged.buffer])
               → main thread: wsAudioTX.send(tagged)
                 → /WSaudioTX → server
                   → Opus: TxOpusDecoder.decode() → Int16 PCM (48kHz, 960 samples/frame)
                   → PCM: pass-through
-                    → AudioHandler.feed_tx_audio() → _tx_queue
+                    → AudioHandler.feed_tx_audio() → resample_48_to_441 (960→882, frame-aligned) → _tx_queue
                       → AudioHandler.write_tx_chunk() (10ms drain loop)
-                        → PyAudio output stream (48kHz, mono) → FT-710 USB Audio Input
+                        → PyAudio output stream (44.1kHz, mono) → FT-710 USB Audio Input
 ```
 
-**TX sample rate is unified at 48 kHz** across the entire chain — browser capture, Opus encode/decode, and PyAudio playback all match. This eliminates the v1.0 sample-rate mismatch (16 kHz mic → 48 kHz playback) that caused audible crackling on transmitted audio.
+**TX runs at 48 kHz throughout the codec domain** — browser capture and Opus encode/decode — and the server bridges to the FT-710's native 44.1 kHz USB audio via frame-aligned resampling (960↔882 = exactly 20 ms, ratio 160:147). This eliminates the v1.0 sample-rate mismatch (16 kHz mic → 48 kHz playback) that caused audible crackling on transmitted audio.
 
 ## 9.5 Spectrum Signal Chain
 
