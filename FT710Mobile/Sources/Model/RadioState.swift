@@ -104,7 +104,7 @@ final class RadioState: ObservableObject {
     static let ipoLabels: [Int: String] = [0: "OFF", 10: "10dB", 20: "20dB", 30: "30dB"]
     var ipoLabel: String { Self.ipoLabels[ipo] ?? "OFF" }
     var filterHz: Int? {
-        let widths = Self.filterWidthsForMode(modeName)
+        let widths = Self.fullFilterWidthsForMode(modeName)
         return widths.first(where: { $0.0 == filterWidth })?.1
     }
     var scopeSpanHz: Int { Self.scopeSpans[scopeSpan] ?? 100000 }
@@ -152,25 +152,39 @@ final class RadioState: ObservableObject {
         ("4m",  70_000_000, 70_500_000, 70_250_000),
     ]
 
-    static let filterWidthsVoice: [(Int, Int)] = [
-        (9, 1800),
-        (11, 2000),
-        (13, 2400),
-        (17, 2700),
-        (20, 3000),
-        (23, 4500),
+    // 完整滤波器表，必须与后端 config.py 保持一致（用于正确显示当前带宽）
+    static let filterWidthsVoiceFull: [(Int, Int)] = [
+        (1,300),(2,400),(3,600),(4,850),(5,1100),(6,1200),(7,1500),(8,1650),
+        (9,1800),(10,1950),(11,2100),(12,2250),(13,2400),(14,2450),(15,2500),
+        (16,2600),(17,2700),(18,2800),(19,2900),(20,3000),(21,3200),(22,3500),(23,4000),
     ]
 
-    static let filterWidthsNarrow: [(Int, Int)] = [
+    static let filterWidthsNarrowFull: [(Int, Int)] = [
         (1,50),(2,100),(3,150),(4,200),(5,250),(6,300),(7,350),(8,400),
         (9,450),(10,500),(11,600),(12,800),(13,1200),(14,1400),(15,1700),
         (16,2000),(17,2400),(18,3000),(19,3200),(20,3500),(21,4000),
     ]
 
+    // 手机 UI 快速循环/下拉菜单中展示的精选子集（Voice 只保留常用 SSB 带宽）
+    static let filterWidthsVoice: [(Int, Int)] = [
+        (9, 1800),
+        (11, 2100),
+        (13, 2400),
+        (17, 2700),
+        (20, 3000),
+        (23, 4000),
+    ]
+
+    static let filterWidthsNarrow: [(Int, Int)] = filterWidthsNarrowFull
+
     static let narrowModes: Set<String> = ["CW-U","CW-L","RTTY-L","RTTY-U","DATA-L","DATA-U","PSK"]
 
     static func filterWidthsForMode(_ modeName: String) -> [(Int, Int)] {
         narrowModes.contains(modeName) ? filterWidthsNarrow : filterWidthsVoice
+    }
+
+    static func fullFilterWidthsForMode(_ modeName: String) -> [(Int, Int)] {
+        narrowModes.contains(modeName) ? filterWidthsNarrowFull : filterWidthsVoiceFull
     }
 
     // MARK: - Calibration (from config.py)

@@ -36,6 +36,10 @@ struct QuickControlsRow: View {
     }
 
     private var filterIndex: Int {
+        // 优先按当前 CAT 索引定位；如果当前索引不在精选列表里，再用带宽值回退匹配
+        if let pos = filterWidths.firstIndex(where: { $0.0 == viewModel.state.filterWidth }) {
+            return pos
+        }
         guard let hz = viewModel.state.filterHz else { return 0 }
         return filterWidths.firstIndex(where: { $0.1 == hz }) ?? 0
     }

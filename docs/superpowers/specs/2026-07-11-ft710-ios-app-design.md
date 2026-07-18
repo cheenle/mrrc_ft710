@@ -208,7 +208,7 @@ FT710Mobile/
 | Tuner | N/A | Antenna tuner with TUNE button |
 | Memories | 3×3 grid UserDefaults | 10-slot server-backed |
 | Audio codec | PCM only | Opus + PCM |
-| Filter | WDSP bandpass | CAT filter width index (voice/narrow tables) |
+| Filter | WDSP bandpass | CAT filter width index; UI shows curated voice/narrow subsets, current-Hz lookup uses full backend tables |
 | Scope span | N/A | Selectable 1kHz–1MHz |
 
 ## Error Handling & Safety
