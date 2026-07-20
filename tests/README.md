@@ -2,7 +2,7 @@
 
 ## Overview
 
-Automated test suite covering the core backend modules. All tests run **without hardware** — no FT-710 radio, no serial port, no USB audio device needed. 223 tests across 17 test modules.
+Automated test suite covering the core backend modules. All tests run **without hardware** — no FT-710 radio, no serial port, no USB audio device needed. 250 tests across 18 test modules.
 
 ```bash
 python -m unittest discover -s tests -v
@@ -12,11 +12,11 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 |--------|-------|
-| Total tests | 223 |
-| Passed | 223 |
+| Total tests | 250 |
+| Passed | 250 |
 | Skipped | 0 (with fastapi installed) |
 | Failed | 0 |
-| Execution time | ~0.8s |
+| Execution time | ~4s (harness tests spawn CLI subprocesses) |
 
 ## Test Modules
 
@@ -155,6 +155,17 @@ SDD coverage: §12.2 (Windows packaging)
 | `WindowsPackagingPathTests` | 4 | Frozen-runtime resource path resolution |
 | `ScopePipeCommandTests` | 2 | scope_pipe command construction under frozen runtime |
 
+### 18. test_sdd_harness.py — SDD-Guardian Context Harness (27 tests)
+
+SDD coverage: NFR-051 (explicit gaps documented), §14 (doc-sync discipline)
+
+| Class | Tests | Covers |
+|-------|-------|--------|
+| `ConstraintRegistryTests` | 5 | constraints.json well-formed: required fields, unique ids, valid severities, regexes compile, SDD traceability, core-module coverage |
+| `HarnessCliTests` | 10 | prime digest, context routing, check blocks DN/SH0NN (exit 2), clean passes, hook blocks/allows/fail-open, core files stay clean |
+| `KnowledgeIndexTests` | 4 | index.json: chapter files exist, every topic ref resolves to live SDD text, topics reachable + routed, core-area coverage |
+| `KnowledgeCliTests` | 8 | Live extraction of AD/NFR/UC/issue/section, brief includes decisions + requirements + risks, Chinese keyword routing |
+
 ## Test Coverage by SDD Requirement
 
 | SDD Section | Test Module(s) | Status |
@@ -176,6 +187,7 @@ SDD coverage: §12.2 (Windows packaging)
 | §15 PTT Safety | test_server_ws_protocol (PTTSafetyLogicTests) | 10 tests |
 | NFR-060–065 Audio Quality | test_audio | 48 tests |
 | NFR-020–023 Auth/Security | test_server_ws_protocol (WSAuthTests) | 4 tests |
+| NFR-051 Doc-sync / SDD-Guardian harness | test_sdd_harness | 27 tests |
 
 ## Running Specific Tests
 

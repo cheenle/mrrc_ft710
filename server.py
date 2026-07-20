@@ -1337,7 +1337,7 @@ async def lifespan(app: FastAPI):
 
     cat = CatController(SERIAL_PORT, BAUD_RATE)
     connected = await cat.connect()
-    radio.serial_connected = connected
+    radio.update(serial_connected=connected)
 
     if connected:
         await _initial_state_sync()
