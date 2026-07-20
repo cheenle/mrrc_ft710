@@ -55,7 +55,7 @@ final class RadioViewModel: ObservableObject {
             try? await Task.sleep(nanoseconds: 600_000_000)  // 0.6s
 
             // Re-login to get fresh token
-            let scheme = "https"
+            let scheme = "http"  // Windows launcher runs --no-ssl (plain HTTP) by default
             guard let loginURL = URL(string: "\(scheme)://\(connection.serverHost)/api/auth/login") else {
                 await MainActor.run {
                     self.connection.connectAll()
@@ -114,7 +114,7 @@ final class RadioViewModel: ObservableObject {
         state.powerOn = true
         startPing()
 
-        let scheme = "https"  // Production server uses HTTPS
+        let scheme = "http"  // Windows launcher runs --no-ssl (plain HTTP) by default
         guard let loginURL = URL(string: "\(scheme)://\(connection.serverHost)/api/auth/login") else {
             connection.connectAll()
             audioCapture.prepare()
@@ -324,6 +324,9 @@ final class RadioViewModel: ObservableObject {
 
     /// Noise reduction on/off.
     func setNoiseReduction(_ on: Bool) { sendSet("nr", on) }
+
+    /// Noise reduction level: 1-15.
+    func setNoiseReductionLevel(_ v: Int) { sendSet("nr_level", v) }
 
     /// Auto notch on/off.
     func setAutoNotch(_ on: Bool) { sendSet("an", on) }

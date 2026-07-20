@@ -25,6 +25,14 @@ struct DSPPanelContent: View {
                     ToggleRow("NR 降噪", isOn: Binding(
                         get: { viewModel.state.noiseReduction },
                         set: { viewModel.setNoiseReduction($0) }))
+                    Stepper(value: Binding(
+                        get: { viewModel.state.nrLevel },
+                        set: { viewModel.setNoiseReductionLevel($0) }
+                    ), in: 1...15) {
+                        Text("NR 等级: \(viewModel.state.nrLevel)")
+                            .font(.subheadline)
+                            .foregroundColor(.radioMuted)
+                    }
                     ToggleRow("AN 自动陷波", isOn: Binding(
                         get: { viewModel.state.autoNotch },
                         set: { viewModel.setAutoNotch($0) }))

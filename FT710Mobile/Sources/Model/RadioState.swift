@@ -225,6 +225,7 @@ final class RadioState: ObservableObject {
         if let v = data["ipo"] as? Int { ipo = v }
         if let v = data["noise_blanker"] as? Bool { noiseBlanker = v }
         if let v = data["noise_reduction"] as? Bool { noiseReduction = v }
+        if let v = data["nr_level"] as? Int { nrLevel = v }
         if let v = data["auto_notch"] as? Bool { autoNotch = v }
         if let v = data["compressor"] as? Bool { compressor = v }
         if let v = data["compressor_level"] as? Int { compressorLevel = v }

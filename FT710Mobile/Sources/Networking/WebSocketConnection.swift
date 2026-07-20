@@ -68,7 +68,7 @@ final class WebSocketConnection: NSObject, @unchecked Sendable {
 
     private func makeSession() -> URLSession {
         let config = URLSessionConfiguration.default
-        let scheme = "https"
+        let scheme = "http"
         config.httpAdditionalHeaders = [
             "Origin": "\(scheme)://\(serverHost)",
             "User-Agent": "FT710Mobile/1.0",
@@ -80,7 +80,7 @@ final class WebSocketConnection: NSObject, @unchecked Sendable {
         let sess = makeSession()
         session = sess
 
-        let scheme = "wss"
+        let scheme = "ws"
         var urlStr = "\(scheme)://\(serverHost)\(endpoint)"
 
         if let pass = password, !pass.isEmpty {
