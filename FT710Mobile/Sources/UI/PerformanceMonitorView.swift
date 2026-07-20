@@ -40,11 +40,11 @@ struct PerformanceMonitorView: View {
     
     private var connectionStatus: String {
         if viewModel.state.ctrlConnected && viewModel.state.audioRXConnected && viewModel.state.audioTXConnected {
-            return "优秀"
+            return String(localized: "优秀")
         } else if viewModel.state.ctrlConnected {
-            return "一般"
+            return String(localized: "一般")
         } else {
-            return "断开"
+            return String(localized: "断开")
         }
     }
     
@@ -61,11 +61,11 @@ struct PerformanceMonitorView: View {
     private var audioQuality: String {
         let rxRMS = viewModel.audioPlayback.rmsLevel
         if rxRMS > 0.1 {
-            return "良好"
+            return String(localized: "良好")
         } else if rxRMS > 0.01 {
-            return "较弱"
+            return String(localized: "较弱")
         } else {
-            return "无信号"
+            return String(localized: "无信号")
         }
     }
     

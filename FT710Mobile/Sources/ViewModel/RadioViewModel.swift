@@ -17,7 +17,7 @@ final class RadioViewModel: ObservableObject {
     @Published var showErrorAlert = false
     @Published var errorTitle = ""
     @Published var errorMessage = ""
-    @Published var errorActionTitle = "确定"
+    @Published var errorActionTitle = String(localized: "确定")
 
     // MARK: - Init
 
@@ -99,7 +99,7 @@ final class RadioViewModel: ObservableObject {
                 }
             } catch {
                 await MainActor.run {
-                    self.state.connectionError = "重连失败: \(error.localizedDescription)"
+                    self.state.connectionError = String(localized: "重连失败: \(error.localizedDescription)")
                     self.connection.connectAll()
                     self.audioPlayback.start()
                     self.audioCapture.prepare()
@@ -133,7 +133,7 @@ final class RadioViewModel: ObservableObject {
 
                 // Handle network error
                 if let err = error {
-                    self.state.connectionError = "连接失败: \(err.localizedDescription)"
+                    self.state.connectionError = String(localized: "连接失败: \(err.localizedDescription)")
                     self.state.powerOn = false
                     return
                 }
@@ -159,7 +159,7 @@ final class RadioViewModel: ObservableObject {
                     self.connection.connectAll()
                     self.audioCapture.prepare()
                 } else {
-                    self.state.connectionError = "认证失败，请检查密码"
+                    self.state.connectionError = String(localized: "认证失败，请检查密码")
                     self.state.powerOn = false  // Reset power state on auth failure
                 }
             }
@@ -192,7 +192,7 @@ final class RadioViewModel: ObservableObject {
     }
     
     /// Show error alert
-    func showError(title: String, message: String, actionTitle: String = "确定") {
+    func showError(title: String, message: String, actionTitle: String = String(localized: "确定")) {
         errorTitle = title
         errorMessage = message
         errorActionTitle = actionTitle
@@ -201,12 +201,12 @@ final class RadioViewModel: ObservableObject {
     
     /// Handle audio errors
     func handleAudioError(_ error: String) {
-        showError(title: "音频错误", message: error, actionTitle: "重试")
+        showError(title: String(localized: "音频错误"), message: error, actionTitle: String(localized: "重试"))
     }
     
     /// Handle connection errors
     func handleConnectionError(_ error: String) {
-        showError(title: "连接错误", message: error, actionTitle: "重新连接")
+        showError(title: String(localized: "连接错误"), message: error, actionTitle: String(localized: "重新连接"))
     }
 
     // MARK: - Control helpers
