@@ -224,6 +224,12 @@ mrrc_ft710/
 | 3 | 2s | `SH0;` `AG;` `PC;` `PA0;` `RA0;` `NB0;` `NR0;` `BC;` `AC;` | Filter, gains, preamp, att, NR, NB, AN, tuner |
 | 4 | 5s | `RM7;` `RM8;` `PR;` | Drain current, voltage, compressor |
 
+User set commands call `skip_next_poll()` for the affected field, and poll loops re-check that
+skip AFTER each in-flight query response — a response that was already on the wire when the
+command arrived is discarded as stale instead of snapping the UI back to the old value.
+Filter width sets are additionally verified by an `SH0;` read-back ~150 ms after `SH00<NN>;`
+(logged as `Filter read-back: index=N (requested M)`).
+
 ## WebSocket Protocol
 
 ### `/WSradio?token=<auth_token>` (JSON text)

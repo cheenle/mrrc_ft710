@@ -34,7 +34,7 @@ Runtime facts are derived from `server.py`, `cat_controller.py`, `audio_handler.
 | Attribute | Value |
 |-----------|-------|
 | Document ID | SDD-MRRC-FT710-2026-001 |
-| SDD Version | V1.6 |
+| SDD Version | V1.7 |
 | Baseline Date | 2026-07-18 |
 | Status | Production release (documentation synchronized with runtime) |
 | Project | MRRC FT-710 |

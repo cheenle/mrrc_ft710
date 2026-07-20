@@ -197,7 +197,7 @@ async def _broadcast_state():
     now = time.monotonic()
     if meter_dirty and now - _last_meter_broadcast_log >= METER_BROADCAST_LOG_INTERVAL_SECONDS:
         _last_meter_broadcast_log = now
-        logger.info(
+        logger.debug(
             "Meter broadcast dirty=%s raw={S=%s PWR=%s ALC=%s SWR=%s ID=%s VD=%s} "
             "derived={dBm=%.1f unit=%s W=%.1f ALC%%=%.0f SWR=%.1f Id=%.1f Vd=%.1f}",
             sorted(meter_dirty),
@@ -327,7 +327,7 @@ async def _read_scope_pipe(proc):
     Stderr lines starting with "STATUS:" are machine-parseable status
     messages from the pipe process.
     """
-    global scope, _scope_proc
+    global scope, _scope_proc, _scope_read_task
     logger.info("Reading from scope_pipe (pid=%d)...", proc.pid)
     _first_frame = True
     _stderr_task = None
@@ -350,7 +350,7 @@ async def _read_scope_pipe(proc):
                     )):
                         logger.warning("scope_pipe: %s", payload)
                     elif "heartbeat:" in payload or "diag:" in payload:
-                        logger.info("scope_pipe: %s", payload)
+                        logger.debug("scope_pipe: %s", payload)
                     else:
                         logger.info("scope_pipe: %s", payload)
                 else:
@@ -452,6 +452,8 @@ async def _read_scope_pipe(proc):
                     pass
         if _scope_proc is proc:
             _scope_proc = None
+        if _scope_read_task is asyncio.current_task():
+            _scope_read_task = None
 
         # ── Auto-restart ──────────────────────────────────────────
         # If spectrum clients are still connected when the pipe exits,
@@ -634,7 +636,7 @@ async def _audio_rx_loop():
                             audio_rx_clients -= dead
             # Periodic health log
             if _loop_count % 250 == 0 and _idle_skipped == 0:  # Every ~5s when active
-                logger.info("Audio loop: loops=%d pcm_chunks=%d sends=%d trimmed=%d clients=%d running=%s peak=%d",
+                logger.debug("Audio loop: loops=%d pcm_chunks=%d sends=%d trimmed=%d clients=%d running=%s peak=%d",
                            _loop_count, _pcm_count, _send_count,
                            _trimmed_bursts,
                            len(audio_rx_clients), audio._rx_running if audio else False,
@@ -883,7 +885,7 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                         logger.error("PTT: TX audio stream failed — unkeying radio")
                         await cat.set_ptt(False)
                         radio.update(tx_status=0, power_meter=0, alc_meter=0,
-                                     swr_meter=0, comp_meter=0)
+                                     swr_meter=0, comp_meter=0, id_meter=0)
                         await ws.send_text(json.dumps({
                             "type": "error",
                             "message": "TX audio device unavailable — PTT released. Try again.",
@@ -903,7 +905,7 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                 # The previous 3×200 ms verify loop added ~600 ms to release.
                 await cat.set_ptt(False)
                 radio.update(tx_status=0, power_meter=0, alc_meter=0,
-                             swr_meter=0, comp_meter=0)
+                             swr_meter=0, comp_meter=0, id_meter=0)
             scheduler and scheduler.skip_next_poll("tx_status", 1.0)
 
         elif field == "tune":
@@ -927,10 +929,24 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
         elif field == "filter" or field == "filter_width":
             idx = int(value)
             logger.info("Filter set command: index=%d", idx)
+            scheduler and scheduler.skip_next_poll("filter_width", 3.0)
             ok = await cat.set_filter_width(idx)
             logger.info("Filter set result: ok=%s index=%d", ok, idx)
-            radio.update(filter_width=idx)
-            scheduler and scheduler.skip_next_poll("filter_width", 3.0)
+            if ok:
+                # Read back the radio's actual width instead of trusting
+                # the write: the FT-710 silently ignores a width index
+                # that is invalid for the current mode, and an optimistic
+                # update would then linger ~4s before the post-skip poll
+                # corrects it.  Skip window (3s) covers this query.
+                await asyncio.sleep(0.15)
+                actual = await cat.get_filter_width()
+                logger.info("Filter read-back: index=%s (requested %d)", actual, idx)
+                radio.update(filter_width=actual if actual is not None else idx)
+            else:
+                await ws.send_text(json.dumps({
+                    "type": "error",
+                    "message": f"Filter width command failed: {idx}",
+                }))
 
         elif field == "af_gain":
             v = max(0, min(255, int(value)))

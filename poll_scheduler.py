@@ -275,7 +275,8 @@ class PollScheduler:
                         if ptt == 0 and was_tx:
                             changed |= self.state.update(
                                 power_meter=0, alc_meter=0,
-                                swr_meter=0, comp_meter=0)
+                                swr_meter=0, comp_meter=0,
+                                id_meter=0)
                         if changed and self._on_state_changed:
                             await self._on_state_changed()
                         failures = 0
@@ -441,6 +442,15 @@ class PollScheduler:
                             continue
                         resp = await self.cat.query(cmd, timeout=POLL_TIMEOUT)
                         if resp:
+                            # Re-check AFTER the await: a user set command
+                            # may have arrived while this query was in
+                            # flight.  The response then carries the
+                            # pre-command (stale) value — applying it would
+                            # snap the UI back to the old setting.  Same
+                            # guard pattern as _poll_if / _poll_vfo.
+                            if await self._should_skip(field) \
+                                    or await self._polling_paused():
+                                continue
                             try:
                                 value = parser(resp)
                                 if value is not None:

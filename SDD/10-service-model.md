@@ -70,7 +70,7 @@ Key commands (see `_execute_set_command` in `server.py` for complete list):
 | `mode` | "USB","LSB",... | `MD0<X>;` | Set operating mode |
 | `ptt` | true/false | `TX1;` / `TX0;` | Priority command path; preempts poll queries |
 | `tune` | true/false | `TX2;` + `AC003;` / `AC000;` + `TX0;` | Tune carrier + tuner start/stop sequence |
-| `filter` / `filter_width` | 00–23 | `SH00<NN>;` | Filter width index (P1=0, P2=0 fixed) |
+| `filter` / `filter_width` | 00–23 | `SH00<NN>;` | Filter width index (P1=0, P2=0 fixed); post-set `SH0;` read-back (~150 ms) broadcasts the radio's actual index |
 | `af_gain` | 0–255 | `AG0<NNN>;` | AF gain |
 | `rf_gain` | 0–255 | `RG0<NNN>;` | RF gain |
 | `meter_display` | 0–5 | `MS<P1>0;` | Radio front-panel meter selection |

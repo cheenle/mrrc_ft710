@@ -161,6 +161,11 @@ PollScheduler (asyncio, 7 cooperative tasks)
   Tier 5  (1s):         connection watchdog               → reconnect + full-state re-sync
 
 User commands skip next poll for affected fields (`skip_next_poll`).
+Poll loops also re-check the skip AFTER each in-flight query returns and discard the response
+when a user command landed mid-flight (stale-read guard in the IF/VFO/settings loops — without
+it, a pre-command `SH0;` response overwrote a just-set filter width and snapped the UI back).
+The `filter` set handler additionally reads `SH0;` back ~150 ms after `SH00<NN>;` and
+broadcasts the radio's actual index (logged as `Filter read-back: index=N (requested M)`).
 PTT/TUNE commands use priority writes (`send_priority_set_command`) and set `_cancel_polls`,
 which poll loops and read threads observe to release the serial lock quickly.
 CAT I/O remains serialized through `CatController._lock`; blocking serial work is offloaded via `asyncio.to_thread()`.

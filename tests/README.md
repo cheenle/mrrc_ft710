@@ -2,7 +2,7 @@
 
 ## Overview
 
-Automated test suite covering the core backend modules. All tests run **without hardware** — no FT-710 radio, no serial port, no USB audio device needed. 160 tests across 10 test modules.
+Automated test suite covering the core backend modules. All tests run **without hardware** — no FT-710 radio, no serial port, no USB audio device needed. 223 tests across 17 test modules.
 
 ```bash
 python -m unittest discover -s tests -v
@@ -12,48 +12,48 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 |--------|-------|
-| Total tests | 160 |
-| Passed | 158 |
-| Skipped | 2 (fastapi not in test env) |
+| Total tests | 223 |
+| Passed | 223 |
+| Skipped | 0 (with fastapi installed) |
 | Failed | 0 |
-| Execution time | ~0.01s |
+| Execution time | ~0.8s |
 
 ## Test Modules
 
-### 1. test_radio_state.py — RadioState (28 tests)
+### 1. test_radio_state.py — RadioState (33 tests)
 
 SDD coverage: §7.2, AD-003, §9.7
 
 | Class | Tests | Covers |
 |-------|-------|--------|
-| `RadioStateFieldMutationTests` | 7 | Field updates, dirty tracking, unknown field handling, batch mutation |
+| `RadioStateFieldMutationTests` | 8 | Field updates, dirty tracking, unknown field handling, batch mutation |
 | `RadioStateDerivedPropertiesTests` | 13 | active_freq, mode_name, band_name, is_transmitting, s_meter_dbm, s_unit, preamp_label, attenuator_label |
-| `RadioStateSerializationTests` | 5 | to_dict (core + derived), to_dirty_dict, value accuracy |
+| `RadioStateSerializationTests` | 6 | to_dict (core + derived), to_dirty_dict, value accuracy |
 | `RadioStateFromSyncResultTests` | 6 | CAT response parsing, empty data, malformed data, booleans, preamp/att, tuner |
 
-### 2. test_cat_controller.py — CAT Protocol (24 tests)
+### 2. test_cat_controller.py — CAT Protocol (29 tests)
 
 SDD coverage: AD-002, §9.6, §10.4
 
 | Class | Tests | Covers |
 |-------|-------|--------|
-| `CatCommandFormattingTests` | 16 | FA, FB, MD0, TX, SM0, SH00, AG, PC, PA0, RA0, NB0, NR0, BC, PR, PS, ST, VS, SS, AC, BS — all command formats |
-| `CatResponseParsingTests` | 5 | Frequency parse, S-meter parse, mode parse, PTT parse, IF response parse, error detection |
-| `CatControllerMockedTests` | 5 | Command terminator (;), query vs set, ASCII encoding, triple PTT verify sequence |
+| `CatCommandFormattingTests` | 15 | FA, FB, MD0, TX, SM0, SH00, AG, PC, PA0, RA0, NB0, NR0, BC, PR, PS, ST, VS, SS, AC, BS — all command formats |
+| `CatResponseParsingTests` | 7 | Frequency parse, S-meter parse, mode parse, PTT parse, IF response parse, filter width parse, error detection |
+| `CatControllerMockedTests` | 7 | Command terminator (;), query vs set, ASCII encoding, SH two-digit width format, write-only set, PTT verify sequence |
 
-### 3. test_config.py — Configuration Tables (25 tests)
+### 3. test_config.py — Configuration Tables (28 tests)
 
 SDD coverage: §7.2, §10.4, NFRs
 
 | Class | Tests | Covers |
 |-------|-------|--------|
 | `ModeTableTests` | 5 | Mode name↔num mapping, bidirectional lookup, display names, UI_MODES |
-| `BandTableTests` | 6 | Band list structure, get_band_for_frequency (20m/40m/80m/10m/edge cases) |
-| `FilterTableTests` | 5 | Filter widths by mode (SSB, CW, FM), get_filter_hz |
+| `BandTableTests` | 8 | Band list structure, get_band_for_frequency (20m/40m/80m/10m/edge cases) |
+| `FilterTableTests` | 6 | Filter widths by mode (SSB, CW, FM), get_filter_hz |
 | `SMeterCalibrationTests` | 4 | raw_to_dbm monotonic, raw_to_s_unit labels (S0–S9, +10–+60) |
 | `ConfigConstantsTests` | 5 | PREAMP_LABELS, ATTENUATOR_LABELS, SCOPE_SPANS, MEM_CHANNEL_COUNT, AUTH_CONFIG |
 
-### 4. test_audio.py — Audio Handler + Opus Codec (20 tests)
+### 4. test_audio.py — Audio Handler + Opus Codec (48 tests)
 
 SDD coverage: AD-004, NFR-060–NFR-065
 
@@ -61,31 +61,37 @@ SDD coverage: AD-004, NFR-060–NFR-065
 |-------|-------|--------|
 | `CodecTagTests` | 4 | AUDIO_TAG_PCM (0x00), AUDIO_TAG_OPUS (0x01), tag distinctness, 1-byte fit |
 | `OpusConstantsTests` | 6 | RX_RATE=48000, FRAME_SAMPLES=960, DEFAULT_BITRATE=64000, MIN=8000, MAX=128000 |
-| `AudioFramingTests` | 6 | Tagged PCM frame format, tagged Opus frame format, Int16 range, 768kbps PCM bandwidth, multi-frame tags |
+| `TxFrontendContractTests` | 11 | TX worklet/worker contract: 48kHz, frame sizes, packet format |
+| `RxRecordingFrontendTests` | 5 | RX recording (MP3/lamejs) frontend contract |
+| `TXBufferTests` | 8 | TX jitter buffer pre-buffer/cap behavior |
+| `TXReleaseOrderTests` | 3 | PTT release ordering: audio drain before TX0 |
+| `RXBackpressureTests` | 3 | RX broadcast backpressure handling |
+| `AudioFrameFormatTests` | 6 | Tagged PCM/Opus frame format, Int16 range, 768kbps PCM bandwidth, multi-frame tags |
 | `AudioDeviceDetectionTests` | 2 | FT-710 name pattern matching, non-FT-710 rejection |
 
-### 5. test_server_ws_protocol.py — WebSocket Protocol (26 tests)
+### 5. test_server_ws_protocol.py — WebSocket Protocol (41 tests)
 
-SDD coverage: §9.2, §10.4, §15
+SDD coverage: §9.2, §9.6, §10.4, §15
 
 | Class | Tests | Covers |
 |-------|-------|--------|
-| `WSMessageFormatTests` | 12 | fullState, stateUpdate, set, get, ping/pong, error, memChannels, memSave, value, legacy colon format |
+| `WSMessageFormatTests` | 11 | fullState, stateUpdate, set, get, ping/pong, error, memChannels, memSave, value, legacy colon format |
 | `WSAuthTests` | 4 | Token format (64 hex chars), valid/invalid token check, WS close code 4001 |
-| `PTTSafetyLogicTests` | 8 | TX1/TX0 commands, triple verify, dead-man switch (3 conditions), watchdog retry count, sendBeacon format, tx audio stop signal, m: settings format |
-| `StateBroadcastLogicTests` | 5 | Empty dirty set skip, partial update, dirty clear after broadcast, skip_next_poll |
+| `PTTSafetyLogicTests` | 10 | TX1/TX0 commands, dead-man switch (3 conditions), watchdog retry count, sendBeacon format, tx audio stop signal, m: settings format |
+| `StateBroadcastLogicTests` | 16 | Empty dirty set skip, partial update, dirty clear after broadcast, skip_next_poll-before-set ordering (band/freq/filter), post-query stale-read guards (IF + settings polls), filter post-set SH0 read-back, client/server band-list consistency |
 
-### 6. test_poll_scheduler.py — Poll Scheduler (12 tests)
+### 6. test_poll_scheduler.py — Poll Scheduler (14 tests)
 
 SDD coverage: AD-009, §9.6
 
 | Class | Tests | Covers |
 |-------|-------|--------|
-| `PollTierStructureTests` | 6 | 5-tier intervals (100ms/500ms/2s/5s), tier commands, throughput limit |
+| `PollTierStructureTests` | 6 | Tier intervals (100ms/500ms/2s/5s), tier commands, throughput limit |
 | `PollSkipLogicTests` | 4 | Skip field accumulation, expiry, multi-field skip, duration types |
-| `PollingOrderTests` | 2 | User command priority over poll, resume after skip expiry |
+| `PollingOrderTests` | 3 | User command priority over poll, polling pause after user command, resume after skip expiry |
+| `TXMeterPollingPreemptionTests` | 1 | TX-meter cycle yields between RM queries for priority commands |
 
-### 7. test_scope_frame.py — Scope Frame Parsing (8 tests)
+### 7. test_scope_frame.py — Scope Frame Parsing (7 tests)
 
 SDD coverage: AD-005, AD-006, §9.5
 
@@ -106,32 +112,69 @@ SDD coverage: AD-006, §9.5.2
 
 SDD coverage: AD-005, §12.2
 
-### 11. test_server_scope_init.py — Scope CAT Init (2 tests, skipped)
+### 11. test_server_scope_init.py — Scope CAT Init (2 tests)
 
 SDD coverage: AD-005, §9.5.1
 
-Skipped when `fastapi` is not installed in the test environment. Requires `pip install fastapi` to run.
+Requires `fastapi` (installed in the project venv).
+
+### 12. test_memory_recall.py — Memory Channel Recall (3 tests)
+
+SDD coverage: §10.4 (memory recall applies stored frequency + mode)
+
+| Class | Tests | Covers |
+|-------|-------|--------|
+| `MemoryRecallTests` | 2 | Recall applies frequency and mode via CAT |
+| `MemoryButtonSourceTests` | 1 | Frontend memory button contract |
+
+### 13. test_quiet_logging.py — Logging Noise Control (4 tests)
+
+| Class | Tests | Covers |
+|-------|-------|--------|
+| `QuietLoggingSourceTests` | 3 | High-frequency polls stay at DEBUG, no per-frame INFO spam |
+| `TXOnlyMeterResetTests` | 1 | TX-only meters zeroed on TX→RX transition |
+
+### 14. test_scope_pipe_restart.py — Scope Pipe Restart (1 test)
+
+SDD coverage: AD-005 (pipe subprocess lifecycle)
+
+### 15. test_windows_launcher.py — Windows Launcher (1 test)
+
+SDD coverage: §12.2 (Windows packaging)
+
+### 16. test_windows_packaging_files.py — Windows Packaging Files (2 tests)
+
+SDD coverage: §12.2 (Windows packaging)
+
+### 17. test_windows_packaging_paths.py — Windows Packaging Paths (6 tests)
+
+SDD coverage: §12.2 (Windows packaging)
+
+| Class | Tests | Covers |
+|-------|-------|--------|
+| `WindowsPackagingPathTests` | 4 | Frozen-runtime resource path resolution |
+| `ScopePipeCommandTests` | 2 | scope_pipe command construction under frozen runtime |
 
 ## Test Coverage by SDD Requirement
 
 | SDD Section | Test Module(s) | Status |
 |-------------|---------------|--------|
-| AD-001 FastAPI/Uvicorn | test_server_scope_init | Skipped (needs fastapi) |
-| AD-002 Direct Serial CAT | test_cat_controller | 24 tests |
-| AD-003 Dirty-Field Broadcasting | test_radio_state, test_server_ws_protocol | 33 tests |
-| AD-004 Dual-Codec Audio | test_audio | 20 tests |
-| AD-005 scope_pipe Subprocess | test_scope_frame, test_scope_runtime_config, test_server_scope_init | 10 tests |
-| AD-006 Dual-Mode Spectrum | test_scope_frame, test_scope_handler_fallback | 9 tests |
-| AD-007 PTT Safety | test_server_ws_protocol (PTTSafetyLogicTests) | 8 tests |
+| AD-001 FastAPI/Uvicorn | test_server_scope_init | 2 tests |
+| AD-002 Direct Serial CAT | test_cat_controller | 29 tests |
+| AD-003 Dirty-Field Broadcasting | test_radio_state, test_server_ws_protocol | 33+ tests |
+| AD-004 Dual-Codec Audio | test_audio | 48 tests |
+| AD-005 scope_pipe Subprocess | test_scope_frame, test_scope_runtime_config, test_server_scope_init, test_scope_pipe_restart | 12 tests |
+| AD-006 Dual-Mode Spectrum | test_scope_frame, test_scope_handler_fallback | 8 tests |
+| AD-007 PTT Safety | test_server_ws_protocol (PTTSafetyLogicTests) | 10 tests |
 | AD-008 PyAudio Detection | test_audio (AudioDeviceDetectionTests) | 2 tests |
-| AD-009 5-Tier Polling | test_poll_scheduler | 12 tests |
-| AD-010 Memory Channels | test_server_ws_protocol (mem messages) | 3 tests |
-| §7.2 RadioState Entity | test_radio_state | 28 tests |
-| §7.2 Config Tables | test_config | 25 tests |
-| §9.2 WS Protocol | test_server_ws_protocol (WSMessageFormatTests) | 12 tests |
-| §9.6 Polling | test_poll_scheduler | 12 tests |
-| §15 PTT Safety | test_server_ws_protocol (PTTSafetyLogicTests) | 8 tests |
-| NFR-060–065 Audio Quality | test_audio | 20 tests |
+| AD-009 7-Task Polling | test_poll_scheduler | 14 tests |
+| AD-010 Memory Channels | test_server_ws_protocol (mem messages), test_memory_recall | 6 tests |
+| §7.2 RadioState Entity | test_radio_state | 33 tests |
+| §7.2 Config Tables | test_config | 28 tests |
+| §9.2 WS Protocol | test_server_ws_protocol (WSMessageFormatTests) | 11 tests |
+| §9.6 Polling (incl. stale-read guard) | test_poll_scheduler, test_server_ws_protocol | 14+ tests |
+| §15 PTT Safety | test_server_ws_protocol (PTTSafetyLogicTests) | 10 tests |
+| NFR-060–065 Audio Quality | test_audio | 48 tests |
 | NFR-020–023 Auth/Security | test_server_ws_protocol (WSAuthTests) | 4 tests |
 
 ## Running Specific Tests
@@ -153,7 +196,7 @@ python -m unittest tests.test_config.ModeTableTests.test_bidirectional_mode_mapp
 ## Design Principles
 
 1. **No hardware required**: All tests use mocked serial, no FT-710, no USB audio, no SPI.
-2. **Fast execution**: ~160 tests in 0.01s — can run on every commit.
+2. **Fast execution**: ~223 tests in ~0.8s — can run on every commit.
 3. **Coverage by SDD**: Each test references the SDD requirement it validates.
 4. **Isolation**: Each test is self-contained; no shared mutable state.
 5. **Readable failures**: Assertion messages clearly state expected vs actual.

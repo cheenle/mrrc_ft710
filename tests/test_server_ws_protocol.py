@@ -272,6 +272,18 @@ class StateBroadcastLogicTests(unittest.TestCase):
             skip_freq_pos, cat_freq_pos,
             "skip_next_poll must be called BEFORE set_frequency",
         )
+        # Filter width changes are slow to apply; the SH0 poll must be
+        # skipped before sending the CAT command so it cannot read back the
+        # old filter width and overwrite the user's selection.
+        filter_block_start = server_source.index('elif field == "filter" or field == "filter_width":')
+        filter_block_end = server_source.index('elif field == "af_gain":')
+        filter_block = server_source[filter_block_start:filter_block_end]
+        skip_filter_pos = filter_block.index('skip_next_poll("filter_width"')
+        cat_filter_pos = filter_block.index("await cat.set_filter_width")
+        self.assertLess(
+            skip_filter_pos, cat_filter_pos,
+            "skip_next_poll must be called BEFORE set_filter_width",
+        )
 
     def test_poll_guards_against_stale_frequency_after_skip(self):
         """The IF poll must check _should_skip AFTER reading frequency,
@@ -288,6 +300,37 @@ class StateBroadcastLogicTests(unittest.TestCase):
         self.assertGreater(
             guard_idx, freq_idx,
             "Guard must appear AFTER get_frequency to catch stale reads",
+        )
+
+    def test_settings_poll_discards_stale_reads_after_query(self):
+        """_poll_settings must re-check _should_skip AFTER each query await.
+        A user set command arriving while a settings query (e.g. SH0) is in
+        flight makes the response stale (pre-command value); applying it
+        snaps the UI back to the old setting for several seconds."""
+        poll_source = Path("poll_scheduler.py").read_text()
+        start = poll_source.index("async def _poll_settings")
+        end = poll_source.index("async def _poll_slow")
+        body = poll_source[start:end]
+        query_idx = body.index("await self.cat.query(cmd")
+        guard_idx = body.index("await self._should_skip(field)", query_idx)
+        self.assertGreater(
+            guard_idx, query_idx,
+            "skip re-check must appear AFTER the query to discard stale reads",
+        )
+
+    def test_filter_set_reads_back_actual_width(self):
+        """The filter handler must read back SH0 after setting, so the UI
+        converges to the radio's actual width even if the radio silently
+        rejects an index (instead of an optimistic value lingering ~4s)."""
+        server_source = Path("server.py").read_text()
+        start = server_source.index('elif field == "filter" or field == "filter_width":')
+        end = server_source.index('elif field == "af_gain":')
+        block = server_source[start:end]
+        set_idx = block.index("await cat.set_filter_width")
+        read_idx = block.index("await cat.get_filter_width")
+        self.assertGreater(
+            read_idx, set_idx,
+            "get_filter_width read-back must come AFTER set_filter_width",
         )
 
     def test_client_server_band_lists_are_consistent(self):
