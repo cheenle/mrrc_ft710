@@ -65,9 +65,15 @@ Change `FT710_WEB_PASSWORD` before exposing the app beyond localhost.
 Start `MRRC FT-710` from the Start Menu or desktop shortcut. The launcher:
 
 1. Reads `%LOCALAPPDATA%\MRRC-FT710\ft710.env`.
-2. Starts the bundled server.
-3. Opens `http://127.0.0.1:8888` in the default browser.
-4. Stops the server when the launcher window is closed.
+2. Starts the bundled server and waits for it to answer HTTP before opening
+   `http://127.0.0.1:8888` in the default browser (up to ~15 seconds on the
+   first run).
+3. Use Ctrl-C in the launcher window for a graceful stop (audio drains and
+   PTT releases first).
+
+**Warning:** closing the launcher window with × kills both processes
+*abruptly* — there is no graceful cleanup. If the radio is transmitting, it
+can stay keyed. Always release PTT before closing the window.
 
 ## FT4222 True Spectrum
 

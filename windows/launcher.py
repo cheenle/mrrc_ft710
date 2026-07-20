@@ -5,6 +5,8 @@ import signal
 import subprocess
 import sys
 import time
+import urllib.error
+import urllib.request
 import webbrowser
 from pathlib import Path
 
@@ -52,6 +54,41 @@ def ensure_config() -> Path:
     return path
 
 
+def seed_mem_channels() -> None:
+    """Copy the bundled starter channels to the user data dir on first run."""
+    target = user_data_dir() / "mem_channels.json"
+    if target.exists():
+        return
+    bundled = app_dir() / "mem_channels.json"
+    if bundled.exists():
+        try:
+            target.write_text(bundled.read_text(encoding="utf-8"), encoding="utf-8")
+        except OSError:
+            pass
+
+
+def wait_for_server(url: str, proc: subprocess.Popen | None = None,
+                    timeout_s: float = 15.0) -> bool:
+    """Poll until the server answers HTTP (any status) or give up.
+
+    Any HTTP response — even 401 from the auth middleware — proves the
+    server is listening. Returns False on startup crash or timeout.
+    """
+    deadline = time.monotonic() + timeout_s
+    probe = url + "/api/health"
+    while time.monotonic() < deadline:
+        if proc is not None and proc.poll() is not None:
+            return False  # server exited during startup
+        try:
+            with urllib.request.urlopen(probe, timeout=2):
+                return True
+        except urllib.error.HTTPError:
+            return True
+        except (urllib.error.URLError, OSError):
+            time.sleep(0.3)
+    return False
+
+
 def load_env(path: Path) -> dict[str, str]:
     env = os.environ.copy()
     for raw in path.read_text(encoding="utf-8").splitlines():
@@ -97,6 +134,7 @@ def stop_process(proc: subprocess.Popen) -> None:
 
 def main() -> int:
     cfg = ensure_config()
+    seed_mem_channels()
     env = load_env(cfg)
     port = env.get("FT710_WEB_PORT", DEFAULT_PORT)
     host = env.get("FT710_WEB_HOST", "127.0.0.1")
@@ -117,8 +155,14 @@ def main() -> int:
         env=env,
         creationflags=creationflags,
     )
-    time.sleep(2.0)
-    webbrowser.open(url)
+    if wait_for_server(url, proc):
+        webbrowser.open(url)
+    elif proc.poll() is not None:
+        print("Server exited during startup — see messages above.")
+        return proc.returncode or 1
+    else:
+        print(f"Server did not answer within 15s; opening {url} anyway.")
+        webbrowser.open(url)
     try:
         return proc.wait()
     except KeyboardInterrupt:
