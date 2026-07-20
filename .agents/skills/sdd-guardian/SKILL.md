@@ -115,6 +115,26 @@ Short imperative summary, scoped commits (one logical change per commit).
 Git mutations only when the user asks. Hardware-dependent changes note the
 test environment (radio model, serial port, FT4222, audio device).
 
+## Superpowers integration (two layers, one lifecycle)
+
+The superpowers set (`~/.codex/skills`, wired via `extra_skill_dirs`) drives
+**process** discipline; this skill drives **content** discipline. They compose —
+never duplicate: full contract in `${KIMI_SKILL_DIR}/references/workflow-integration.md`.
+
+| Phase | Superpowers skill | SDD-Guardian action |
+|---|---|---|
+| 创意/需求 | `brainstorming` | `brief --task`; spec must cite SDD refs → verify with `trace` |
+| 计划 | `writing-plans` / `create-plan` | `brief <files>`; plan includes affected chapters + doc-sync task |
+| 执行 | `executing-plans` / `subagent-driven-development` / `test-driven-development` | hook auto-blocks violations; paste `context` output into subagent briefs |
+| 调试 | `systematic-debugging` | read `references/constraint-catalog.md` FIRST — it is this project's incident history |
+| 验证 | `verification-before-completion` | gate = unittest green + `check --staged` clean + Phase 5 done |
+| 评审 | `requesting-code-review` / `receiving-code-review` | attach `brief` output; constraints.json as review checklist |
+| 收尾 | `finishing-a-development-branch` | Phase 5 doc-sync + SDD/14 version entry before merge/PR |
+
+Priority on conflict (per superpowers' own rule that user instructions outrank
+skills): `SDD/`, `AGENTS.md`, and `constraints.json` are project law — hook
+blocks and SDD constraints always win over any workflow-skill default.
+
 ## Harness reference
 
 ```
@@ -123,6 +143,7 @@ sdd_context.py brief <paths> [--task]   # FULL engineering brief: constraints +
                                         #   live-extracted ADs/NFRs/UCs/risks/issues
 sdd_context.py context <paths> [--task] # fast view: SDD refs + constraints only
 sdd_context.py sdd <AD-011|NFR-060|UC-005|R4|I6|SC8|9.6|keyword>  # one item
+sdd_context.py trace <spec-or-plan.md>  # spec/plan ↔ SDD citation audit (advisory)
 sdd_context.py check <paths>|--staged   # pattern scan; exit 2 on block violations
 sdd_context.py hook                     # PreToolUse mode (stdin JSON), exit 2 blocks
 ```

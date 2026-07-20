@@ -22,6 +22,7 @@ python3 $H brief <文件>          # 动手前:该文件的完整工程简报
                                  # (约束 + AD 全文 + NFR + 用例 + 风险/开放问题,实时切片自 SDD)
 python3 $H brief --task "任务"    # 按主题拉简报(支持中文关键词)
 python3 $H sdd AD-011            # 单条查询:AD-xxx / NFR-xxx / UC-xxx / Rn / In / SCn / An / 9.6 / 关键词
+python3 $H trace <spec/plan.md>  # superpowers spec/plan 的 SDD 引用审计(提示缺失引用,不阻断)
 python3 $H context <文件>        # 快速视图:只看约束,不看 SDD 正文
 python3 $H check --staged        # 提交前:扫暂存区,exit 2 = 有阻断违规
 python3 $H check <文件>          # 扫指定文件
@@ -43,9 +44,14 @@ python3 $H prime                 # 黄金规则摘要(hook 每次会话自动跑
 - SDD 正文更新 → 什么都不用做,`brief`/`sdd` 实时切片自动呈现新内容
 - 改完跑 `venv/bin/python -m unittest tests.test_sdd_harness`(27 个测试守护 harness 本身)
 
+## 与 superpowers 的关系(两层融合)
+
+superpowers 管**过程**(头脑风暴→计划→执行→评审→收尾),sdd-guardian 管**内容**(SDD 约束/需求/文档同步)。冲突时 SDD/AGENTS.md/constraints.json 是项目法律,永远优先。每个 superpowers 阶段挂的 guardian 动作、spec↔SDD 引用规则见 `references/workflow-integration.md`;常用一条:`brief` 拉简报,`trace` 审 spec 引用。
+
 ## 参考文档
 
-- `SKILL.md` — 六阶段生命周期(简报→设计→实现→测试→验证→文档同步/提交)
+- `SKILL.md` — 六阶段生命周期(简报→设计→实现→测试→验证→文档同步/提交)+ superpowers 阶段映射表
+- `references/workflow-integration.md` — 两套技能的融合契约(分析、仲裁、映射、边界)
 - `references/constraint-catalog.md` — 全部规则 + 事故渊源
 - `references/lifecycle.md` — 每阶段检查清单
 - 冲突时以 `SDD/` 原文为准

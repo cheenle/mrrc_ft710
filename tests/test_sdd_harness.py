@@ -224,6 +224,55 @@ class KnowledgeCliTests(unittest.TestCase):
         self.assertIn("AD-009", r.stdout)
 
 
+class TraceCommandTests(unittest.TestCase):
+    """trace: spec/plan ↔ SDD citation audit (Superpowers bridge)."""
+
+    def _write_spec(self, name: str, content: str) -> str:
+        p = REPO_ROOT / name
+        p.write_text(content, encoding="utf-8")
+        self.addCleanup(p.unlink)
+        return str(p)
+
+    def test_trace_reports_missing_expected_refs(self):
+        spec = self._write_spec(
+            "_trace_test_spec.md",
+            "# Filter redesign\n\nTouches cat_controller.py and poll_scheduler.py.\n",
+        )
+        r = run_cli("trace", spec)
+        self.assertEqual(r.returncode, 0)
+        self.assertIn("cat_controller.py", r.stdout)
+        self.assertIn("expected but NOT cited", r.stdout)
+        self.assertIn("AD-002", r.stdout)  # cat-serial topic ref
+
+    def test_trace_acknowledges_cited_refs(self):
+        spec = self._write_spec(
+            "_trace_test_spec2.md",
+            "# CAT change\n\nImplements AD-002 and AD-014 for cat_controller.py.\n",
+        )
+        r = run_cli("trace", spec)
+        self.assertIn("AD-002", r.stdout)
+        self.assertIn("AD-014", r.stdout)
+        # Both cited → must not appear in the missing list
+        missing = r.stdout.split("expected but NOT cited")[-1] \
+            if "expected but NOT cited" in r.stdout else ""
+        self.assertNotIn("AD-002", missing)
+
+    def test_trace_handles_missing_file(self):
+        r = run_cli("trace", "no/such/spec.md")
+        self.assertEqual(r.returncode, 0)
+        self.assertIn("not a file", r.stderr)
+
+    def test_trace_ignores_version_numbers(self):
+        """Version strings like 1.0 / V1.7 are not § citations — only §X.Y counts."""
+        spec = self._write_spec(
+            "_trace_test_spec3.md",
+            "# Notes\n\nServer V1.7, config 1.0, runtime 3.12 — no SDD refs here.\n",
+        )
+        r = run_cli("trace", spec)
+        self.assertIn("SDD refs cited (0)", r.stdout)
+        self.assertIn("nothing to verify", r.stdout)
+
+
 from contextlib import contextmanager
 
 @contextmanager

@@ -102,6 +102,12 @@
       "globs": [],
       "keywords": ["scope", "requirement", "feature", "milestone", "需求", "范围", "里程碑"],
       "refs": ["sec:3.2", "sec:3.3", "sec:3.4", "sec:4.5", "sec:4.6", "sec:13.1", "sec:13.6"]
+    },
+    {
+      "id": "specs-plans",
+      "globs": ["docs/superpowers/**"],
+      "keywords": ["spec", "plan", "brainstorm", "设计稿", "计划", "头脑风暴"],
+      "refs": ["sec:3.2", "sec:3.3", "sec:3.4", "issue:I6", "issue:I7", "nfr:NFR-051"]
     }
   ]
 }

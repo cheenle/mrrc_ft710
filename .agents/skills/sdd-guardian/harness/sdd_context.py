@@ -17,6 +17,8 @@ Commands:
                                  risks, issues) extracted live from SDD/.
   sdd <REF|term>                 Print one SDD item (AD-011, NFR-060, UC-005,
                                  R4, I6, SC8, A4, 9.6, ch15) or search terms.
+  trace <spec-or-plan.md>        Spec/plan ↔ SDD traceability audit (advisory):
+                                 files it references vs SDD refs it should cite.
   check [PATHS...] [--staged]    Pattern-scan content; exit 2 if any block-severity hit.
   hook                           PreToolUse hook mode: read event JSON on stdin,
                                  inspect the pending Edit/Write, exit 2 + reason on block.
@@ -280,6 +282,75 @@ def _constraints_block(reg: dict, path: str) -> None:
         print(f"    {tag} [{r['severity']}] {r['id']}: {r['message']}")
 
 
+# ── Spec/plan ↔ SDD traceability (Superpowers bridge) ──────────────
+
+_FILE_MENTION_RX = re.compile(r"[\w\-./]+\.(?:py|js|html|css|toml|json|sh)\b")
+
+
+def _refs_present(text: str) -> set[str]:
+    """SDD ref idents found in a document (AD-014, NFR-060, UC-005, R4, I6,
+    SC8, A4, §9.6). Section refs count only in the explicit §X.Y form —
+    a bare '9.6' is indistinguishable from a version number."""
+    found: set[str] = set()
+    for m in re.findall(r"\b(AD-\d{3}|NFR-\d{3}|UC-\d{3}|SC\d|R\d|I\d|A\d)\b", text):
+        found.add(m)
+    for m in re.findall(r"§\s*(\d{1,2}\.\d{1,2})", text):
+        found.add(m)
+    return found
+
+
+def _expected_refs(idx: dict, repo_files: list[str]) -> list[str]:
+    """Refs the mentioned files route to (idents only, deduped, order-stable)."""
+    out: list[str] = []
+    for f in repo_files:
+        for t in topics_for_path(idx, f):
+            for r in t["refs"]:
+                ident = r.split(":", 1)[1]
+                if ident not in out:
+                    out.append(ident)
+    return out
+
+
+def cmd_trace(reg: dict, idx: dict, paths: list[str]) -> int:
+    """Check a spec/plan document's SDD traceability (advisory).
+
+    Superpowers specs/plans (docs/superpowers/) must cite the SDD refs of the
+    areas they touch — this lists cited vs expected-but-missing refs.
+    """
+    if not paths:
+        print("usage: trace <spec-or-plan.md> [...]", file=sys.stderr)
+        return 1
+    for raw in paths:
+        p = Path(raw)
+        if not p.is_file():
+            print(f"── {raw}: not a file", file=sys.stderr)
+            continue
+        text = p.read_text(encoding="utf-8", errors="replace")
+        # Resolve mentioned repo files (as-written path or top-level basename).
+        repo_files: list[str] = []
+        for m in dict.fromkeys(_FILE_MENTION_RX.findall(text)):
+            if (PROJECT_ROOT / m).is_file():
+                repo_files.append(norm(m))
+            elif "/" not in m and (PROJECT_ROOT / m).is_file():
+                repo_files.append(norm(m))
+        cited = _refs_present(text)
+        expected = _expected_refs(idx, repo_files)
+        missing = [r for r in expected if r not in cited]
+        print(f"── {norm(str(p))} ──")
+        print(f"  files referenced: {', '.join(repo_files) or '(none resolved)'}")
+        cited_sorted = sorted(cited)
+        print(f"  SDD refs cited ({len(cited_sorted)}): {', '.join(cited_sorted) or '(none)'}")
+        if missing:
+            print(f"  expected but NOT cited ({len(missing)}): {', '.join(missing)}")
+            print("  → resolve with: sdd <id>  (e.g. sdd AD-014) and cite the relevant ones")
+        elif not expected:
+            print("  (no routed SDD expectations — nothing to verify)")
+        else:
+            print("  ✓ all routed SDD refs are cited")
+        print("")
+    return 0
+
+
 # ── Commands ────────────────────────────────────────────────────────
 
 def cmd_prime(reg: dict) -> int:
@@ -493,6 +564,8 @@ def main(argv: list[str]) -> int:
                   file=sys.stderr)
             return 1
         return cmd_sdd(idx, " ".join(rest))
+    if cmd == "trace":
+        return cmd_trace(reg, idx, rest)
     if cmd == "check":
         staged = "--staged" in rest
         return cmd_check(reg, [a for a in rest if not a.startswith("--")], staged)
