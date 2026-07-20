@@ -7,10 +7,11 @@
 | 机制 | 状态 | 生效时机 |
 |------|------|----------|
 | 项目级 skill(`.agents/skills/sdd-guardian/`) | 已随仓库提交 | 新 session 自动扫描发现;涉及编码任务时 agent 自动调用 |
+| Superpowers 工作流技能(17 个,`~/.codex/skills/`) | 已通过 `extra_skill_dirs` 挂入 `~/.kimi-code/config.toml` | 全部 session 默认可调用(brainstorming、TDD、systematic-debugging、writing-plans 等驱动工作流;sdd-guardian 管设计约束,两者互补) |
 | SessionStart hook | 已装入 `~/.kimi-code/config.toml` | 每次开会话自动注入黄金规则摘要 |
 | PreToolUse hook | 已装入 `~/.kimi-code/config.toml` | 每次 Edit/Write 前自动检查,阻断级违规直接拒绝 |
 
-手动调用(通常不需要):`/skill:sdd-guardian [任务描述]`
+手动调用(通常不需要):`/skill:sdd-guardian [任务描述]`,superpowers 技能同理(如 `/skill:brainstorming`)。
 
 ## 日常命令(harness CLI)
 
