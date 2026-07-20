@@ -37,12 +37,13 @@ SDD (Software Design Description) in `SDD/` — 15-chapter IBM TeamSD documentat
 
 `.agents/skills/sdd-guardian/` turns the SDD into enforceable engineering guardrails for any agent working in this repo (auto-discovered as a project-level skill):
 
-- `SKILL.md` — 6-phase lifecycle (context → design → implement → test → verify → doc-sync/commit) plus the golden-rule constraint table.
+- `SKILL.md` — 6-phase lifecycle (brief → design → implement → test → verify → doc-sync/commit) plus the golden-rule constraint table.
 - `harness/constraints.json` — machine-readable constraint registry distilled from SDD AD-001…AD-015, incident history (DN freq-drift, PR errata, SH format, 16kHz crackling, V1.7 stale-read race), and open issues I6/I7.
-- `harness/sdd_context.py` — stdlib-only CLI: `prime` (session digest), `context <paths>|--task` (SDD refs + rules per file/topic), `check <paths>|--staged` (exit 2 on block violations), `hook` (PreToolUse mode).
+- `harness/index.json` — knowledge routing index: maps files/topics to SDD refs across all 15 chapters (ADs, NFR-001…065, UC-001…008, risks R1–R8, assumptions A1–A6, issues I1–I7, success criteria SC1–SC9). Holds no content — refs are sliced live from `SDD/*.md`, so it never goes stale.
+- `harness/sdd_context.py` — stdlib-only CLI: `prime` (session digest), `brief <paths>|--task` (full engineering brief: constraints + live-extracted SDD sections), `sdd <id|keyword>` (one item: AD-011, NFR-060, UC-005, R4, I6, 9.6…), `context` (fast constraints view), `check <paths>|--staged` (exit 2 on block violations), `hook` (PreToolUse mode).
 - `references/` — full constraint catalog with rationale + phase checklists.
 
-Before editing, run `python3 .agents/skills/sdd-guardian/harness/sdd_context.py context <files>`; before committing, `... check --staged` must be clean. To make enforcement automatic (session-start context injection + pre-edit blocking), install the hooks once: `python3 .agents/skills/sdd-guardian/harness/install_hooks.py` (appends `[[hooks]]` to `~/.kimi-code/config.toml`, idempotent, backs up first). Behavior changes still owe the doc-sync described in SKILL.md Phase 5 (SDD chapters + version history + this file + README + tests/README).
+Before editing, run `python3 .agents/skills/sdd-guardian/harness/sdd_context.py brief <files>`; before committing, `... check --staged` must be clean. To make enforcement automatic (session-start context injection + pre-edit blocking), install the hooks once: `python3 .agents/skills/sdd-guardian/harness/install_hooks.py` (appends `[[hooks]]` to `~/.kimi-code/config.toml`, idempotent, backs up first). Behavior changes still owe the doc-sync described in SKILL.md Phase 5 (SDD chapters + version history + this file + README + tests/README).
 
 ## Build, Test, and Development Commands
 

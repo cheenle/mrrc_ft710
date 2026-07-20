@@ -5,14 +5,20 @@ consciously justify skipping it.
 
 ## 0. Context
 
-- [ ] Ran `sdd_context.py context <paths>` for every file I expect to touch
-- [ ] Ran `sdd_context.py context --task "<description>"` for topical rules
+- [ ] Ran `sdd_context.py brief <paths>` for every file I expect to touch
+      (constraints + live-extracted ADs, NFRs, use cases, risks, issues)
+- [ ] Ran `sdd_context.py brief --task "<description>"` for topical coverage
+- [ ] Pulled individual items with `sdd <id>` where the brief truncated them
 - [ ] Read the SDD chapters the harness pointed at (non-trivial changes)
 
 ## 1. Design
 
+- [ ] Requirements traceability: named the SC/NFR this change serves or affects;
+      flagged any NFR-target risk (latency/bandwidth/safety) to the user up front
 - [ ] Identified affected ADs (AD-001…AD-015); contradictions get an AD amendment in the same change
+- [ ] Checked feasibility (§13): risks R1–R8 / assumptions A1–A6 this change depends on
 - [ ] Checked open issues I6/I7 don't undermine the design
+- [ ] Walked affected use cases (UC-001…008) main flow + exceptions
 - [ ] PTT/TX-adjacent work reviewed against Chapter 15 layered release model
 - [ ] Non-trivial work went through plan mode with concrete file/step lists
 

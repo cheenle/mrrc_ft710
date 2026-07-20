@@ -141,6 +141,89 @@ class HarnessCliTests(unittest.TestCase):
                          f"core files trip block rules:\n{r.stderr}")
 
 
+class KnowledgeIndexTests(unittest.TestCase):
+    """index.json routes into the SDD; every ref must resolve to live content."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.idx = json.loads((HARNESS / "index.json").read_text(encoding="utf-8"))
+
+    def test_all_chapter_files_exist(self):
+        for num, ch in self.idx["chapters"].items():
+            self.assertTrue((REPO_ROOT / ch["file"]).is_file(),
+                            f"chapter {num} file missing: {ch['file']}")
+
+    def test_every_topic_ref_resolves(self):
+        """All routed refs (ad/nfr/uc/risk/issue/sc/assume/sec) slice real SDD text."""
+        import subprocess as sp
+        for topic in self.idx["topics"]:
+            for ref in topic["refs"]:
+                r = run_cli("sdd", ref.split(":", 1)[1])
+                self.assertEqual(r.returncode, 0,
+                                 f"topic {topic['id']} has dangling ref {ref}")
+
+    def test_topics_have_keywords_or_globs(self):
+        for topic in self.idx["topics"]:
+            self.assertTrue(topic["globs"] or topic["keywords"],
+                            f"topic {topic['id']} is unreachable")
+            self.assertTrue(topic["refs"], f"topic {topic['id']} routes nowhere")
+
+    def test_knowledge_coverage_of_core_areas(self):
+        ids = {t["id"] for t in self.idx["topics"]}
+        for area in ("cat-serial", "polling-state", "ptt-tx-safety",
+                     "audio-pipeline", "scope-spectrum", "frontend-ui",
+                     "auth-security", "project-scope"):
+            self.assertIn(area, ids)
+
+
+class KnowledgeCliTests(unittest.TestCase):
+    """brief/sdd commands surface requirements, decisions, feasibility — not just rules."""
+
+    def test_sdd_extracts_architecture_decision(self):
+        r = run_cli("sdd", "AD-011")
+        self.assertEqual(r.returncode, 0)
+        self.assertIn("44.1", r.stdout)
+        self.assertIn("Rationale", r.stdout)
+
+    def test_sdd_extracts_nfr_row_with_context(self):
+        r = run_cli("sdd", "NFR-060")
+        self.assertEqual(r.returncode, 0)
+        self.assertIn("NFR-060", r.stdout)
+        self.assertIn("5.7", r.stdout)  # enclosing section header included
+
+    def test_sdd_extracts_use_case(self):
+        r = run_cli("sdd", "UC-005")
+        self.assertEqual(r.returncode, 0)
+        self.assertIn("UC-005", r.stdout)
+
+    def test_sdd_extracts_open_issue(self):
+        r = run_cli("sdd", "I6")
+        self.assertIn("multi-client", r.stdout)
+
+    def test_sdd_extracts_chapter_section(self):
+        r = run_cli("sdd", "9.6")
+        self.assertEqual(r.returncode, 0)
+        self.assertIn("PollScheduler", r.stdout)
+
+    def test_brief_includes_decisions_requirements_and_risks(self):
+        r = run_cli("brief", "audio_handler.py")
+        self.assertEqual(r.returncode, 0)
+        self.assertIn("AD-011", r.stdout)     # architecture decision
+        self.assertIn("NFR-060", r.stdout)    # requirement
+        self.assertIn("R3", r.stdout)         # feasibility risk
+        self.assertIn("Constraints", r.stdout)
+
+    def test_brief_task_chinese_keywords(self):
+        r = run_cli("brief", "--task", "增加一个新的 CAT 命令")
+        self.assertEqual(r.returncode, 0)
+        self.assertIn("AD-002", r.stdout)
+
+    def test_brief_poll_scheduler_has_stale_guard_and_ad009(self):
+        r = run_cli("brief", "poll_scheduler.py")
+        self.assertIn("poll-stale-guard", r.stdout)
+        self.assertIn("AD-009", r.stdout)
+
+
 from contextlib import contextmanager
 
 @contextmanager

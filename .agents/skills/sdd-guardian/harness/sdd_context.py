@@ -1,11 +1,22 @@
 #!/usr/bin/env python3
 """SDD context harness for the mrrc_ft710 codebase.
 
-Reads harness/constraints.json (machine-readable registry distilled from
-SDD/ + AGENTS.md) and provides four commands:
+Two knowledge sources, both living in this directory:
+  constraints.json — machine-readable enforcement rules (block/warn/info)
+  index.json       — routing index into the SDD knowledge base (requirements,
+                     context, architecture decisions, risks, use cases...)
 
+The index holds NO duplicated content: refs are resolved by slicing the live
+SDD/*.md files, so this harness can never drift stale from the design record.
+
+Commands:
   prime                          Compact session-start digest (golden rules).
-  context [PATHS...] [--task T]  SDD refs + applicable constraints for files/topics.
+  context [PATHS...] [--task T]  SDD refs + applicable constraints (fast view).
+  brief [PATHS...] [--task T]    Full engineering brief: constraints PLUS the
+                                 relevant SDD sections (ADs, NFRs, use cases,
+                                 risks, issues) extracted live from SDD/.
+  sdd <REF|term>                 Print one SDD item (AD-011, NFR-060, UC-005,
+                                 R4, I6, SC8, A4, 9.6, ch15) or search terms.
   check [PATHS...] [--staged]    Pattern-scan content; exit 2 if any block-severity hit.
   hook                           PreToolUse hook mode: read event JSON on stdin,
                                  inspect the pending Edit/Write, exit 2 + reason on block.
@@ -21,11 +32,20 @@ from pathlib import Path
 
 HARNESS_DIR = Path(__file__).resolve().parent
 REGISTRY_PATH = HARNESS_DIR / "constraints.json"
+INDEX_PATH = HARNESS_DIR / "index.json"
 PROJECT_ROOT = HARNESS_DIR.parents[3]
+
+BRIEF_REF_LINE_CAP = 40     # per extracted SDD section
+BRIEF_TOTAL_LINE_CAP = 300  # whole knowledge section
 
 
 def load_registry() -> dict:
     with open(REGISTRY_PATH, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def load_index() -> dict:
+    with open(INDEX_PATH, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -112,14 +132,163 @@ def print_violations(violations: list[dict], stream) -> None:
         )
 
 
+# ── SDD knowledge extraction (live slices from SDD/*.md) ───────────
+
+def _read_chapter(idx: dict, num: str) -> tuple[str, list[str]] | None:
+    ch = idx["chapters"].get(str(num))
+    if not ch:
+        return None
+    p = PROJECT_ROOT / ch["file"]
+    if not p.is_file():
+        return None
+    return ch["file"], p.read_text(encoding="utf-8").splitlines()
+
+
+def _slice_heading(lines: list[str], heading_rx: str, level: str) -> list[str]:
+    """Slice from the heading matching heading_rx to the next heading of the
+    same or higher level (level='##' matches '## ' starts; '###' matches '### '
+    and '## ' stops; '#' stops on any heading)."""
+    start = None
+    for i, line in enumerate(lines):
+        if re.match(heading_rx, line):
+            start = i
+            break
+    if start is None:
+        return []
+    stop = len(lines)
+    for j in range(start + 1, len(lines)):
+        l = lines[j]
+        if level == "#":
+            if l.startswith("#"):
+                stop = j
+                break
+        elif level == "##":
+            if l.startswith("## ") or l.startswith("# "):
+                stop = j
+                break
+        else:  ### stops at ###, ##, #
+            if l.startswith("### ") or l.startswith("## ") or l.startswith("# "):
+                stop = j
+                break
+    return lines[start:stop]
+
+
+def _extract_row(lines: list[str], row_id: str) -> list[str]:
+    """Extract a table row by its first-column ID, with the enclosing
+    section heading and table header for readability."""
+    for i, line in enumerate(lines):
+        if line.startswith(f"| {row_id} ") or line.startswith(f"| {row_id}|"):
+            section = None
+            header = None
+            for j in range(i - 1, -1, -1):
+                lj = lines[j]
+                if header is None and lj.startswith("| ID"):
+                    header = lj
+                if lj.startswith("## ") and not lj.startswith("###"):
+                    section = lj
+                    break
+            out = []
+            if section:
+                out.append(section)
+            if header:
+                out.append(header)
+            out.append(line)
+            return out
+    return []
+
+
+def resolve_ref(idx: dict, ref: str) -> dict | None:
+    """Resolve a typed ref (ad:/nfr:/uc:/risk:/issue:/sc:/assume:/sec:/ch:)
+    to extracted SDD content. Returns {ref, file, lines} or None."""
+    if ":" not in ref:
+        return None
+    kind, ident = ref.split(":", 1)
+    kind = kind.strip().lower()
+    ident = ident.strip()
+    chapter_for = {
+        "ad": "8", "uc": "6", "nfr": "5", "risk": "13",
+        "issue": "13", "assume": "13", "sc": "3",
+    }
+    if kind in ("sec", "ch"):
+        num = ident.split(".")[0]
+        got = _read_chapter(idx, num)
+        if not got:
+            return None
+        file, lines = got
+        if kind == "ch" or "." not in ident:
+            body = lines  # whole chapter
+        else:
+            body = _slice_heading(lines, rf"^##\s+{re.escape(ident)}(\s|$)", "##")
+            if not body:
+                return None
+        return {"ref": ref, "file": file, "lines": body}
+    ch_num = chapter_for.get(kind)
+    if not ch_num:
+        return None
+    got = _read_chapter(idx, ch_num)
+    if not got:
+        return None
+    file, lines = got
+    if kind == "ad":
+        body = _slice_heading(lines, rf"^##\s+{re.escape(ident)}\b", "##")
+    elif kind == "uc":
+        body = _slice_heading(lines, rf"^###\s+{re.escape(ident)}\b", "###")
+    else:  # nfr / risk / issue / assume / sc → table rows
+        body = _extract_row(lines, ident)
+    if not body:
+        return None
+    return {"ref": ref, "file": file, "lines": body}
+
+
+def topics_for_path(idx: dict, path: str) -> list[dict]:
+    return [t for t in idx["topics"] if t["globs"] and matches_any(path, t["globs"])]
+
+
+def topics_for_task(idx: dict, task: str) -> list[dict]:
+    words = {w.lower() for w in re.findall(r"[A-Za-z0-9_\-\u4e00-\u9fff]{2,}", task)}
+    out = []
+    for t in idx["topics"]:
+        hay = {t["id"].lower()} | {k.lower() for k in t["keywords"]}
+        if words & hay:
+            out.append(t)
+    return out
+
+
+def _print_extracted(item: dict, cap: int = BRIEF_REF_LINE_CAP) -> int:
+    """Print one resolved ref; returns lines printed."""
+    lines = item["lines"]
+    shown = lines[:cap]
+    print(f"┌─ {item['ref']}  ({item['file']})")
+    n = 0
+    for l in shown:
+        print("│ " + l)
+        n += 1
+    if len(lines) > cap:
+        print(f"│ … ({len(lines) - cap} more lines — read {item['file']})")
+        n += 1
+    print("└────")
+    return n
+
+
+def _constraints_block(reg: dict, path: str) -> None:
+    rules = applicable_rules(reg, path)
+    if not rules:
+        return
+    print("  Constraints:")
+    for r in rules:
+        tag = {"block": "✗", "warn": "!", "info": "i"}[r["severity"]]
+        print(f"    {tag} [{r['severity']}] {r['id']}: {r['message']}")
+
+
 # ── Commands ────────────────────────────────────────────────────────
 
 def cmd_prime(reg: dict) -> int:
     blocks = [r for r in reg["rules"] if r["severity"] == "block"]
     print("═══ SDD-GUARDIAN — mrrc_ft710 design harness (SDD " + reg["sdd_version"] + ") ═══")
-    print("This repo is documented by SDD/ (IBM TeamSD, 15 chapters). Before changing")
-    print("code, load constraints for the files you touch:")
-    print("  python3 .agents/skills/sdd-guardian/harness/sdd_context.py context <paths>")
+    print("This repo is documented by SDD/ (IBM TeamSD, 15 chapters: requirements,")
+    print("context, decisions, feasibility...). Before changing code, pull the full")
+    print("engineering brief for the files you touch:")
+    print("  python3 .agents/skills/sdd-guardian/harness/sdd_context.py brief <paths>")
     print("Validate a change before committing:")
     print("  python3 .agents/skills/sdd-guardian/harness/sdd_context.py check --staged")
     print("")
@@ -127,47 +296,110 @@ def cmd_prime(reg: dict) -> int:
     for r in blocks:
         print(f"  ✗ {r['id']}: {r['title']}  [{r['sdd_ref']}]")
     print("")
-    print("Lifecycle: context → design (check ADs/open issues I6,I7) → implement")
+    print("Lifecycle: brief → design (ADs, NFRs, risks, open issues I6/I7) → implement")
     print("(minimal diffs, module conventions) → test (unittest, no hardware, sync")
     print("tests/README) → doc-sync (SDD chapters + 14-version-history + AGENTS.md")
     print("+ README) → commit (imperative, scoped, ask before git mutations).")
     return 0
 
 
-def cmd_context(reg: dict, paths: list[str], task: str | None) -> int:
-    seen_maps: set[int] = set()
+def cmd_context(reg: dict, idx: dict, paths: list[str], task: str | None) -> int:
     for raw in paths:
         p = norm(raw)
         print(f"── {p} ──")
-        matched = False
-        for i, entry in enumerate(reg["context_map"]):
-            if matches_any(p, entry["globs"]) and i not in seen_maps:
-                seen_maps.add(i)
-                matched = True
-                print("  SDD: " + ", ".join(entry["sdd_refs"]))
-                print("  " + entry["notes"])
-        rules = [r for r in applicable_rules(reg, p) if r["severity"] != "info" or r["patterns"] == []]
-        if rules:
-            print("  Constraints:")
-            for r in rules:
-                tag = {"block": "✗", "warn": "!", "info": "i"}[r["severity"]]
-                print(f"    {tag} [{r['severity']}] {r['id']}: {r['message']}")
-        if not matched and not rules:
+        topics = topics_for_path(idx, p)
+        refs: list[str] = []
+        for t in topics:
+            refs.extend(r for r in t["refs"] if r not in refs)
+        if refs:
+            print("  SDD: " + ", ".join(refs))
+        _constraints_block(reg, p)
+        if not refs and not applicable_rules(reg, p):
             print("  (no specific SDD mapping — general conventions apply)")
         print("")
     if task:
-        kws = {w.lower() for w in re.findall(r"[A-Za-z0-9_\-]{4,}", task)}
-        hits = []
-        for r in reg["rules"]:
-            hay = f"{r['id']} {r['title']} {r['message']}".lower()
-            if kws & set(re.findall(r"[a-z0-9_\-]{4,}", hay)):
-                hits.append(r)
-        if hits:
-            print(f"── constraints relevant to: {task!r} ──")
-            for r in hits:
-                tag = {"block": "✗", "warn": "!", "info": "i"}[r["severity"]]
-                print(f"  {tag} [{r['severity']}] {r['id']} ({r['sdd_ref']}): {r['message']}")
+        topics = topics_for_task(idx, task)
+        if topics:
+            print(f"── SDD topics relevant to: {task!r} ──")
+            for t in topics:
+                print(f"  {t['id']}: " + ", ".join(t["refs"]))
+            print("  → run `brief --task ...` to get the full extracted sections")
     return 0
+
+
+def cmd_brief(reg: dict, idx: dict, paths: list[str], task: str | None) -> int:
+    refs: list[str] = []
+    if paths:
+        for raw in paths:
+            p = norm(raw)
+            print(f"══ {p} ══")
+            for t in topics_for_path(idx, p):
+                for r in t["refs"]:
+                    if r not in refs:
+                        refs.append(r)
+            _constraints_block(reg, p)
+            print("")
+    if task:
+        for t in topics_for_task(idx, task):
+            for r in t["refs"]:
+                if r not in refs:
+                    refs.append(r)
+        print(f"══ task: {task} ══")
+        print("")
+    if not refs:
+        print("No SDD topics matched — try `sdd <term>` to search, or read SDD/README.md.")
+        return 0
+    print(f"── SDD KNOWLEDGE ({len(refs)} refs, extracted live from SDD/) ──\n")
+    total = 0
+    for r in refs:
+        item = resolve_ref(idx, r)
+        if not item:
+            print(f"┌─ {r}\n│ (unresolved — check index.json vs SDD/)\n└────")
+            continue
+        remaining = BRIEF_TOTAL_LINE_CAP - total
+        if remaining <= 10:
+            print(f"… budget reached; resolve remaining refs individually: `sdd {r}`")
+            break
+        total += _print_extracted(item, cap=min(BRIEF_REF_LINE_CAP, remaining))
+        print("")
+    return 0
+
+
+def cmd_sdd(idx: dict, term: str) -> int:
+    t = term.strip()
+    # Exact ref forms
+    m = re.match(r"^(AD-\d+|NFR-\d+|UC-\d+|R\d+|I\d+|SC\d+|A\d+)$", t, re.I)
+    if m:
+        ident = m.group(1).upper()
+        kind = {"AD": "ad", "NFR": "nfr", "UC": "uc", "R": "risk",
+                "I": "issue", "SC": "sc", "A": "assume"}[re.match(r"[A-Z]+", ident).group(0)]
+        item = resolve_ref(idx, f"{kind}:{ident}")
+        if item:
+            _print_extracted(item, cap=200)
+            return 0
+        print(f"not found: {ident}", file=sys.stderr)
+        return 1
+    m = re.match(r"^(?:ch)?(\d{1,2})(?:\.(\d+))?$", t, re.I)
+    if m:
+        ref = f"sec:{t[2:]}" if t.startswith("sec:") else (
+            f"ch:{m.group(1)}" if not m.group(2) else f"sec:{m.group(1)}.{m.group(2)}")
+        item = resolve_ref(idx, ref)
+        if item:
+            _print_extracted(item, cap=200)
+            return 0
+        print(f"not found: {t}", file=sys.stderr)
+        return 1
+    # Free-text search over topics and refs
+    topics = topics_for_task(idx, t)
+    if topics:
+        print(f"topics matching {t!r}:")
+        for tp in topics:
+            print(f"  {tp['id']}: " + ", ".join(tp["refs"]))
+        print("\nresolve individually: sdd AD-014 | sdd NFR-060 | sdd 9.6 | brief --task ...")
+        return 0
+    print(f"no match for {t!r} — try an AD/NFR/UC id, a section like 9.6, or a keyword",
+          file=sys.stderr)
+    return 1
 
 
 def cmd_check(reg: dict, paths: list[str], staged: bool) -> int:
@@ -239,6 +471,7 @@ def cmd_hook(reg: dict) -> int:
 
 def main(argv: list[str]) -> int:
     reg = load_registry()
+    idx = load_index()
     args = argv[1:]
     if not args:
         print(__doc__)
@@ -246,13 +479,20 @@ def main(argv: list[str]) -> int:
     cmd, rest = args[0], args[1:]
     if cmd == "prime":
         return cmd_prime(reg)
-    if cmd == "context":
+    if cmd in ("context", "brief"):
         task = None
         if "--task" in rest:
             i = rest.index("--task")
             task = " ".join(rest[i + 1:])
             rest = rest[:i]
-        return cmd_context(reg, rest, task)
+        fn = cmd_context if cmd == "context" else cmd_brief
+        return fn(reg, idx, rest, task)
+    if cmd == "sdd":
+        if not rest:
+            print("usage: sdd <AD-xxx|NFR-xxx|UC-xxx|Rn|In|SCn|An|N.N|chNN|term>",
+                  file=sys.stderr)
+            return 1
+        return cmd_sdd(idx, " ".join(rest))
     if cmd == "check":
         staged = "--staged" in rest
         return cmd_check(reg, [a for a in rest if not a.startswith("--")], staged)

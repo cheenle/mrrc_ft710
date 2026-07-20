@@ -1,41 +1,57 @@
 ---
 name: sdd-guardian
-description: SDD-driven software-engineering lifecycle guardrails for the mrrc_ft710 FT-710 web-control codebase — enforces SDD architecture decisions, CAT/audio/polling constraints, testing and documentation sync on every code change
+description: SDD-driven engineering lifecycle for mrrc_ft710 — full design context (requirements/NFRs, use cases, architecture decisions, feasibility risks) plus enforcement of CAT/audio/polling/PTT constraints, testing and documentation sync on every code change
 type: prompt
-whenToUse: When creating, modifying, reviewing, or debugging code in this repository; when planning features or refactors; when the change touches CAT commands, audio, polling, PTT, state, WebSocket protocol, or frontend UI
+whenToUse: When creating, modifying, reviewing, or debugging code in this repository; when planning features or refactors; when the change touches CAT commands, audio, polling, PTT, state, WebSocket protocol, frontend UI, deployment, or documentation
 arguments:
   - task
 ---
 
 # SDD Guardian — engineering lifecycle for mrrc_ft710
 
-This repository is governed by `SDD/` (IBM TeamSD, 15 chapters, currently **V1.7**).
-The SDD is the canonical design record: your job on every change is to keep the
-runtime AND the design record consistent. This skill is the enforcement loop;
-`${KIMI_SKILL_DIR}/harness/` is the machine-readable backing (constraints.json +
-sdd_context.py CLI). ${ARGUMENTS:+Task focus: $ARGUMENTS}
+This repository is governed by `SDD/` (IBM TeamSD, 15 chapters, currently **V1.7**)
+— requirements, system context, architecture decisions, service/component models,
+feasibility analysis, and version history. The SDD is the canonical design record:
+your job on every change is to keep the runtime AND the design record consistent.
+This skill is the enforcement loop; `${KIMI_SKILL_DIR}/harness/` is the machine-readable
+backing: `constraints.json` (enforcement rules), `index.json` (knowledge routing into
+every SDD chapter — resolved live, never a stale copy), and `sdd_context.py` (CLI).
+${ARGUMENTS:+Task focus: $ARGUMENTS}
 
-## Phase 0 — Load context (always, before touching code)
+## Phase 0 — Load the full engineering brief (always, before touching code)
 
 ```bash
-python3 ${KIMI_SKILL_DIR}/harness/sdd_context.py context <files-you-will-touch>
-python3 ${KIMI_SKILL_DIR}/harness/sdd_context.py context --task "<one-line task description>"
+python3 ${KIMI_SKILL_DIR}/harness/sdd_context.py brief <files-you-will-touch>
+python3 ${KIMI_SKILL_DIR}/harness/sdd_context.py brief --task "<one-line task description>"
 ```
 
-This prints the SDD sections, architecture decisions (AD-001…AD-015), and the
-block/warn/info constraints that apply to those files. For anything beyond a
-trivial fix, also read the referenced SDD chapter.
+`brief` extracts, live from the SDD, everything relevant to those files/topics:
 
-## Phase 1 — Design check
+- **Architecture decisions** (AD-001…AD-015) with problem/decision/consequences
+- **Requirements** (NFR-001…065 with targets + verification; success criteria SC1–SC9)
+- **Use cases** (UC-001…008) your change must keep working
+- **Feasibility**: risks R1–R8 + mitigations, assumptions A1–A6, open issues I1–I7
+- **Constraints** (block/warn/info rules for those files)
 
-- Which ADs does this change touch? Are you about to contradict one? If yes,
-  the AD must be amended in `SDD/08` in the same change — never silently.
-- Known open issues (SDD §13.4): **I6** no multi-client control arbitration
-  (last-writer-wins), **I7** `mem_channels.json` POST has no schema
-  validation/backup. Don't design features that assume either is solved.
-- Safety review for anything touching PTT/TX: Chapter 15's layered release
-  model is load-bearing. TX0 is fire-and-forget; never re-add blocking
-  post-release verify loops (removed in V1.2, cost 600 ms).
+Need one specific item later? `sdd AD-011` · `sdd NFR-060` · `sdd UC-005` ·
+`sdd R4` · `sdd I6` · `sdd 9.6` · `sdd <keyword>`. For anything beyond a trivial
+fix, also read the referenced SDD chapter in full.
+
+## Phase 1 — Design check (requirements → decision → feasibility)
+
+- **Requirements traceability**: which SC/NFR does this change serve or affect?
+  If it could degrade an NFR target (latency, bandwidth, safety), that is a
+  design conversation with the user — not a unilateral code edit.
+- **Architecture decisions**: which ADs does this change touch? Contradicting an
+  AD means amending `SDD/08` in the same change — never silently diverging.
+- **Feasibility**: does the change rely on something ch13 lists as a risk or
+  assumption (R1–R8, A1–A6)? Does it conflict with open issues — **I6** no
+  multi-client control arbitration (last-writer-wins), **I7** `mem_channels.json`
+  POST has no schema validation/backup? Don't design as if those were solved.
+- **Use cases**: walk the affected UC main flow + exceptions end-to-end mentally.
+- **Safety**: anything touching PTT/TX — Chapter 15's layered release model is
+  load-bearing. TX0 is fire-and-forget; never re-add blocking post-release
+  verify loops (removed in V1.2, cost 600 ms).
 
 ## Phase 2 — Implement under constraint
 
@@ -103,10 +119,20 @@ test environment (radio model, serial port, FT4222, audio device).
 
 ```
 sdd_context.py prime                    # session-start digest (SessionStart hook)
-sdd_context.py context <paths> [--task] # SDD refs + constraints for files/topics
+sdd_context.py brief <paths> [--task]   # FULL engineering brief: constraints +
+                                        #   live-extracted ADs/NFRs/UCs/risks/issues
+sdd_context.py context <paths> [--task] # fast view: SDD refs + constraints only
+sdd_context.py sdd <AD-011|NFR-060|UC-005|R4|I6|SC8|9.6|keyword>  # one item
 sdd_context.py check <paths>|--staged   # pattern scan; exit 2 on block violations
 sdd_context.py hook                     # PreToolUse mode (stdin JSON), exit 2 blocks
 ```
+
+Knowledge architecture: `constraints.json` holds enforcement rules;
+`index.json` routes files/topics to typed SDD refs but stores **no content** —
+`brief`/`sdd` slice the live `SDD/*.md` files at query time, so the harness can
+never drift stale from the design record. When you add a new engineering area,
+extend `index.json` topics; when the SDD gains sections, existing refs resolve
+to the new text automatically.
 
 Optional automatic enforcement (recommended): install the hooks from
 `${KIMI_SKILL_DIR}/harness/hooks.snippet.toml` into `~/.kimi-code/config.toml`
