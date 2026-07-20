@@ -54,7 +54,7 @@
 2. `docs/IOS_APP_ANALYSIS.md` - iOS App 深度分析 (9.7KB)
 3. `docs/IOS_APP_SUMMARY.md` - iOS App 快速总结 (6.7KB)
 4. `docs/IOS_APP_FIX_GUIDE.md` - iOS App 修复指南 (7.0KB)
-5. `IOS_ANALYSIS_COMPLETE.md` - iOS 分析完成报告 (2.8KB)
+5. ~~`IOS_ANALYSIS_COMPLETE.md`~~ - 已于 2026-07-20 文档清理中删除(内容并入 `docs/IOS_APP_SUMMARY.md`)
 6. `IOS_ANALYSIS_FINAL_SUMMARY.txt` - 最终总结 (3.2KB)
 7. `DELIVERABLES_CHECKLIST.md` - 交付清单 (4.2KB)
 

@@ -1,8 +1,8 @@
 # FT-710 Web Control — 完整文档索引
 
-**最后更新**: 2026-07-14  
-**文档总数**: 17 份  
-**版本**: v2.1.0
+**最后更新**: 2026-07-20  
+**文档总数**: 17 份核心 + 10 份 iOS  
+**版本**: v2.2.0
 
 ---
 
@@ -40,6 +40,20 @@
 |------|------|------|
 | [docs/TX_LINK_ANALYSIS.md](docs/TX_LINK_ANALYSIS.md) | TX 音频链路深度分析 | 架构师/高级开发 |
 | [docs/DOCUMENT_UPDATE_SUMMARY.md](docs/DOCUMENT_UPDATE_SUMMARY.md) | 本次文档更新总结 | 文档维护者 |
+
+### 📱 iOS App (FT710Mobile/)
+| 文档 | 说明 | 读者 |
+|------|------|------|
+| [FT710Mobile/README.md](FT710Mobile/README.md) | iOS app 简介与构建运行 | 所有人 |
+| [FT710Mobile/CLAUDE.md](FT710Mobile/CLAUDE.md) | iOS 工程指南(面向编码代理) | 开发者/代理 |
+| [FT710Mobile/docs/ARCHITECTURE.md](FT710Mobile/docs/ARCHITECTURE.md) | iOS 架构设计 | 架构师/高级开发 |
+| [docs/IOS_APP_SUMMARY.md](docs/IOS_APP_SUMMARY.md) | iOS 现状总结(2026-07-20 基准) | 所有人 |
+| [docs/IOS_APP_ANALYSIS.md](docs/IOS_APP_ANALYSIS.md) | iOS 深度审计(P0-P2 问题清单) | 开发者 |
+| [docs/IOS_APP_FIX_GUIDE.md](docs/IOS_APP_FIX_GUIDE.md) | iOS 修复路线图 | 开发者 |
+| [docs/IOS_BUILD_GUIDE.md](docs/IOS_BUILD_GUIDE.md) | iOS 构建指南(真机) | 开发者 |
+| [docs/IOS_FIXES_PROGRESS.md](docs/IOS_FIXES_PROGRESS.md) | iOS 修复进度核实 | 开发者 |
+| [docs/IOS_OPUS_INTEGRATION.md](docs/IOS_OPUS_INTEGRATION.md) | iOS Opus 现状与 TX 启用指南 | 开发者 |
+| [docs/IOS_TESTING_GUIDE.md](docs/IOS_TESTING_GUIDE.md) | iOS 测试指南 | 开发者/QA |
 
 ### 📐 设计规范
 | 文档 | 说明 | 读者 |

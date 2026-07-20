@@ -323,11 +323,13 @@ python3 -m unittest discover -s tests -v
 | [EXECUTIVE_SUMMARY.md](EXECUTIVE_SUMMARY.md) | Executive summary (中文) |
 | [COMPLETION_REPORT.md](COMPLETION_REPORT.md) | Completion report (中文) |
 | [docs/TX_LINK_ANALYSIS.md](docs/TX_LINK_ANALYSIS.md) | TX audio chain deep analysis |
-| [docs/IOS_APP_ANALYSIS.md](docs/IOS_APP_ANALYSIS.md) | iOS App deep analysis |
-| [docs/IOS_APP_FIX_GUIDE.md](docs/IOS_APP_FIX_GUIDE.md) | iOS App fix guide |
-| [docs/IOS_OPUS_INTEGRATION.md](docs/IOS_OPUS_INTEGRATION.md) | iOS Opus integration guide |
+| [docs/IOS_APP_SUMMARY.md](docs/IOS_APP_SUMMARY.md) | iOS App current status summary (2026-07-20) |
+| [docs/IOS_APP_ANALYSIS.md](docs/IOS_APP_ANALYSIS.md) | iOS App deep analysis (P0–P2 issues) |
+| [docs/IOS_APP_FIX_GUIDE.md](docs/IOS_APP_FIX_GUIDE.md) | iOS App fix roadmap |
+| [docs/IOS_BUILD_GUIDE.md](docs/IOS_BUILD_GUIDE.md) | iOS build guide (real device) |
+| [docs/IOS_FIXES_PROGRESS.md](docs/IOS_FIXES_PROGRESS.md) | iOS fix verification log |
+| [docs/IOS_OPUS_INTEGRATION.md](docs/IOS_OPUS_INTEGRATION.md) | iOS Opus status & TX enablement |
 | [docs/IOS_TESTING_GUIDE.md](docs/IOS_TESTING_GUIDE.md) | iOS testing guide |
-| [IOS_FIXES_SUMMARY.md](IOS_FIXES_SUMMARY.md) | iOS fixes summary |
 | [SDD/](SDD/) | Software Design Description (15 chapters) |
 | [FT-710_CAT_Knowledge_Base.md](FT-710_CAT_Knowledge_Base.md) | CAT command reference |
 

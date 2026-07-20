@@ -1,202 +1,85 @@
-# SunsdrMobile
+# FT710Mobile
 
-**Native iOS app for SunSDR2 DX amateur radio transceiver control.**
+**Yaesu FT-710 短波电台的 iOS 遥控客户端(SwiftUI,iOS 17,iPhone)。**
 
-Control your SunSDR2 DX radio from iPhone with real-time spectrum waterfall, audio playback, DSP processing, and full QSO management — a complete mobile replacement for the web frontend.
+通过 4 路加密 WebSocket 连接到本仓库根的 Python FastAPI 服务端(`server.py`),在 iPhone 上实现频率/模式/DSP 控制、实时频谱瀑布、下行语音接收与 PTT 语音发射。
 
-🌐 **[Project Website](https://cheenle.github.io/SunsdrMobile/)** — promotional page with feature overview, architecture, and quick-start guide.
-
-![Platform](https://img.shields.io/badge/platform-iOS%2017%2B-orange)
-![Language](https://img.shields.io/badge/swift-5.9-orange)
-![License](https://img.shields.io/badge/license-MIT-blue)
+> 本 README 于 2026-07-20 重写(旧版描述的是另一个项目,已作废)。工程现状的权威审计见 [`docs/IOS_APP_ANALYSIS.md`](../docs/IOS_APP_ANALYSIS.md)。
 
 ---
 
-## Features
+## 特性
 
-### Spectrum & Waterfall
-- Real-time 512-bin FFT waterfall with web-matching colour ramp
-- Adaptive noise floor (30th percentile + headroom)
-- Contrast stretching with configurable gain/bias
-- Dynamic frequency scale that adjusts to IQ sample rate (39k/78k/156k/312k)
-- Tap-to-tune on waterfall
+- **电台控制**: 频率(直输/步进/波段跳转)、VFO A/B、模式、滤波器宽度、Preamp/ATT、AGC、NB/NR/ANotch、射频功率、麦克风增益、静噪
+- **频谱瀑布**: 850 bin 实时瀑布(服务端 ~5fps 广播)+ FFT 曲线,配色与 web 端一致
+- **音频**: RX 下行 Opus 解码播放(48kHz,10× 增益补偿);TX 麦克风采集 48kHz/20ms PCM 帧上行,按住 PTT 即发
+- **仪表**: S 表、功率、SWR、ALC、COMP 等发射仪表
+- **其他**: 存储频道、设置页(重连/增益/音量)、深色琥珀主题、横竖屏自适应
 
-### Audio
-- RX: PCM Int16 48kHz audio playback via AVAudioPlayerNode
-- TX: Microphone capture → downsample (48k→16k) → Int16 PCM → WebSocket
-- Audio level meter with RMS display
-- Mute toggle
+## 系统要求
 
-### Controls
-- **Frequency**: Large 56pt display, step up/down (1K/5K/10K/50K/100K), tap-to-enter
-- **Band**: 12 presets (160m–2m) via Picker menu
-- **Mode**: USB/LSB/CW/AM/FM/WFM rotary selector
-- **Filter**: CW/SSB/Wide/AM/FM bandwidth presets
-- **Gain**: AF, RF, and Squelch sliders
-- **PTT**: Large 96pt button with long-press gesture and TX level indicator
+| 项 | 要求 |
+|---|---|
+| 设备 | **iPhone 真机**(模拟器无法构建:内置 `libopus.a` 只有 arm64 真机 slice) |
+| 系统 | iOS 17.0+ |
+| 开发 | Xcode 15+(iOS 17 SDK)、[XcodeGen](https://github.com/yonaskolb/XcodeGen)(`brew install xcodegen`)、Apple 开发者账号(真机签名) |
+| 服务端 | 本仓库根的 FastAPI 服务端(`server.py`)已连接 FT-710 并启用 TLS,默认端口 8888。App 硬编码 `https/wss`,**需要 iOS 信任的 TLS 证书**,连不了 `--no-ssl` 服务端 |
 
-### DSP Panel
-- WDSP master enable/disable
-- NR2 noise reduction with level control
-- NB (Noise Blanker), ANF (Automatic Notch Filter), NF
-- AGC modes: Off / Slow / Medium / Fast
-- Manual notch list with add/delete
-
-### Channel Memory
-- 3×3 grid of frequency presets (always visible, 9 slots)
-- Tap any cell to instantly tune frequency + mode
-- Empty slots show placeholder, ready for quick-save
-- Persisted via UserDefaults JSON
-
-### Settings
-- Favorites list with swipe-to-delete
-- Server host configuration
-- IQ sample rate selector (39k / 78k / 156k / 312k)
-- Connection status indicators
-- AF gain slider
-
----
-
-## Screenshots
-
-<img src="docs/diagrams/screenshot-mockup.svg" alt="SunsdrMobile UI Screenshot" width="360">
-
-
-
----
-
-## Requirements
-
-| Component | Requirement |
-|-----------|-------------|
-| iOS | 17.0+ |
-| Xcode | 15.0+ |
-| Swift | 5.9 |
-| Device | Physical iPhone (simulator lacks full AVAudioEngine mic support) |
-| Backend | SunSDR2 DX running `sunmrrc` FastAPI server |
-
----
-
-## Quick Start
-
-### 1. Clone
+服务端启动(仓库根,详见根 `AGENTS.md`):
 
 ```bash
-git clone https://github.com/cheenle/SunsdrMobile.git
-cd SunsdrMobile
+pip install -r requirements.txt
+FT710_SERIAL_PORT=/dev/cu.usbserial-XXXX FT710_WEB_PASSWORD='<强密码>' python server.py
 ```
 
-### 2. Generate Xcode Project
+## 构建与运行
 
 ```bash
-xcodegen generate
-```
+cd FT710Mobile
 
-### 3. Open & Build
-
-```bash
-open SunsdrMobile.xcodeproj
-```
-
-Select your iPhone as the target, configure signing (Team: `VQ89MM7935`), then `Cmd+R`.
-
-### 4. Login
-
-Enter your server address (default: `radio.vlsc.net:8889`) and password on the login screen. Credentials are stored in Keychain for auto-login.
-
----
-
-## Project Structure
-
-```
-SunsdrMobile/
-├── project.yml                     # XcodeGen spec
-├── CLAUDE.md                       # Developer reference
-├── README.md
-├── Resources/
-│   └── Info.plist
-└── Sources/
-    ├── App/
-    │   └── SunsdrMobileApp.swift        # @main entry, auto-login
-    ├── Model/
-    │   ├── RadioState.swift              # @Published central state
-    │   └── FavoritesManager.swift        # Channel presets
-    ├── Networking/
-    │   ├── WebSocketConnection.swift     # URLSessionWebSocketTask
-    │   └── ConnectionManager.swift       # 4-socket manager
-    ├── ViewModel/
-    │   └── RadioViewModel.swift          # Central coordinator
-    ├── Audio/
-    │   ├── AudioPlaybackManager.swift    # RX playback
-    │   ├── AudioCaptureManager.swift     # TX capture
-    │   └── SpectrumProcessor.swift       # Waterfall rendering
-    └── UI/
-        ├── ContentView.swift
-        ├── HeaderView.swift              # Freq + band + status
-        ├── MainRXView.swift              # RX tab
-        ├── WaterfallView.swift           # Spectrum display
-        ├── FrequencyDisplay.swift        # 56pt digits
-        ├── SMeterView.swift
-        ├── ModeSelectorView.swift
-        ├── PTTButtonView.swift           # 96pt TX button
-        ├── DSPPanelView.swift
-        ├── SettingsView.swift
-        └── LoginView.swift
-```
-
----
-
-## Architecture
-
-### Data Flow
-
-<img src="docs/diagrams/data-flow.svg" alt="WebSocket Data Flow" width="360">
-
-### Spectrum Pipeline (CPU-optimized)
-
-<img src="docs/diagrams/spectrum-pipeline.svg" alt="Spectrum Pipeline" width="600">
-
-All heavy computation runs off the main thread. WaterfallView is a pure display view — no `onChange`, no processing logic.
-
-### State Management
-
-`RadioState` (~30 `@Published` properties) → `RadioViewModel` (forwards `objectWillChange`) → SwiftUI views via `@EnvironmentObject`
-
-Server text messages are parsed in `RadioState.apply(serverMessage:)` using `cmd:val` protocol.
-
----
-
-## Backend Compatibility
-
-This app is designed to work with the `sunmrrc` FastAPI server from the [sunsdrv2](https://github.com/cheenle/sunsdrv2) project.
-
-**Required server version**: sunmrrc v3.4+
-
-**Authentication**: POST `/api/auth/login` → `sunmrrc_auth` cookie → `?token=` WebSocket query param
-
----
-
-## Build (Command Line)
-
-```bash
-# Generate project
+# 1. 生成 Xcode 工程(已验证:xcodegen 2.45.4)
 xcodegen generate
 
-# Build for device (unsigned)
-xcodebuild -project SunsdrMobile.xcodeproj \
-  -scheme SunsdrMobile \
-  -sdk iphoneos \
-  -destination 'generic/platform=iOS' \
-  CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO \
-  build
+# 2. 打开工程
+open FT710Mobile.xcodeproj
+
+# 3. Xcode 中选择你的 iPhone 真机 → Run(首次需在 设置→通用→VPN与设备管理 信任开发者证书)
 ```
 
----
+命令行无签名编译检查(不产物入库):
 
-## License
+```bash
+cd FT710Mobile
+xcodebuild -project FT710Mobile.xcodeproj -scheme FT710Mobile \
+  -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO \
+  -derivedDataPath /tmp/ft710-dd build
+```
 
-MIT
+工程配置只改 `project.yml`(部署目标、bundle id、签名团队),不要在 Xcode 里手改工程文件后忘记回写。`DEVELOPMENT_TEAM` 当前硬编码为 `VQ89MM7935`,换账号请改 `project.yml`。
 
----
+## 配置(App 内)
 
-🤖 Built with [Claude Code](https://claude.ai/code)
+- **服务器地址**: 登录页输入 `host:port`(默认 `radio.vlsc.net:8888`),`@AppStorage("serverHost")` 持久化,下次自动填入。
+- **密码**: 即服务端 `FT710_WEB_PASSWORD`。登录(`POST /api/auth/login`)成功后密码存入 **Keychain**(`kSecAttrServer=host`,account=`ft710_mobile`),下次启动自动登录。
+- **注意**: 当前版本密码错误也会直接写 Keychain 并进主界面(已知问题,见下),输错密码只能删除 App 重装——输入时请仔细。
+
+## 当前状态与已知问题
+
+Happy path(登录 → 控制 → 音频 → 频谱)两端协议逐字段核对**匹配可用**。但 2026-07-20 深度审计([`docs/IOS_APP_ANALYSIS.md`](../docs/IOS_APP_ANALYSIS.md))发现一批待修问题,按级别摘要:
+
+- **P0(安全)**: PTT 释放竞态——WAN 下快速点按可能丢失 `ptt:false`,电台卡死在发射态;无 PTT 看门狗/后台保护;认证失败死循环(服务端重启后 App 只能杀掉重来);密码输错即锁死;瀑布流误触即改频(QSY)。
+  → 修复设计与实施计划已批准(`docs/superpowers/specs/2026-07-20-ios-ptt-safety-design.md`、`docs/superpowers/plans/2026-07-20-ios-ptt-safety.md`),**尚未实施**。
+- **P1(功能)**: 存储频道协议与服务端脱节(频道列表常态为空、保存不持久);主界面 TUNE 按钮实为天调开关;蓝牙/44.1kHz 路由下 TX 语音变调;RX 无 jitter buffer(网络抖动后音频滞后累积);录音功能失效。
+- **P2(工程)**: UI 目录 25 个文件中 14 个是死代码;无 test target、测试有效覆盖率为 0;功率/SWR 仪表换算与服务端标定表不一致;`Info.plist` 设备能力声明陈旧(`armv7`)。
+
+完整清单、file:line 证据与修复优先级请读分析报告。**在真机上发射前,请知悉 P0 项的存在。**
+
+## 文档
+
+| 文档 | 内容 |
+|---|---|
+| [`CLAUDE.md`](CLAUDE.md) | 面向 AI 编码代理的工程指引(架构/协议/约束) |
+| [`docs/IOS_APP_ANALYSIS.md`](../docs/IOS_APP_ANALYSIS.md) | 2026-07-20 深度审计(权威现状) |
+| [`docs/superpowers/specs/2026-07-20-ios-ptt-safety-design.md`](../docs/superpowers/specs/2026-07-20-ios-ptt-safety-design.md) | PTT 安全修复设计(已批准,待实施) |
+| [`docs/superpowers/plans/2026-07-20-ios-ptt-safety.md`](../docs/superpowers/plans/2026-07-20-ios-ptt-safety.md) | PTT 安全修复实施计划(待实施) |
+| `docs/ARCHITECTURE.md`(本目录) | ⚠️ 已腐化(描述另一个项目),待重写,勿参考 |

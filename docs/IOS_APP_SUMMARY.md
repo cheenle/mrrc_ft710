@@ -1,262 +1,83 @@
-# FT710Mobile iOS App — 分析总结报告
+# FT710Mobile iOS App — 现状总结
 
-**分析日期**: 2026-07-14  
-**项目**: FT710Mobile (iOS 客户端)  
-**状态**: 分析完成，待修复
-
----
-
-## 📊 项目概况
-
-| 项目 | 详情 |
-|------|------|
-| **平台** | iOS 17+ (SwiftUI) |
-| **架构** | MVVM (Model-View-ViewModel) |
-| **通信** | WebSocket (4 路连接) |
-| **后端** | Python FastAPI FT-710 Server |
-| **代码量** | ~30 个 Swift 文件 |
-| **UI 组件** | 20+ 个视图组件 |
+**基准日期**: 2026-07-20(替代 2026-07-14 旧版,旧版结论已全部过期)
+**权威来源**: 本文档是 `docs/IOS_APP_ANALYSIS.md`(2026-07-20 深度审计)的摘要视图;任何细节冲突以分析报告为准。报告中每条结论均经实际代码核对并附 file:line 证据。
+**项目**: Yaesu FT-710 远程控制系统的 iOS 客户端,位于 `FT710Mobile/`(SwiftUI,iOS 17+),服务端为仓库根目录的 `server.py` 等 Python FastAPI 模块。
 
 ---
 
-## 🏗️ 架构亮点
+## 一句话定位
 
-### 1. 清晰的关注点分离
-```
-App Layer (FT710MobileApp.swift)
-    ↓
-ViewModel Layer (RadioViewModel.swift)
-    ↓
-Model Layer (RadioState.swift, MemoryChannelsManager.swift)
-    ↓
-Service Layer (ConnectionManager, Audio*, Spectrum*)
-    ↓
-View Layer (20+ SwiftUI Views)
-```
-
-### 2. 优秀的线程管理
-- **@MainActor**: 确保 UI 更新在主线程
-- **DispatchQueue**: 计算密集型操作在后台队列
-- **弱引用**: 避免循环引用和内存泄漏
-
-### 3. 性能优化
-- **Accelerate 框架**: SIMD 优化的音频处理
-- **后台频谱处理**: 完全离主线程
-- **帧率限制**: 瀑布图限制在 ~15 fps
+FT710Mobile 是通过 4 路 WebSocket 连接 FT-710 服务端的 iOS 远程控制客户端:Happy path 协议对接健康(控制、RX 音频、频谱可用),但 PTT 安全、认证失败路径存在 P0 级缺陷,大量功能"写了代码但没接线",工程健康度差(测试 0 覆盖、14/24 UI 文件是死代码)。
 
 ---
 
-## 🔴 关键问题 (P0 - 立即修复)
+## 功能清单
 
-### 1. Opus 编解码器未实现
-**位置**: `OpusEncoder.swift`, `OpusDecoder.swift`
+### ✅ 可用
 
-**问题**:
-```swift
-func decode(_ opusData: Data) -> Data? {
-    return nil  // placeholder — C bridge wired in follow-up
-}
-```
+- **基础控制**:频率设定/步进、模式、滤波、DSP 开关(NR/NB/AN/COMP)、VFO-A/B、SPLIT、天调开关、各类增益(AF/RF/功率/麦克)——`{"type":"set"}` 协议两端逐字段核对匹配。
+- **RX 音频**:服务端 Opus 编码(48kHz/20ms,tag 0x01)广播,iOS `OpusDecoder` 经 C 桥调 libopus 真实解码播放(`AudioPlaybackManager.swift:110-128`);PCM(tag 0x00)回退路径同在。
+- **频谱/瀑布流**:1701B 帧解析、瀑布图 + FFT 线显示;S-meter 标定与服务端一致。
 
-**影响**:
-- RX 音频：如果服务器发送 Opus，iOS 客户端无法播放
-- TX 音频：麦克风数据无法编码为 Opus
+### 🟡 半残(有 UI/代码,行为错误或场景受限)
 
-**修复方案**:
-```swift
-// 方案 1: 使用 WebRTC Opus
-import WebRTC
+- **存储频道(mem)**:服务端 `null` 空槽导致 iOS 整体解析失败(列表常空)、键名 `label` vs `name` 错位、槽位 6 vs 10 不一致、`saveMemory` 只写本地从不发 `memSave`、recall 未用服务端原子 `memRecall`——子协议全线脱节(分析报告 §3.1)。
+- **TUNE 按钮**:主界面 TUNE 发的是 `"tuner"`(天调开关)而非 `"tune"`(TX2 载波调谐),无法从主 UI 发起调谐(分析报告 §3.2)。
+- **录音**:`toggleRecording()` 翻转的标志位无任何读取者;真正实现录音的 `startRecording/stopRecording` 无调用方,且 `makeWAV` 头部字段错位,产出的 WAV 打不开(分析报告 §4.3)。
+- **TX 音频(特定路由变调)**:重采样函数拒绝上采样(`AudioCaptureManager.swift:157`),蓝牙 HFP(8/16kHz)或 44.1kHz 路由下 TX 音高上移甚至不可辨;内置麦克风 48kHz 路由下 TX PCM 可用(分析报告 §4.1)。
 
-// 方案 2: 集成 libopus
-// 需要 C bridge 或 Swift wrapper
+### ❌ 缺失
 
-// 方案 3: 暂时降级到 PCM
-func decode(_ opusData: Data) -> Data? {
-    // 返回 nil 让调用方降级到 PCM 路径
-    return nil
-}
-```
-
-### 2. PTT 按钮双重实现
-**位置**: `ContentView.swift` (PTTBar), `PTTButtonView.swift`
-
-**问题**:
-- `PTTBar` 在底部固定显示
-- `PTTButtonView` 是另一个独立实现
-- 用户可能看到两个 PTT 按钮
-
-**修复方案**:
-```swift
-// 统一使用 PTTBar，删除 PTTButtonView
-// 或者在 PTTButtonView 中复用 PTTBar 的逻辑
-```
+- **PTT 看门狗**:无释放后验证重发、无最大 TX 时长;`config.py:289 PTT_SAFETY_TIMEOUT` 服务端也从未实现(分析报告 §2.2)。
+- **后台保护**:无 scenePhase 监听、无 `UIBackgroundModes`,App 进后台 4 条 socket 全部挂起且无前台重连钩子(分析报告 §2.2、§6)。
+- **RX jitter buffer / PLC**:每帧到达即播放,网络抖动后音频永久滞后越积越多;丢包即爆音(web 端有 220ms 预缓冲 + 800ms 上限的 jitter buffer,分析报告 §4.2)。
+- **TX Opus**:`useOpus = false` 且无置 true 路径,TX 恒为 PCM ~768kbps,Opus 编码链路整体死代码(详见 `docs/IOS_OPUS_INTEGRATION.md`)。
 
 ---
 
-## 🟡 重要问题 (P1 - 短期修复)
+## 质量现状
 
-### 3. 音频会话配置
-**位置**: `AudioPlaybackManager.swift`, `AudioCaptureManager.swift`
-
-**问题**:
-```swift
-// RX: .playback
-try session.setCategory(.playback, mode: .default, ...)
-
-// TX: .playAndRecord  
-try session.setCategory(.playAndRecord, mode: .default, ...)
-```
-
-**影响**: RX/TX 切换时可能需要重新配置音频会话
-
-**修复方案**:
-```swift
-// 统一使用 .playAndRecord
-try session.setCategory(.playAndRecord, mode: .default,
-                       options: [.mixWithOthers, .allowBluetoothA2DP])
-```
-
-### 4. 错误处理不足
-**位置**: 多处
-
-**问题**:
-- WebSocket 连接错误显示简单的 `errorMessage`
-- 音频错误没有用户反馈
-- 缺乏重试机制
-
-**修复方案**:
-```swift
-// 添加详细的错误处理和用户反馈
-struct ErrorMessage: Identifiable {
-    let id = UUID()
-    let title: String
-    let message: String
-    let retryAction: (() -> Void)?
-}
-
-@Published var showError: ErrorMessage?
-```
-
-### 5. 内存管理风险
-**位置**: `RadioViewModel.swift`
-
-**问题**:
-```swift
-private func bindSockets() {
-    cancellables.removeAll()
-    // 创建多个 sink 订阅
-    state.objectWillChange.sink { ... }.store(in: &cancellables)
-    // ... 更多订阅
-}
-```
-
-**修复方案**:
-```swift
-// 确保 bindSockets() 只在必要时调用
-// 考虑使用更高效的订阅管理
-```
+- **测试有效覆盖率 0%**:两个测试文件未接入 `project.yml`(无 test target);`RadioViewModelTests.swift` 调用的 API 全部不存在,编译即失败;`OpusCodecTests.swift` 调用的 C 符号名错误且断言必败。网络/音频/PTT/频谱四条关键路径零覆盖(分析报告 §7)。
+- **死代码**:24 个 UI 文件 14 个无调用点(含 `PTTButtonView.swift`、`PTTFooter.swift`、`MainRXView.swift` 等整套组件);逻辑层另有 `setupErrorObservers()`、`useOpus`、`isRecording` 等 10 处死代码。两套实现并存且语义已漂移,误导后续维护(分析报告 §8)。
+- **文档腐化**:`FT710Mobile/CLAUDE.md`、`README.md`、`docs/ARCHITECTURE.md` 描述的是另一个项目(SunsdrMobile:/WSCTRX 端点、cmd:val 文本协议、端口 8889),均不可信(分析报告 §1)。
 
 ---
 
-## 🟢 次要问题 (P2 - 中期优化)
+## 风险 Top 5
 
-### 6. 硬编码配置
-**位置**: `FT710MobileApp.swift`
-
-```swift
-@AppStorage("serverHost") private var savedHost: String = "radio.vlsc.net:8888"
-```
-
-**建议**: 添加开发模式配置
-
-### 7. 缺少单元测试
-**建议**: 为核心逻辑添加测试
-- `RadioState` 状态管理
-- `SpectrumProcessor` 数据处理
-- `AudioPlaybackManager` 音频处理
-
-### 8. 国际化支持
-**建议**: 使用 Localizable.strings 支持多语言
+| # | 风险 | 一句话 | 分析报告 |
+|---|------|--------|----------|
+| 1 | PTT 释放竞态 | `onEnded` 只在 `txStatus > 0` 时发 `ptt:false`,WAN 延迟下快速点按可致电台卡死发射态 | §2.1 |
+| 2 | 认证失败死循环 | 4001 永远到不了客户端;`reconnect()` 拿会话 token 当密码重新登录,服务端重启后 App 永久卡死 | §2.3 |
+| 3 | 崩溃隐患 | `playerNode` 重复 attach、`installTap` 重试,两处确定性 NSException 路径(reconnect/power 循环可达) | §2.5 |
+| 4 | 瀑布流误触 QSY | `DragGesture(minimumDistance: 0)` 直接 `setFrequency`,任何滑动/误触都改频率,iOS 独有发射安全风险 | §2.6 |
+| 5 | 密码锁死 | `onLogin` 无条件置 `isLoggedIn = true` 并把密码写 Keychain,输错密码只能删 App 重装 | §2.4 |
 
 ---
 
-## 📈 代码质量评分
+## 进行中工作
 
-| 维度 | 评分 | 说明 |
-|------|------|------|
-| **架构设计** | ⭐⭐⭐⭐⭐ | MVVM 清晰，关注点分离好 |
-| **代码组织** | ⭐⭐⭐⭐⭐ | 文件结构合理，命名规范 |
-| **性能优化** | ⭐⭐⭐⭐ | 后台处理优秀，Opus 缺失扣分 |
-| **错误处理** | ⭐⭐ | 需要大幅改进 |
-| **测试覆盖** | ⭐ | 完全没有测试 |
-| **文档质量** | ⭐⭐⭐ | CLAUDE.md 很好，缺少 API 文档 |
-| **安全性** | ⭐⭐⭐⭐ | Keychain 存储，WebSocket 认证 |
-
-**综合评分**: ⭐⭐⭐⭐ (4/5)
+- **spec ① iOS 发射安全修复 — 已批准,待实施**。
+  - 设计文档: `docs/superpowers/specs/2026-07-20-ios-ptt-safety-design.md`(方案 A:纯 SwiftUI + PTTManager 状态机)
+  - 实施计划: `docs/superpowers/plans/2026-07-20-ios-ptt-safety.md`
+  - 范围: PTT 释放竞态、看门狗/scenePhase 后台保护、瀑布流误触 QSY + 首屏假开机;服务端零改动。
+- **spec ② 连接生命周期 + 音频引擎崩溃修复 — 待设计**。
+  - 范围: 认证失败路径(1006→auth-check→回登录页)、`reconnect()` 凭据 bug、密码锁死、`playerNode`/`installTap` 崩溃隐患(分析报告 §2.3-§2.5)。
 
 ---
 
-## 🎯 修复优先级
+## 文档地图
 
-### 立即行动 (本周)
-1. ✅ 实现 Opus 编解码器（或使用 PCM 降级）
-2. ✅ 统一 PTT 按钮实现
-3. ✅ 添加基本的错误处理和用户反馈
-
-### 短期改进 (1 个月内)
-4. ✅ 完善音频会话管理
-5. ✅ 添加核心逻辑的单元测试
-6. ✅ 优化内存管理
-
-### 中期优化 (3 个月内)
-7. ✅ 添加国际化支持
-8. ✅ 改进配置管理
-9. ✅ 添加性能监控
-
----
-
-## 📚 参考资源
-
-### Opus 编解码实现
-- **WebRTC Opus**: https://webrtc.org/native-code/audio-processing/
-- **libopus Swift Wrapper**: https://github.com/nicklama/SwiftOpus
-- **Apple Audio Toolbox**: 原生支持部分编解码
-
-### iOS 音频最佳实践
-- [Apple Audio Programming Guide](https://developer.apple.com/documentation/avfoundation/audio_processing)
-- [AVAudioEngine Best Practices](https://developer.apple.com/documentation/avfaudio/avaudioengine)
-- [Audio Session Configuration](https://developer.apple.com/documentation/avfaudio/avaudiosession)
-
-### SwiftUI 性能优化
-- [SwiftUI Performance Tips](https://developer.apple.com/documentation/swiftui/performance-tips)
-- [Avoiding Common SwiftUI Performance Issues](https://www.avanderlee.com/swiftui/performance/)
-
----
-
-## 📝 总结
-
-FT710Mobile iOS 应用整体架构优秀，代码质量较高，但在关键功能实现上存在明显缺口。最需要优先解决的是 Opus 编解码器的实现，这直接影响 TX/RX 功能的可用性。
-
-### 核心优势
-- ✅ 清晰的 MVVM 架构设计
-- ✅ 优秀的线程管理和性能优化
-- ✅ 美观的用户界面和交互体验
-- ✅ 完善的频谱处理算法
-
-### 主要挑战
-- ❌ Opus 编解码器未实现（阻塞功能）
-- ❌ PTT 按钮双重实现（用户体验问题）
-- ❌ 错误处理不足（用户体验问题）
-- ❌ 缺乏测试覆盖（质量保障问题）
-
-### 建议
-1. **立即**: 实现 Opus 编解码器（P0）
-2. **本周**: 统一 PTT 按钮，完善错误处理（P1）
-3. **本月**: 添加单元测试，优化内存管理（P1）
-4. **下季度**: 国际化支持，配置管理改进（P2）
-
----
-
-**报告生成时间**: 2026-07-14 09:35  
-**分析师**: Agnes Code Review  
-**下次审查**: Opus 编解码器实现后
+| 文档 | 内容 | 可信度 |
+|------|------|--------|
+| `docs/IOS_APP_ANALYSIS.md` | **权威基准**: 2026-07-20 深度审计,全部结论附 file:line 证据 | ✅ 可信 |
+| `docs/IOS_APP_SUMMARY.md` | 本文档: 现状总结(功能/质量/风险/进行中工作) | ✅ 可信 |
+| `docs/IOS_FIXES_PROGRESS.md` | 修复进度核实记录: 2026-07-14 旧声称 vs 代码真相 | ✅ 可信 |
+| `docs/IOS_OPUS_INTEGRATION.md` | Opus 集成现状与 TX 启用指南 | ✅ 可信 |
+| `docs/IOS_BUILD_GUIDE.md` | 构建指南;注意其 `xcodebuild test` 指引当前不可用(测试未接入工程) | ⚠️ 部分过期 |
+| `docs/IOS_TESTING_GUIDE.md` | 测试指南;描述的测试套件未接入工程且 API 全错 | ⚠️ 部分过期 |
+| `docs/IOS_APP_FIX_GUIDE.md` | 2026-07-14 旧修复指南,基于过期结论 | ❌ 仅历史参考 |
+| `docs/superpowers/specs/2026-07-20-ios-ptt-safety-design.md` | PTT 安全修复设计(spec ①,已批准) | ✅ 可信 |
+| `docs/superpowers/plans/2026-07-20-ios-ptt-safety.md` | PTT 安全修复实施计划 | ✅ 可信 |
+| `FT710Mobile/CLAUDE.md` / `README.md` / `docs/ARCHITECTURE.md` | 描述的是 SunsdrMobile(另一个项目) | ❌ 已腐化,不可信 |

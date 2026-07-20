@@ -10,7 +10,7 @@
 
 - **Happy path 协议对接健康**:4 路 WebSocket 端点(`/WSradio` `/WSaudioRX` `/WSaudioTX` `/WSspectrum`)、音频 1 字节 codec tag(0x00 PCM / 0x01 Opus)、1701B 频谱帧、48kHz/20ms 帧、`{"type":"set"}` 控制消息、`ft710_auth` cookie + `?token=` 认证——两端逐字段核对均匹配。
 - **问题集中在三条线**:PTT 安全、认证失败路径、大量功能"写了 UI/代码但没接线"。
-- **工程健康度差**:24 个 UI 文件 14 个是死代码;测试有效覆盖率 0%;`FT710Mobile/` 自带三份文档(CLAUDE.md/README.md/docs/ARCHITECTURE.md)已腐化成另一个项目(SunsdrMobile)的描述。
+- **工程健康度差**:25 个 UI 文件 14 个是死代码;测试有效覆盖率 0%;`FT710Mobile/` 自带三份文档(CLAUDE.md/README.md/docs/ARCHITECTURE.md)已腐化成另一个项目(SunsdrMobile)的描述。
 
 ---
 
@@ -119,7 +119,7 @@ web 端 `ptt_manager.js:20-57` 有释放后 500ms×3 验证重发 TX0、`:105-12
 - 服务端 `"error"` 消息在主界面被吞(`RadioViewModel.swift:440-441` 只写 offState 才展示的 `connectionError`)→ "TX audio device unavailable"(`server.py:889-892`)等关键错误用户看不到。`setupErrorObservers()`(`:182-192`)从未被调用 → 音频错误通知没人接。`ErrorAlertView` 的"重新连接/重试"按钮没有绑定动作。
 - 首屏假开机:`RadioState.powerOn` 默认 true 但不连接,登录后电源图标亮绿,用户要点两次才开始连接(`RadioState.swift:40`、`HeaderView.swift:51-56`)。
 - ping 每 2s(web 15s)且从不校验 pong → TCP 半开时 `ctrlConnected` 长时间假阳性;重连固定 3s 无退避。
-- 无 `UIBackgroundModes`,App 进后台 4 条 socket 全部挂起,无前台重连钩子。
+- `Info.plist:34-37` 已声明 `UIBackgroundModes = audio`(音频后台模式),但无任何 scenePhase 处理:进后台时 PTT 不强制释放、socket 状态不整理,回前台也无重连钩子(PTT 部分由 spec ① 补上)。
 - `wss`/`https` 不可配置 → 无法连 `--no-ssl` 服务端;默认主机 `radio.vlsc.net:8888` 散落多处。
 - 杂项:AGC tag3 "Max"/"慢" 不一致;preamp/att 索引显示为 "dB" 且 "+" 无上限;<10MHz 频率显示前导零;iOS 完全忽略 `scope_start_freq`。
 
@@ -145,7 +145,7 @@ web 端 `ptt_manager.js:20-57` 有释放后 500ms×3 验证重发 TX0、`:105-12
 
 ## 8. 死代码清单(grep 全库确认无调用点)
 
-UI(14/24 文件):MainRXView(连带 GainSlider/AudioLevelBar)、DSPPanelView、PTTFooter、PTTButtonView、TunerView、PerformanceMonitorView、DSPQuickButtons、MemoryChannelsGrid、MemoryChannelsView、ModeSelectorView、BandSelectorView、FilterSelectorView、VFOButtons、TuningControls、ContentView.swift:269-307 的 PTTBar/PTTPressStyle。
+UI(14/25 文件):MainRXView(连带 GainSlider/AudioLevelBar)、DSPPanelView、PTTFooter、PTTButtonView、TunerView、PerformanceMonitorView、DSPQuickButtons、MemoryChannelsGrid、MemoryChannelsView、ModeSelectorView、BandSelectorView、FilterSelectorView、VFOButtons、TuningControls、ContentView.swift:269-307 的 PTTBar/PTTPressStyle。
 
 逻辑:`RadioViewModel.powerOn()`、`setupErrorObservers()`、`WebSocketConnection.updatePassword`、`isConnected`、`ConnectionManager.errorMessage`、`AudioCaptureManager.isRecording`、`useOpus`、`AudioSessionManager.handleAudioRouteChange`/`isBluetoothActive`、`audioOpusDetected` 通知名、`SpectrumProcessor.wfDecimate`。
 

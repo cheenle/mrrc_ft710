@@ -26,10 +26,12 @@ Frontend assets in `static/`:
 - `ft710_ui.js` — All UI rendering: waterfall, S-meter, meters, controls, PTT
 - `rx_worklet_processor.js` — AudioWorklet: time-based jitter buffer RX playback
 - `tx_capture_worklet.js` — AudioWorklet: mic capture (48kHz)
-- `tx_opus_worker.js` — Web Worker: Opus encode from mic samples (48kHz, 28kbps CBR)
+- `tx_opus_worker.js` — Web Worker: Opus encode from mic samples (48kHz, 64kbps CBR)
 - `modules/opus_codec.js` + `opus_wasm.js` — Browser-side WASM Opus codec
 - `modules/ptt_manager.js` — PTT state machine + safety watchdog
 - `modules/settings_manager.js` — Cookie + localStorage persistence
+
+iOS app in `FT710Mobile/` (SwiftUI, iOS 17, real device only — bundled `libopus.a` is arm64-device-only so simulator builds fail to link). See `FT710Mobile/CLAUDE.md` for build/test commands and protocol facts, `FT710Mobile/docs/ARCHITECTURE.md` for layer design, and `docs/IOS_APP_ANALYSIS.md` for the 2026-07-20 audit with the P0–P2 known-issue list.
 
 SDD (Software Design Description) in `SDD/` — 15-chapter IBM TeamSD documentation.
 

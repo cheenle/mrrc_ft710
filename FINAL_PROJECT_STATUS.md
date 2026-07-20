@@ -85,8 +85,7 @@
 3. **IOS_OPUS_INTEGRATION.md** - Opus 集成详解
 4. **IOS_TESTING_GUIDE.md** - 测试指南
 5. **IOS_BUILD_GUIDE.md** - 构建部署指南
-6. **IOS_FIXES_SUMMARY.md** - 修复总结
-7. **IOS_APP_FINAL_SUMMARY.md** - 最终总结
+6. **IOS_FIXES_PROGRESS.md** - 修复进度核实(2026-07-20 文档清理:原 IOS_FIXES_SUMMARY.md / IOS_APP_FINAL_SUMMARY.md 因内容失实已删除,以 docs/ 下文档为准)
 
 ### 技术文档
 1. **FIXES_SUMMARY.md** - Python 修复详情
