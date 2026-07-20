@@ -20,14 +20,18 @@ struct FT710MobileApp: App {
                 LoginView { host, pass in
                     savedHost = host
                     savePassword(pass, for: host)
-                    viewModel = RadioViewModel(serverHost: host, password: pass)
+                    let vm = RadioViewModel(serverHost: host, password: pass)
+                    viewModel = vm
                     isLoggedIn = true
+                    vm.powerOnAsync()
                 }
                 .preferredColorScheme(.dark)
                 .onAppear {
                     if !savedHost.isEmpty, let pass = loadPassword(for: savedHost) {
-                        viewModel = RadioViewModel(serverHost: savedHost, password: pass)
+                        let vm = RadioViewModel(serverHost: savedHost, password: pass)
+                        viewModel = vm
                         isLoggedIn = true
+                        vm.powerOnAsync()
                     }
                 }
             }

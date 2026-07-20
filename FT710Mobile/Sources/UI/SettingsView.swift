@@ -76,6 +76,16 @@ struct SettingsView: View {
                             Toggle("", isOn: Binding(get: { viewModel.state.noiseReduction }, set: { viewModel.setNoiseReduction($0) })).labelsHidden().toggleStyle(.switch)
                         }
                         HStack {
+                            Text("NR Level").font(.subheadline)
+                            Spacer()
+                            Stepper(value: Binding(
+                                get: { viewModel.state.nrLevel },
+                                set: { viewModel.setNoiseReductionLevel($0) }
+                            ), in: 1...15) {
+                                Text("\(viewModel.state.nrLevel)").font(.subheadline.monospaced()).foregroundColor(.radioAccent)
+                            }
+                        }
+                        HStack {
                             Image(systemName: "waveform.line.dotted").foregroundColor(.radioMuted).frame(width: 20)
                             Text("Auto Notch (AN)").font(.subheadline)
                             Spacer()

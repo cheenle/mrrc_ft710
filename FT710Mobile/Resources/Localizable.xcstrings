@@ -41,12 +41,12 @@
         }
       }
     },
-    "NR 等级: %lld": {
+    "NR 等级: %@": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "NR Level: %lld"
+            "value": "NR Level: %@"
           }
         }
       }
