@@ -16,6 +16,7 @@ import json
 import logging
 import os
 import secrets as _secrets
+import signal
 import struct
 import subprocess as _subprocess
 import sys
@@ -102,10 +103,22 @@ SCRIPT_DIR = Path(__file__).parent
 
 
 def _runtime_dir() -> Path:
-    """Return the directory containing runtime files for source or frozen mode."""
+    """Return the directory containing sibling executables (source or frozen mode)."""
     if getattr(sys, "frozen", False):
         return Path(sys.executable).resolve().parent
     return SCRIPT_DIR
+
+
+def _bundled_data_dir() -> Path:
+    """Return the directory containing PyInstaller-bundled data files (e.g. static/).
+
+    PyInstaller's onedir mode places bundled data under sys._MEIPASS, which is
+    a separate "_internal" directory from the one containing the executable.
+    """
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        return Path(meipass)
+    return _runtime_dir()
 
 
 def _scope_pipe_command() -> list[str] | None:
@@ -122,8 +135,8 @@ def _scope_pipe_command() -> list[str] | None:
     return None
 
 
-STATIC_DIR = _runtime_dir() / "static"
-MEM_FILE = Path(os.environ.get("FT710_MEM_FILE", str(_runtime_dir() / "mem_channels.json")))
+STATIC_DIR = _bundled_data_dir() / "static"
+MEM_FILE = Path(os.environ.get("FT710_MEM_FILE", str(_bundled_data_dir() / "mem_channels.json")))
 
 # ── Auth Helpers ────────────────────────────────────────────────────
 
@@ -167,7 +180,7 @@ def _load_mem_channels() -> list:
     """Load memory channels from disk."""
     if MEM_FILE.exists():
         try:
-            data = json.loads(MEM_FILE.read_text())
+            data = json.loads(MEM_FILE.read_text(encoding="utf-8"))
             channels = data.get("channels", [])
             # Pad to exactly MEM_CHANNEL_COUNT slots
             while len(channels) < MEM_CHANNEL_COUNT:
@@ -317,6 +330,38 @@ async def _broadcast_spectrum_loop():
         await asyncio.sleep(interval)
 
 
+async def _stop_proc_gracefully(proc, timeout: float = 2.0):
+    """Stop a subprocess, letting it release resources (e.g. FT4222 handle) first.
+
+    On Windows, Process.terminate() calls TerminateProcess(), which kills the
+    process immediately and bypasses Python signal handlers entirely — any
+    `finally` cleanup (like FT_Close on the FT4222 handle) never runs, leaking
+    the device handle until Windows notices the process died. CTRL_BREAK_EVENT
+    is the only signal Windows subprocesses can actually catch and act on, and
+    it requires the child to have been spawned in its own process group.
+    """
+    try:
+        if sys.platform == "win32":
+            proc.send_signal(signal.CTRL_BREAK_EVENT)
+        else:
+            proc.terminate()
+    except Exception:
+        pass
+    try:
+        await asyncio.wait_for(proc.wait(), timeout=timeout)
+    except asyncio.TimeoutError:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+        try:
+            await proc.wait()
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
 async def _read_scope_pipe(proc):
     """Read binary spectrum frames from scope_pipe subprocess stdout.
 
@@ -435,21 +480,7 @@ async def _read_scope_pipe(proc):
         if scope:
             scope._connected = False
         if proc.returncode is None:
-            try:
-                proc.terminate()
-            except Exception:
-                pass
-            try:
-                await asyncio.wait_for(proc.wait(), timeout=2.0)
-            except asyncio.TimeoutError:
-                try:
-                    proc.kill()
-                except Exception:
-                    pass
-                try:
-                    await proc.wait()
-                except Exception:
-                    pass
+            await _stop_proc_gracefully(proc)
         if _scope_proc is proc:
             _scope_proc = None
         if _scope_read_task is asyncio.current_task():
@@ -483,10 +514,12 @@ async def _ensure_scope_pipe_running():
             logger.warning("scope_pipe worker not found — spectrum will use S-meter fallback only")
             return
         logger.info("Starting scope_pipe subprocess for spectrum client...")
+        creationflags = _subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0
         try:
             _scope_proc = await asyncio.create_subprocess_exec(
                 *scope_pipe_cmd,
                 stdout=_subprocess.PIPE, stderr=_subprocess.PIPE,
+                creationflags=creationflags,
             )
             _scope_read_task = asyncio.create_task(
                 _read_scope_pipe(_scope_proc), name="scope_pipe_read"
@@ -515,20 +548,7 @@ async def _stop_scope_pipe():
     proc = _scope_proc
     _scope_proc = None
     if proc and proc.returncode is None:
-        try:
-            proc.terminate()
-            await asyncio.wait_for(proc.wait(), timeout=2.0)
-        except asyncio.TimeoutError:
-            try:
-                proc.kill()
-            except Exception:
-                pass
-            try:
-                await proc.wait()
-            except Exception:
-                pass
-        except Exception:
-            pass
+        await _stop_proc_gracefully(proc)
     if scope:
         scope._connected = False
 
@@ -1484,7 +1504,7 @@ async def login_page(request: Request):
     """Serve the login page."""
     login_html = STATIC_DIR / "login.html"
     if login_html.exists():
-        return HTMLResponse(login_html.read_text())
+        return HTMLResponse(login_html.read_text(encoding="utf-8"))
     return HTMLResponse("""
     <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport"
     content="width=device-width,initial-scale=1"><title>FT-710 Login</title>
@@ -1624,6 +1644,7 @@ async def ws_radio(ws: WebSocket):
     # Check auth via query param (browser WebSocket doesn't support custom headers)
     token = ws.query_params.get("token", "")
     if not token or token not in _auth_tokens:
+        await ws.accept()
         await ws.close(code=4001, reason="Unauthorized")
         return
 
@@ -1684,6 +1705,7 @@ async def ws_spectrum(ws: WebSocket):
     """
     token = ws.query_params.get("token", "")
     if not token or token not in _auth_tokens:
+        await ws.accept()
         await ws.close(code=4001, reason="Unauthorized")
         return
 
@@ -1718,6 +1740,7 @@ async def ws_audio_rx(ws: WebSocket):
     """
     token = ws.query_params.get("token", "")
     if not token or token not in _auth_tokens:
+        await ws.accept()
         await ws.close(code=4001, reason="Unauthorized")
         return
 
@@ -1750,6 +1773,7 @@ async def ws_audio_tx(ws: WebSocket):
 
     token = ws.query_params.get("token", "")
     if not token or token not in _auth_tokens:
+        await ws.accept()
         await ws.close(code=4001, reason="Unauthorized")
         return
 
@@ -1897,7 +1921,7 @@ def main():
                        args.ssl_cert, args.ssl_key)
 
     uvicorn.run(
-        "server:app",
+        app,
         host=args.host,
         port=args.port,
         log_level="info",

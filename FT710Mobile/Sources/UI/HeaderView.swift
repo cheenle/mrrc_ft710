@@ -3,6 +3,8 @@ import SwiftUI
 /// Top header: status dots + VFO A/B + S-meter reading + power toggle.
 struct HeaderView: View {
     @EnvironmentObject var viewModel: RadioViewModel
+    @State private var showFreqEntry = false
+    @State private var freqEntryText = ""
 
     var body: some View {
         VStack(spacing: 2) {
@@ -56,9 +58,20 @@ struct HeaderView: View {
                 }
             }
 
-            // Row 2: Frequency display (fills row)
+            // Row 2: Frequency display (fills row) — tap to enter a frequency directly
             FrequencyDisplayView(freqHz: viewModel.state.activeFreq)
                 .padding(.horizontal, 4)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    freqEntryText = String(format: "%.3f", Double(viewModel.state.activeFreq) / 1_000_000)
+                    showFreqEntry = true
+                }
+                .alert("Enter Frequency (MHz)", isPresented: $showFreqEntry) {
+                    TextField("14.074", text: $freqEntryText)
+                        .keyboardType(.decimalPad)
+                    Button("Set") { commitFreqEntry() }
+                    Button("Cancel", role: .cancel) {}
+                }
 
             // Row 3: Band name
             HStack {
@@ -68,6 +81,17 @@ struct HeaderView: View {
             }.padding(.horizontal, 12)
         }
         .padding(.vertical, 4)
+    }
+
+    /// Parses freqEntryText the same way the web frontend's commitFreq() does:
+    /// bare integer < 100k is kHz, anything left < 1000 is MHz, else already Hz.
+    private func commitFreqEntry() {
+        let raw = freqEntryText.trimmingCharacters(in: .whitespaces)
+        guard var hz = Double(raw) else { return }
+        if hz < 100_000 && !raw.contains(".") { hz *= 1_000 }
+        if hz < 1_000 { hz *= 1_000_000 }
+        let clamped = max(30_000, min(75_000_000, Int(hz.rounded())))
+        viewModel.setFrequency(clamped)
     }
 
     private func wsDot(_ on: Bool, _ label: String) -> some View {

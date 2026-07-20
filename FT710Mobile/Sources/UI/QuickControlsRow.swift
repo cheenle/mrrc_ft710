@@ -5,28 +5,12 @@ import SwiftUI
 struct QuickControlsRow: View {
     @EnvironmentObject var viewModel: RadioViewModel
 
-    // MARK: - Mode
-
-    private var modeIndex: Int {
-        RadioState.uiModes.firstIndex(of: viewModel.state.modeName) ?? 1
-    }
-
-    private func cycleMode() {
-        let idx = (modeIndex + 1) % RadioState.uiModes.count
-        viewModel.setMode(RadioState.uiModes[idx])
-    }
-
     // MARK: - Band
 
     private var bandIndex: Int {
         RadioState.bands.firstIndex(where: {
             $0.start <= viewModel.state.activeFreq && viewModel.state.activeFreq <= $0.end
         }) ?? 5
-    }
-
-    private func cycleBand() {
-        let idx = (bandIndex + 1) % RadioState.bands.count
-        viewModel.setBand(RadioState.bands[idx].defaultFreq)
     }
 
     // MARK: - Filter
@@ -81,16 +65,32 @@ struct QuickControlsRow: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            CycleTapButton(
-                label: viewModel.state.modeDisplay,
-                color: .radioAccent,
-                action: cycleMode
-            )
-            CycleTapButton(
-                label: RadioState.bands[bandIndex].name,
-                color: .radioAccent,
-                action: cycleBand
-            )
+            Menu {
+                ForEach(RadioState.uiModes, id: \.self) { m in
+                    Button(RadioState.modeDisplayNames[m] ?? m) { viewModel.setMode(m) }
+                }
+            } label: {
+                Text(viewModel.state.modeDisplay)
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundColor(.black)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 28)
+                    .background(Color.radioAccent)
+                    .cornerRadius(6)
+            }
+            Menu {
+                ForEach(Array(RadioState.bands.enumerated()), id: \.offset) { _, band in
+                    Button(band.name) { viewModel.setBand(band.defaultFreq) }
+                }
+            } label: {
+                Text(RadioState.bands[bandIndex].name)
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundColor(.black)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 28)
+                    .background(Color.radioAccent)
+                    .cornerRadius(6)
+            }
             CycleTapButton(
                 label: formatFilter(),
                 color: .radioAccent,

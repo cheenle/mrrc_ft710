@@ -17,7 +17,7 @@ final class RadioViewModel: ObservableObject {
     @Published var showErrorAlert = false
     @Published var errorTitle = ""
     @Published var errorMessage = ""
-    @Published var errorActionTitle = "确定"
+    @Published var errorActionTitle = String(localized: "确定")
 
     // MARK: - Init
 
@@ -55,7 +55,7 @@ final class RadioViewModel: ObservableObject {
             try? await Task.sleep(nanoseconds: 600_000_000)  // 0.6s
 
             // Re-login to get fresh token
-            let scheme = "https"
+            let scheme = "http"  // Windows launcher runs --no-ssl (plain HTTP) by default
             guard let loginURL = URL(string: "\(scheme)://\(connection.serverHost)/api/auth/login") else {
                 await MainActor.run {
                     self.connection.connectAll()
@@ -99,7 +99,7 @@ final class RadioViewModel: ObservableObject {
                 }
             } catch {
                 await MainActor.run {
-                    self.state.connectionError = "重连失败: \(error.localizedDescription)"
+                    self.state.connectionError = String(localized: "重连失败: \(error.localizedDescription)")
                     self.connection.connectAll()
                     self.audioPlayback.start()
                     self.audioCapture.prepare()
@@ -114,7 +114,7 @@ final class RadioViewModel: ObservableObject {
         state.powerOn = true
         startPing()
 
-        let scheme = "https"  // Production server uses HTTPS
+        let scheme = "http"  // Windows launcher runs --no-ssl (plain HTTP) by default
         guard let loginURL = URL(string: "\(scheme)://\(connection.serverHost)/api/auth/login") else {
             connection.connectAll()
             audioCapture.prepare()
@@ -133,7 +133,7 @@ final class RadioViewModel: ObservableObject {
 
                 // Handle network error
                 if let err = error {
-                    self.state.connectionError = "连接失败: \(err.localizedDescription)"
+                    self.state.connectionError = String(localized: "连接失败: \(err.localizedDescription)")
                     self.state.powerOn = false
                     return
                 }
@@ -159,7 +159,7 @@ final class RadioViewModel: ObservableObject {
                     self.connection.connectAll()
                     self.audioCapture.prepare()
                 } else {
-                    self.state.connectionError = "认证失败，请检查密码"
+                    self.state.connectionError = String(localized: "认证失败，请检查密码")
                     self.state.powerOn = false  // Reset power state on auth failure
                 }
             }
@@ -192,7 +192,7 @@ final class RadioViewModel: ObservableObject {
     }
     
     /// Show error alert
-    func showError(title: String, message: String, actionTitle: String = "确定") {
+    func showError(title: String, message: String, actionTitle: String = String(localized: "确定")) {
         errorTitle = title
         errorMessage = message
         errorActionTitle = actionTitle
@@ -201,12 +201,12 @@ final class RadioViewModel: ObservableObject {
     
     /// Handle audio errors
     func handleAudioError(_ error: String) {
-        showError(title: "音频错误", message: error, actionTitle: "重试")
+        showError(title: String(localized: "音频错误"), message: error, actionTitle: String(localized: "重试"))
     }
     
     /// Handle connection errors
     func handleConnectionError(_ error: String) {
-        showError(title: "连接错误", message: error, actionTitle: "重新连接")
+        showError(title: String(localized: "连接错误"), message: error, actionTitle: String(localized: "重新连接"))
     }
 
     // MARK: - Control helpers
@@ -324,6 +324,9 @@ final class RadioViewModel: ObservableObject {
 
     /// Noise reduction on/off.
     func setNoiseReduction(_ on: Bool) { sendSet("nr", on) }
+
+    /// Noise reduction level: 1-15.
+    func setNoiseReductionLevel(_ v: Int) { sendSet("nr_level", v) }
 
     /// Auto notch on/off.
     func setAutoNotch(_ on: Bool) { sendSet("an", on) }
