@@ -2,6 +2,14 @@
 venv/
 .venv/
 
+# Build output
+dist/
+build/
+
+# Proprietary FTDI runtime binaries (fetched via vendor/ftdi/windows/fetch-ftdi.ps1)
+vendor/ftdi/windows/bin/
+vendor/ftdi/windows/downloads/
+
 # Python cache
 __pycache__/
 *.pyc

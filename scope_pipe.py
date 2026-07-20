@@ -152,6 +152,9 @@ def main():
     global running
     signal.signal(signal.SIGINT, stop_running)
     signal.signal(signal.SIGTERM, stop_running)
+    if hasattr(signal, "SIGBREAK"):
+        # Windows delivers CTRL_BREAK_EVENT as SIGBREAK, not SIGTERM.
+        signal.signal(signal.SIGBREAK, stop_running)
 
     # ── Load libraries ──────────────────────────────────────────────
     configure_windows_dll_search_path()
