@@ -651,6 +651,22 @@ function renderWaterfallRow(wf1) {
     const w = canvas.width;
     const h = canvas.height;
 
+    // Radio disconnected: the fallback spectrum is a flat ~zero floor which
+    // renders as a black void that looks like a UI failure. Say so instead.
+    if (!radioState.serial_connected) {
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = 'rgba(239, 68, 68, 0.85)';
+        ctx.font = 'bold 13px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('电台未连接 — 检查 USB / 电源', w / 2, h / 2 + 4);
+        const fftCanvas = document.getElementById('fft-canvas');
+        if (fftCanvas) {
+            const fctx = fftCanvas.getContext('2d');
+            fctx.clearRect(0, 0, fftCanvas.width, fftCanvas.height);
+        }
+        return;
+    }
+
     // Scroll canvas content up by 1px
     ctx.drawImage(canvas, 0, 1, w, h - 1, 0, 0, w, h - 1);
 
