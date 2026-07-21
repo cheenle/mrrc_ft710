@@ -155,9 +155,14 @@ class RxRecordingFrontendTests(unittest.TestCase):
         self.assertIn(".mp3", source)
         self.assertIn("_f32ToInt16", source)
 
-    def test_lamejs_library_is_included_in_html(self):
+    def test_lamejs_is_lazy_loaded_not_in_html(self):
+        # lame.js (~500 KB) is intentionally NOT in index.html — the REC
+        # feature lazy-loads it on first click via _loadLame().
         html_source = (REPO_ROOT / "static" / "index.html").read_text()
-        self.assertIn("lame.js", html_source)
+        self.assertNotIn("lame.js", html_source)
+        main_source = (REPO_ROOT / "static" / "ft710_main.js").read_text()
+        self.assertIn("function _loadLame()", main_source)
+        self.assertIn("/modules/lame.js", main_source)
 
     def test_decoded_rx_frames_feed_recorder(self):
         source = (REPO_ROOT / "static" / "ft710_main.js").read_text()

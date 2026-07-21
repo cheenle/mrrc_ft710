@@ -420,3 +420,33 @@ a { color: var(--accent); text-decoration: none; }
     background: var(--bg-card); color: var(--text-secondary);
     border-radius: var(--radius-sm); font-size: 14px;
 }
+
+/* ── Error toast ────────────────────────────────────────────────── */
+#ft710-toast {
+    position: fixed; top: calc(env(safe-area-inset-top, 0px) + 8px); left: 50%;
+    transform: translate(-50%, -70px); z-index: 2000;
+    background: var(--danger); color: #fff; font-size: 13px; font-weight: 600;
+    padding: 10px 16px; border-radius: var(--radius-md);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5); opacity: 0;
+    transition: transform 0.25s, opacity 0.25s; pointer-events: none;
+    max-width: 90%; text-align: center;
+}
+#ft710-toast.show { transform: translate(-50%, 0); opacity: 1; }
+
+/* ── Desktop / large screens ────────────────────────────────────── */
+@media (min-width: 768px) {
+    .app-container { max-width: 720px; }
+    #fft-canvas { height: 60px; }
+    #waterfall-canvas { height: 120px; }
+    #freq-scale-canvas { height: 24px; }
+    #smeter-canvas { height: 24px; }
+    .smeter-value { font-size: 14px; min-width: 36px; }
+    .smeter-dbm { font-size: 11px; min-width: 56px; }
+    .smeter-labels { font-size: 9px; }
+    .freq-digit { font-size: 38px; }
+    .freq-small { font-size: 24px; }
+    .freq-sep { font-size: 32px; }
+    .ptt-button { min-height: 88px; font-size: 22px; }
+    .quick-btn { padding: 8px 4px; font-size: 13px; }
+    .dsp-btn { padding: 6px 0; font-size: 12px; }
+}

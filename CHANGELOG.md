@@ -2,6 +2,29 @@
 
 All notable changes to the FT-710 Web Control project.
 
+## [v1.6.1] — 2026-07-21 — Web Frontend Safety & UX Overhaul
+
+### Safety
+- **PTT watchdog actually armed**: PTT/TUNE buttons and Space-bar PTT now
+  route through `PTTManager` (previously bypassed — watchdog, pagehide
+  force-RX and unload beacon were dead code); broken `sendBeacon` removed
+- **TUNE is press-and-hold** (was latch-on-click — accidental TX path)
+- **Keyboard guards**: ignore `e.repeat` and events from inputs
+
+### Fixes
+- Silent `renderFreqScale` crash (missing `range` arg) that skipped
+  VFO/PTT renders every update cycle
+- Server `error` messages now show a toast banner
+- 🔊 Vol slider is browser-local volume (localStorage), no longer fought
+  by the CAT `af_gain` poll
+- S-meter label: relative `dB` (S9=0) instead of misleading `dBm`
+
+### Features
+- Waterfall/FFT click-to-QSY (8 px drag threshold)
+- Desktop layout ≥768 px (720 px container, 120 px waterfall, larger controls)
+- Filter tables server-authoritative (`fullState.filterTables`)
+- `lame.js` lazy-loaded on first REC click; asset cache bust v17
+
 ## [v1.6.0] — 2026-07-21 — Windows Desktop Installer
 
 ### Windows Package

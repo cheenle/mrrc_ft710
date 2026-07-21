@@ -288,6 +288,9 @@ function handleMessage(msg) {
                 uiModes.length = 0;
                 uiModes.push(...msg.modes);
             }
+            if (msg.filterTables) {
+                window.filterTables = msg.filterTables;
+            }
             if (msg.memChannels) {
                 memChannels.length = 0;
                 memChannels.push(...msg.memChannels);
@@ -312,9 +315,8 @@ function handleMessage(msg) {
                 const changedFields = msg.fields ? Object.keys(msg.fields) : msg.dirty;
                 if (changedFields) {
                     renderUpdates(changedFields);
-                    if (changedFields.includes('af_gain')) {
-                        _applyAfGainToAudioNode();
-                    }
+                    // NOTE: server af_gain no longer drives the playback gain
+                    // node — the volume slider is browser-local (localStorage).
                 }
             }
             break;
@@ -347,6 +349,9 @@ function handleMessage(msg) {
 
         case 'error':
             console.warn('Server error:', msg.message);
+            if (msg.message && typeof showToast === 'function') {
+                showToast(msg.message);
+            }
             break;
     }
 }
@@ -432,13 +437,15 @@ function bodyload() {
 
 // ── Keyboard support ────────────────────────────────────────────────
 document.addEventListener('keydown', function(e) {
+    if (e.repeat) return;                    // ignore key auto-repeat (held key)
+    if (e.target !== document.body) return;  // don't steal keys from inputs
     // Space = PTT
-    if (e.code === 'Space' && e.target === document.body) {
+    if (e.code === 'Space') {
         e.preventDefault();
         if (!radioState.is_transmitting) {
-            handlePTTStart();
+            if (window.PTTManager) PTTManager.pttStart(); else handlePTTStart();
         } else {
-            handlePTTEnd();
+            if (window.PTTManager) PTTManager.pttEnd(); else handlePTTEnd();
         }
     }
     // Arrow keys = tune
@@ -492,6 +499,24 @@ var RX_RECORDER_MIME = 'audio/mpeg';
 var RX_RECORDER_EXT  = 'mp3';
 var RX_MP3_BITRATE   = 128;        // kbps, good balance of quality vs size
 
+// lame.js (~500 KB) is lazy-loaded on first REC click — it is not needed
+// for normal operation and would otherwise slow every page load.
+var _lameLoadPromise = null;
+function _loadLame() {
+    if (typeof lamejs !== 'undefined' && typeof lamejs.Mp3Encoder === 'function') {
+        return Promise.resolve(true);
+    }
+    if (_lameLoadPromise) return _lameLoadPromise;
+    _lameLoadPromise = new Promise(function(resolve) {
+        var s = document.createElement('script');
+        s.src = staticUrlWithAuth('/modules/lame.js?v=1');
+        s.onload = function() { resolve(typeof lamejs !== 'undefined' && typeof lamejs.Mp3Encoder === 'function'); };
+        s.onerror = function() { resolve(false); };
+        document.head.appendChild(s);
+    });
+    return _lameLoadPromise;
+}
+
 function _formatRecordingTimestamp(d) {
     function pad(n) { return String(n).padStart(2, '0'); }
     return d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '-' +
@@ -542,9 +567,13 @@ window.RXRecorder = (function() {
     async function start() {
         if (active) return true;
         if (!isSupported()) {
-            console.warn('MP3 recording not supported — lamejs missing');
-            _notify();
-            return false;
+            // First use: pull the MP3 encoder on demand
+            var loaded = await _loadLame();
+            if (!loaded || !isSupported()) {
+                console.warn('MP3 recording not supported — lamejs unavailable');
+                _notify();
+                return false;
+            }
         }
         if (!AudioRX_context || AudioRX_context.state === 'closed') {
             if (typeof connectAudioRX === 'function') connectAudioRX();
@@ -1367,15 +1396,22 @@ var FullscreenMgr = (function () {
 })();
 
 // ── Audio gain helper ────────────────────────────────────────────────
-// Sync the Web Audio gain node from radioState.af_gain, with a
-// 2.5× boost multiplier to compensate for quiet FT-710 USB audio.
-// Clamped to [0, 3.0] to allow real amplification while preventing
-// runaway gain from blowing out speakers.
+// The 🔊 Vol slider is browser-side playback volume, persisted in
+// localStorage — it is deliberately NOT the radio's CAT AF gain, so the
+// CAT poll can never fight the user's volume setting.
+// A 10× boost compensates for quiet FT-710 USB audio; clamped at 10× to
+// prevent runaway gain from blowing out speakers.
 var AUDIO_GAIN_BOOST = 10.0;
 var AUDIO_GAIN_MAX = 10.0;
+function _getBrowserVolume() {
+    var v = 128;
+    try { var s = localStorage.getItem('ft710_afVol'); if (s !== null) v = parseInt(s); } catch(e) {}
+    if (isNaN(v)) v = 128;
+    return Math.max(0, Math.min(255, v));
+}
 function _applyAfGainToAudioNode() {
     if (typeof AudioRX_gain_node === 'undefined' || !AudioRX_gain_node) return;
-    var raw = (radioState.af_gain || 128) / 255.0;
+    var raw = _getBrowserVolume() / 255.0;
     var boosted = Math.min(AUDIO_GAIN_MAX, raw * AUDIO_GAIN_BOOST);
     AudioRX_gain_node.gain.value = boosted;
 }

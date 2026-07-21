@@ -32,6 +32,7 @@ from config import (
     SCOPE_SERIAL_PORT, SCOPE_BAUD_RATE, SCOPE_SPANS,
     AUTH_COOKIE, AUTH_TOKEN_BYTES, MEM_CHANNEL_COUNT, PTT_SAFETY_TIMEOUT,
     MODE_NUM_TO_NAME, MODE_NAME_TO_NUM, BANDS, UI_MODES,
+    FILTER_WIDTHS_VOICE, FILTER_WIDTHS_NARROW, NARROW_MODES,
     get_band_for_frequency, get_filter_widths_for_mode, get_filter_hz,
 )
 from cat_controller import CatController
@@ -1642,6 +1643,13 @@ async def ws_radio(ws: WebSocket):
             "bands": BANDS,
             "modes": UI_MODES,
             "memChannels": channels,
+            # Server-authoritative filter tables so the frontend stops
+            # hardcoding its own (drifting) copies.
+            "filterTables": {
+                "voice": FILTER_WIDTHS_VOICE,
+                "narrow": FILTER_WIDTHS_NARROW,
+                "narrowModes": sorted(NARROW_MODES),
+            },
         }))
     except Exception:
         ctrl_clients.discard(ws)

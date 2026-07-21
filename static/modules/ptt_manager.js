@@ -101,18 +101,6 @@
         },
     };
 
-    // ── Safety: force RX on page unload ───────────────────────────
-    window.addEventListener('beforeunload', function() {
-        if (pttActive || tuneActive) {
-            // Use sendBeacon for fire-and-forget
-            if (navigator.sendBeacon) {
-                const data = JSON.stringify({type:'set', field:'ptt', value:false});
-                const blob = new Blob([data], {type: 'application/json'});
-                navigator.sendBeacon('/WSradio', blob);
-            }
-        }
-    });
-
     // ── Safety: force RX on page hide (mobile app switch) ─────────
     window.addEventListener('pagehide', function() {
         if (pttActive || tuneActive) {
@@ -121,6 +109,11 @@
             }
         }
     });
+
+    // NOTE: tab close / reload is covered server-side — when the last
+    // control WebSocket disconnects during TX, the server forces RX
+    // (server.py ws_radio finally block). The previous sendBeacon here
+    // POSTed to /WSradio, a WebSocket-only endpoint, so it never worked.
 
     console.log('PTT Manager initialized');
 })();

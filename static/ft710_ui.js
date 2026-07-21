@@ -131,9 +131,9 @@ function renderSMeter() {
     ctx.lineWidth = 1;
     ctx.strokeRect(0.5, 0.5, w - 1, h - 1);
 
-    // Update text values
+    // Update text values (dB relative to S9=0, not absolute dBm)
     setText('smeter-value', radioState.s_unit);
-    setText('smeter-dbm', radioState.s_meter_dbm.toFixed(0) + ' dBm');
+    setText('smeter-dbm', radioState.s_meter_dbm.toFixed(0) + ' dB');
 }
 
 // ── Meter Rendering ─────────────────────────────────────────────────
@@ -240,9 +240,31 @@ function getNextBand(currentBand) {
     return bandList[nextIdx];
 }
 
+function _filterTablesFor(modeName) {
+    // Server-authoritative tables (fullState.filterTables, from config.py)
+    // with the legacy hardcoded copies as fallback.
+    const t = window.filterTables;
+    let isNarrow;
+    if (t && Array.isArray(t.narrowModes)) {
+        isNarrow = t.narrowModes.includes(modeName);
+    } else {
+        isNarrow = ['CW-U','CW-L','RTTY-L','RTTY-U','DATA-L','DATA-U','PSK'].includes(modeName);
+    }
+    const widths = {};
+    const list = t ? (isNarrow ? t.narrow : t.voice) : null;
+    if (list) {
+        for (const pair of list) widths[pair[0]] = pair[1];
+    } else {
+        const fullVoice = {1:300,2:400,3:600,4:850,5:1100,6:1200,7:1500,8:1650,9:1800,10:1950,11:2100,12:2250,13:2400,14:2450,15:2500,16:2600,17:2700,18:2800,19:2900,20:3000,21:3200,22:3500,23:4000};
+        const fullNarrow = {1:50,2:100,3:150,4:200,5:250,6:300,7:350,8:400,9:450,10:500,11:600,12:800,13:1200,14:1400,15:1700,16:2000,17:2400,18:3000,19:3200,20:3500,21:4000};
+        Object.assign(widths, isNarrow ? fullNarrow : fullVoice);
+    }
+    return { widths: widths, isNarrow: isNarrow };
+}
+
 function getNextFilter(currentIdx, modeName) {
     // Curated filter rotation for each mode group
-    const isNarrow = ['CW-U','CW-L','RTTY-L','RTTY-U','DATA-L','DATA-U','PSK'].includes(modeName);
+    const isNarrow = _filterTablesFor(modeName).isNarrow;
     // Voice: 1.8k / 2.4k / 2.7k / 3k / 4k (WIDE/"无")
     const voiceList = [9, 13, 17, 20, 23];   // → 1800, 2400, 2700, 3000, 4000 Hz
     // Narrow: 150 / 300 / 500 / 1200 / 2400 / 4000
@@ -254,17 +276,7 @@ function getNextFilter(currentIdx, modeName) {
 }
 
 function getFilterLabel(idx, modeName) {
-    const isNarrow = ['CW-U','CW-L','RTTY-L','RTTY-U','DATA-L','DATA-U','PSK'].includes(modeName);
-    const voiceWidths = {9:1800, 13:2400, 17:2700, 20:3000, 23:4000};
-    const narrowWidths = {3:150, 6:300, 10:500, 13:1200, 17:2400, 21:4000};
-    const table = isNarrow ? narrowWidths : voiceWidths;
-    var hz = table[idx];
-    // Fallback: if index not in curated list, look up from full table
-    if (!hz) {
-        const fullVoice = {1:300,2:400,3:600,4:850,5:1100,6:1200,7:1500,8:1650,9:1800,10:1950,11:2100,12:2250,13:2400,14:2450,15:2500,16:2600,17:2700,18:2800,19:2900,20:3000,21:3200,22:3500,23:4000};
-        const fullNarrow = {1:50,2:100,3:150,4:200,5:250,6:300,7:350,8:400,9:450,10:500,11:600,12:800,13:1200,14:1400,15:1700,16:2000,17:2400,18:3000,19:3200,20:3500,21:4000};
-        hz = (isNarrow ? fullNarrow : fullVoice)[idx];
-    }
+    const hz = _filterTablesFor(modeName).widths[idx];
     if (!hz) return '--';
     if (hz === 4000) return '无';
     if (hz >= 1000) return (hz/1000).toFixed(1) + 'k';
@@ -316,8 +328,10 @@ function setDspBtn(id, active) {
 
 // ── Sliders ─────────────────────────────────────────────────────────
 function renderSliders() {
+    // NOTE: the AF slider is browser-side playback volume (localStorage),
+    // NOT the radio's AF gain — it is intentionally not rendered from
+    // radio state, or the CAT poll would fight the user's setting.
     setSlider('slider-rfpower', 'val-rfpower', radioState.rf_power);
-    setSlider('slider-afgain', 'val-afgain', radioState.af_gain);
 }
 
 function setSlider(sliderId, valId, value) {
@@ -376,12 +390,11 @@ function renderRecordingState() {
     const recordBtn = document.getElementById('btn-record');
     if (!recordBtn) return;
     const recorder = window.RXRecorder;
-    const supported = !!(recorder && recorder.isSupported && recorder.isSupported());
     const active = !!(recorder && recorder.isActive);
-    recordBtn.disabled = !supported;
+    recordBtn.disabled = false;
     recordBtn.classList.toggle('record-active', active);
-    recordBtn.textContent = active ? 'STOP' : (supported ? 'REC' : 'MP3 ✗');
-    recordBtn.title = supported ? '录制接收音频为 MP3 (128kbps)' : '缺少 MP3 编码器 (lamejs)';
+    recordBtn.textContent = active ? 'STOP' : 'REC';
+    recordBtn.title = '录制接收音频为 MP3 (128kbps，首次点击时加载编码器)';
 }
 
 function renderFFTPlot(wf1) {
@@ -570,19 +583,24 @@ const SCOPE_SPAN_HZ = {
     9: 1000000,
 };
 
+function _isDesktopLayout() {
+    return !!(window.matchMedia && window.matchMedia('(min-width: 768px)').matches);
+}
+
 function initWaterfall() {
     const canvas = document.getElementById('waterfall-canvas');
     if (!canvas) return;
     const rect = canvas.parentElement.getBoundingClientRect();
     const w = Math.max(100, rect.width - 8); // Minimum 100px wide
+    const desktop = _isDesktopLayout();
     canvas.width = w;
-    canvas.height = 67;  // Compact waterfall
+    canvas.height = desktop ? 120 : 67;
 
     // Size FFT canvas to match width
     const fftCanvas = document.getElementById('fft-canvas');
     if (fftCanvas) {
         fftCanvas.width = w;
-        fftCanvas.height = 33;
+        fftCanvas.height = desktop ? 60 : 33;
     }
 
     waterfallHistory = [];
@@ -598,18 +616,26 @@ function ensureWaterfallInitialized() {
     if (canvas && canvas.width < 100) {
         const rect = canvas.parentElement.getBoundingClientRect();
         if (rect.width > 100) {
-            const w = rect.width - 8;
-            canvas.width = w;
-            canvas.height = 67;
-            const fftCanvas = document.getElementById('fft-canvas');
-            if (fftCanvas) {
-                fftCanvas.width = w;
-                fftCanvas.height = 22;
-            }
-            waterfallHistory = [];
+            initWaterfall();
         }
     }
 }
+
+// Re-init on viewport resize / rotation (debounced)
+let _wfResizeTimer = null;
+window.addEventListener('resize', function() {
+    clearTimeout(_wfResizeTimer);
+    _wfResizeTimer = setTimeout(function() {
+        const canvas = document.getElementById('waterfall-canvas');
+        if (!canvas || !waterfallInitialized) return;
+        const rect = canvas.parentElement.getBoundingClientRect();
+        const targetW = Math.max(100, rect.width - 8);
+        const targetH = _isDesktopLayout() ? 120 : 67;
+        if (Math.abs(canvas.width - targetW) > 4 || canvas.height !== targetH) {
+            initWaterfall();
+        }
+    }, 250);
+});
 
 function renderWaterfallRow(wf1) {
     ensureWaterfallInitialized();
@@ -802,7 +828,13 @@ function renderScopeSettings() {
     if (ceilVal) ceilVal.textContent = scopeCeil;
     const canvas = document.getElementById('waterfall-canvas');
     if (canvas && canvas.width > 0) {
-        renderFreqScale(canvas.width);
+        // Rebuild the VFO-centred range — renderFreqScale requires it
+        // (previously called without it, throwing on every update cycle).
+        const spanHz = SCOPE_SPAN_HZ[radioState.scope_span] || 100000;
+        const vfoFreq = radioState.active_freq ||
+            (radioState.active_vfo === 'B' ? radioState.vfo_b_freq : radioState.vfo_a_freq) ||
+            14200000;
+        renderFreqScale(canvas.width, _computeFreqRange(vfoFreq, spanHz));
     }
 }
 
@@ -850,7 +882,7 @@ function renderUpdates(dirtyFields) {
             if (['tx_status','is_transmitting'].includes(f)) needStatus = needPTT = true;
             if (['filter_width','filter_hz','preamp','preamp_label','attenuator','attenuator_label'].includes(f)) needButtons = true;
             if (['noise_blanker','noise_reduction','auto_notch','compressor','tuner_status'].includes(f)) needToggles = true;
-            if (['rf_power','af_gain'].includes(f)) needSliders = true;
+            if (['rf_power'].includes(f)) needSliders = true;
             if (['scope_span','scope_speed','scope_mode','scope_start_freq'].includes(f)) needScope = true;
             if (['split'].includes(f)) needVFO = true;
             if (['serial_connected'].includes(f)) needStatus = true;
@@ -1087,9 +1119,19 @@ function initUI() {
         sendCommand('rf_power', v);
         radioState.rf_power = v;
     });
+    // Restore persisted browser volume before wiring
+    (function() {
+        var v = 128;
+        try { var s = localStorage.getItem('ft710_afVol'); if (s !== null) v = parseInt(s); } catch(e) {}
+        if (isNaN(v)) v = 128;
+        var sl = document.getElementById('slider-afgain');
+        if (sl) sl.value = v;
+        setText('val-afgain', v);
+    })();
     document.getElementById('slider-afgain').addEventListener('input', function() {
         setText('val-afgain', this.value);
-        // Control browser audio volume with boost (see _applyAfGainToAudioNode).
+        // Browser-side playback volume only (persisted in localStorage).
+        // Deliberately NOT sent as CAT AF gain — see _applyAfGainToAudioNode.
         var raw = parseInt(this.value) / 255.0;
         var boost = typeof AUDIO_GAIN_BOOST !== 'undefined' ? AUDIO_GAIN_BOOST : 5.0;
         var maxGain = typeof AUDIO_GAIN_MAX !== 'undefined' ? AUDIO_GAIN_MAX : 5.0;
@@ -1097,10 +1139,7 @@ function initUI() {
         if (typeof AudioRX_gain_node !== 'undefined' && AudioRX_gain_node) {
             AudioRX_gain_node.gain.value = g;
         }
-        radioState.af_gain = parseInt(this.value);
-    });
-    document.getElementById('slider-afgain').addEventListener('change', function() {
-        // No-op: browser-side volume only, don't send CAT command
+        try { localStorage.setItem('ft710_afVol', this.value); } catch(e) {}
     });
     const micSlider = document.getElementById('slider-micgain');
     if (micSlider) {
@@ -1141,31 +1180,40 @@ function initUI() {
         renderVFOButtons();
     });
 
-    // PTT button
+    // PTT button — routed through PTTManager so the safety watchdog and
+    // pagehide force-RX stay armed (previously bypassed = dead watchdog).
     const pttBtn = document.getElementById('btn-ptt');
-    pttBtn.addEventListener('mousedown', handlePTTStart);
-    pttBtn.addEventListener('touchstart', function(e) { e.preventDefault(); handlePTTStart(); });
-    pttBtn.addEventListener('mouseup', handlePTTEnd);
-    pttBtn.addEventListener('touchend', function(e) { e.preventDefault(); handlePTTEnd(); });
-    pttBtn.addEventListener('mouseleave', handlePTTEnd);
-    pttBtn.addEventListener('touchcancel', handlePTTEnd);
+    const pttStart = function() { if (window.PTTManager) PTTManager.pttStart(); else handlePTTStart(); };
+    const pttEnd = function() { if (window.PTTManager) PTTManager.pttEnd(); else handlePTTEnd(); };
+    pttBtn.addEventListener('mousedown', pttStart);
+    pttBtn.addEventListener('touchstart', function(e) { e.preventDefault(); pttStart(); });
+    pttBtn.addEventListener('mouseup', pttEnd);
+    pttBtn.addEventListener('touchend', function(e) { e.preventDefault(); pttEnd(); });
+    pttBtn.addEventListener('mouseleave', pttEnd);
+    pttBtn.addEventListener('touchcancel', pttEnd);
 
-    // TUNE button
+    // TUNE button — press-and-HOLD (carrier only while held). The previous
+    // latch-on-click design could key the radio from a single accidental tap.
     const tuneBtn = document.getElementById('btn-tune');
-    tuneBtn.addEventListener('click', function() {
-        if (radioState.tx_status === 2) {
-            handleTuneEnd();
-        } else {
-            handleTuneStart();
-        }
-    });
+    const tuneStart = function() { if (window.PTTManager) PTTManager.tuneStart(); else handleTuneStart(); };
+    const tuneEnd = function() { if (window.PTTManager) PTTManager.tuneEnd(); else handleTuneEnd(); };
+    tuneBtn.title = '按住发射调谐载波，松开即停';
+    tuneBtn.addEventListener('mousedown', tuneStart);
+    tuneBtn.addEventListener('touchstart', function(e) { e.preventDefault(); tuneStart(); });
+    tuneBtn.addEventListener('mouseup', tuneEnd);
+    tuneBtn.addEventListener('touchend', function(e) { e.preventDefault(); tuneEnd(); });
+    tuneBtn.addEventListener('mouseleave', tuneEnd);
+    tuneBtn.addEventListener('touchcancel', tuneEnd);
 
     // RX recording button
     const recordBtn = document.getElementById('btn-record');
     if (recordBtn) {
         recordBtn.addEventListener('click', async function() {
             if (window.RXRecorder) {
-                await window.RXRecorder.toggle();
+                const ok = await window.RXRecorder.toggle();
+                if (ok === false && !window.RXRecorder.isActive && typeof showToast === 'function') {
+                    showToast('MP3 编码器加载失败，无法录音');
+                }
             }
         });
         renderRecordingState();
@@ -1239,6 +1287,49 @@ function initUI() {
         btn.addEventListener('mouseup', function() { clearTimeout(pressTimer); });
         btn.addEventListener('mouseleave', function() { clearTimeout(pressTimer); });
     });
+
+    // Waterfall / FFT click-to-tune (QSY). Click maps the x position to a
+    // frequency inside the current span; sub-8px movement counts as a click,
+    // larger drags are treated as scroll gestures and ignored.
+    function wireScopeQSY(canvasId) {
+        const cv = document.getElementById(canvasId);
+        if (!cv) return;
+        let downX = null;
+        function qsy(clientX) {
+            const rect = cv.getBoundingClientRect();
+            const x = clientX - rect.left;
+            const spanHz = SCOPE_SPAN_HZ[radioState.scope_span] || 100000;
+            const vfoFreq = radioState.active_freq ||
+                (radioState.active_vfo === 'B' ? radioState.vfo_b_freq : radioState.vfo_a_freq) ||
+                14200000;
+            const f = Math.max(30000, Math.min(75000000,
+                Math.round(vfoFreq - spanHz / 2 + (x / rect.width) * spanHz)));
+            const field = radioState.active_vfo === 'A' ? 'freq' : 'vfo_b_freq';
+            sendCommand(field, f);
+            if (radioState.active_vfo === 'A') radioState.vfo_a_freq = f;
+            else radioState.vfo_b_freq = f;
+            renderFrequency();
+        }
+        cv.addEventListener('mousedown', function(e) { downX = e.clientX; });
+        cv.addEventListener('mouseup', function(e) {
+            if (downX === null) return;
+            const dx = Math.abs(e.clientX - downX);
+            downX = null;
+            if (dx <= 8) qsy(e.clientX);
+        });
+        cv.addEventListener('touchstart', function(e) { downX = e.touches[0].clientX; }, {passive: true});
+        cv.addEventListener('touchend', function(e) {
+            if (downX === null) return;
+            const x = e.changedTouches[0].clientX;
+            const dx = Math.abs(x - downX);
+            downX = null;
+            if (dx <= 8) qsy(x);
+        });
+        cv.title = '点击频谱直接 QSY 到对应频率';
+        cv.style.cursor = 'crosshair';
+    }
+    wireScopeQSY('waterfall-canvas');
+    wireScopeQSY('fft-canvas');
 
     // Menu
     document.getElementById('menu-toggle').addEventListener('click', function() {
@@ -1404,6 +1495,22 @@ function hapticFeedback(pattern) {
         if (pattern === 'medium') navigator.vibrate(15);
         else navigator.vibrate(8);
     }
+}
+
+// ── Error toast ─────────────────────────────────────────────────────
+// Server 'error' messages (e.g. "Radio not connected", "Band change
+// failed") used to go to the console only — surface them to the operator.
+function showToast(message, durationMs) {
+    let toast = document.getElementById('ft710-toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'ft710-toast';
+        document.body.appendChild(toast);
+    }
+    toast.textContent = message;
+    toast.classList.add('show');
+    clearTimeout(toast._hideTimer);
+    toast._hideTimer = setTimeout(function() { toast.classList.remove('show'); }, durationMs || 3500);
 }
 
 // ── Frequency input (click-to-edit) ─────────────────────────────────
