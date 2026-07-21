@@ -1896,8 +1896,11 @@ def main():
         logger.warning("SSL disabled or cert/key not found (cert=%s key=%s)",
                        args.ssl_cert, args.ssl_key)
 
+    # Pass the app object (not the "server:app" import string) so frozen
+    # PyInstaller builds work — a frozen exe cannot re-import the "server"
+    # module by name.
     uvicorn.run(
-        "server:app",
+        app,
         host=args.host,
         port=args.port,
         log_level="info",
