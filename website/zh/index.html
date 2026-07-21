@@ -31,9 +31,11 @@
         </a>
         <ul class="nav-links">
             <li><a href="#features">功能</a></li>
+            <li><a href="#ios">iOS 客户端</a></li>
             <li><a href="#architecture">架构</a></li>
             <li><a href="#spectrum">频谱</a></li>
             <li><a href="#audio">音频</a></li>
+            <li><a href="#download">下载</a></li>
             <li><a href="#start">快速开始</a></li>
             <li><a href="sdd.html">SDD</a></li>
             <li><a href="https://github.com/cheenle/mrrc_ft710" target="_blank" rel="noopener">
@@ -175,6 +177,60 @@
                     <li>RF 断开前优雅 TX 音频排空</li>
                 </ul>
             </div>
+        </div>
+    </div>
+</section>
+
+<!-- iOS App -->
+<section class="section" id="ios" style="background: var(--bg-primary);">
+    <div class="container">
+        <div class="section-header">
+            <span class="section-label">iOS 客户端</span>
+            <h2 class="section-title">原生 iPhone 遥控 App</h2>
+            <p class="section-subtitle">SwiftUI 客户端(iOS 17+)— 与浏览器共用同一套 4 路 WebSocket 协议,专为单手移动操作优化。</p>
+        </div>
+
+        <div class="features-grid">
+            <div class="feature-card animate">
+                <div class="icon"><i class="fas fa-broadcast-tower"></i></div>
+                <h3>完整电台控制</h3>
+                <p>频率(直输 / 步进 / 波段跳转)、VFO A/B、模式、滤波器宽度、Preamp/ATT、AGC、NB/NR/ANotch、射频功率、麦克风增益、静噪 — 全部在 iPhone 上完成。</p>
+                <ul>
+                    <li>4 路加密 WebSocket(wss)</li>
+                    <li>Token 认证,密码存 Keychain</li>
+                </ul>
+            </div>
+
+            <div class="feature-card animate">
+                <div class="icon"><i class="fas fa-water"></i></div>
+                <h3>瀑布图 + 仪表</h3>
+                <p>850 bin 实时瀑布图 + FFT 曲线,配色与 Web 端一致。S 表及发射仪表(PWR / SWR / ALC / COMP),支持存储频道列表。</p>
+                <ul>
+                    <li>与浏览器相同的二进制频谱帧</li>
+                    <li>深色琥珀主题,横竖屏自适应</li>
+                </ul>
+            </div>
+
+            <div class="feature-card animate">
+                <div class="icon"><i class="fas fa-microphone"></i></div>
+                <h3>Opus 语音收发</h3>
+                <p>RX:Opus 48kHz 解码播放;TX:麦克风 48kHz / 20ms PCM 帧上行,按住 PTT 即发。</p>
+                <ul>
+                    <li>libopus 真机库(arm64)</li>
+                    <li>设置页:重连 / 增益 / 音量</li>
+                </ul>
+            </div>
+        </div>
+
+        <div style="background:rgba(230,126,34,0.08);border:1px solid rgba(230,126,34,0.4);border-radius:12px;padding:1.25rem 1.5rem;margin-top:2rem">
+            <p style="color:var(--text-primary);margin:0 0 0.5rem"><i class="fas fa-triangle-exclamation" style="color:#e67e22"></i> <strong>早期版本 — 需自行编译</strong></p>
+            <p style="color:var(--text-muted);font-size:0.9rem;margin:0">需要 iPhone 真机(模拟器不支持 — 内置 libopus 仅含 arm64 真机 slice)、iOS 17+、Xcode 15 + XcodeGen,以及启用 TLS 的服务端。2026-07-20 审计报告列有 P0 级 PTT 安全已知问题,修复方案已批准、正在实施。发射前请先阅读审计报告。</p>
+        </div>
+
+        <div style="text-align:center;margin-top:2rem">
+            <a href="https://github.com/cheenle/mrrc_ft710/tree/main/FT710Mobile" class="btn btn-secondary btn-large" target="_blank" rel="noopener">
+                <i class="fab fa-apple"></i> GitHub 上的 FT710Mobile
+            </a>
         </div>
     </div>
 </section>
@@ -367,6 +423,50 @@
             <span class="tech-tag">Web Audio API</span>
             <span class="tech-tag">getUserMedia</span>
         </div>
+    </div>
+</section>
+
+<!-- Download -->
+<section class="section" id="download" style="background: var(--bg-primary);">
+    <div class="container">
+        <div class="section-header">
+            <span class="section-label">下载</span>
+            <h2 class="section-title">Windows 桌面安装包</h2>
+            <p class="section-subtitle">Windows 11/12 x64 — 内置 Python 3.12 运行时,无需手动安装 Python。开始菜单启动器,用户级配置存放于 %LOCALAPPDATA%。</p>
+        </div>
+
+        <div class="steps">
+            <div class="step">
+                <h4>1 · 安装驱动</h4>
+                <p>Silicon Labs CP210x VCP 驱动(FT-710 Enhanced COM 口)。仅当需要 FT4222 真实频谱时再装 FTDI D2XX。</p>
+                <code>设备管理器 → 端口 (COM 和 LPT) → Enhanced COM Port</code>
+            </div>
+            <div class="step">
+                <h4>2 · 运行安装包</h4>
+                <p>MRRC-FT710-Setup.exe — v1.6.0,28.3 MB,x64。开始菜单 + 可选桌面快捷方式。</p>
+                <code>MD5 2be2a654242f284f73104aea2e010c41</code>
+            </div>
+            <div class="step">
+                <h4>3 · 编辑配置</h4>
+                <p>开始菜单 → Edit Configuration — 设置 Enhanced COM 口和强密码。</p>
+                <code>%LOCALAPPDATA%\MRRC-FT710\ft710.env</code>
+            </div>
+            <div class="step">
+                <h4>4 · 启动</h4>
+                <p>开始菜单 → MRRC FT-710 — 启动器自动拉起服务器并打开浏览器。</p>
+                <code>http://127.0.0.1:8888 → 登录 → 全功能控制</code>
+            </div>
+        </div>
+
+        <div style="text-align:center;margin-top:2.5rem">
+            <a href="../downloads/MRRC-FT710-Setup.exe" class="btn btn-primary btn-large">
+                <i class="fab fa-windows"></i> 下载 Windows 版
+            </a>
+            <a href="https://github.com/cheenle/mrrc_ft710/releases" class="btn btn-secondary btn-large" target="_blank" rel="noopener">
+                <i class="fab fa-github"></i> GitHub Releases
+            </a>
+        </div>
+        <p style="text-align:center;color:var(--text-muted);font-size:0.85rem;margin-top:1rem">缺少 FTDI DLL 时频谱自动降级为 S 表模拟显示,CAT 控制与音频不受影响。macOS / Linux / 树莓派请按下方步骤从源码运行。</p>
     </div>
 </section>
 
