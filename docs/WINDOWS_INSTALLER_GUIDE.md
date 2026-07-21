@@ -5,6 +5,21 @@ The package is designed for Windows 11 and Windows 12-class x64 desktop
 systems. It installs a user-launched desktop app with an embedded Python
 runtime; users do not need to install Python manually.
 
+## Download (v1.6.0)
+
+| File | Size | MD5 |
+|------|------|-----|
+| `MRRC-FT710-Setup.exe` | 28.3 MB | `2be2a654242f284f73104aea2e010c41` |
+
+- Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_ft710/downloads/MRRC-FT710-Setup.exe>
+- GitHub Releases: <https://github.com/cheenle/mrrc_ft710/releases>
+
+The v1.6.0 package was built on Windows 11 (Python 3.12.4, PyInstaller
+6.21.0, Inno Setup 6.7.3) and verified end-to-end: silent install →
+launcher start → web login → `/api/health` OK. Two build fixes landed in
+this release: PyInstaller spec `ROOT` resolution (`parents[1]`) and
+`uvicorn.run(app)` object loading for the frozen server exe.
+
 ## User Installation
 
 ### 1. Install required device drivers

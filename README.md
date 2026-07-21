@@ -23,11 +23,19 @@ Open `http://localhost:8888` in a browser. **Default password: change it immedia
 
 ### Windows Desktop Installer
 
-Windows 11/12 users can use the desktop installer build instead of installing
-Python manually. The installer runs a user-launched desktop app with an
-embedded Python runtime; closing the launcher window stops the server.
+Windows 11/12 users can install the desktop package — no Python install
+required. The installer runs a user-launched desktop app with an embedded
+Python runtime; closing the launcher window stops the server.
 
-Build and installation details are in [docs/WINDOWS_INSTALLER_GUIDE.md](docs/WINDOWS_INSTALLER_GUIDE.md).
+**Download v1.6.0** (28.3 MB, MD5 `2be2a654242f284f73104aea2e010c41`):
+
+- Fast mirror: <https://www.vlsc.net/mrrc_ft710/downloads/MRRC-FT710-Setup.exe>
+- GitHub Releases: <https://github.com/cheenle/mrrc_ft710/releases>
+
+After install, edit `%LOCALAPPDATA%\MRRC-FT710\ft710.env` (Start Menu →
+`Edit Configuration`) to set the Enhanced COM Port and web password, then
+launch `MRRC FT-710` from the Start Menu. Build and installation details
+are in [docs/WINDOWS_INSTALLER_GUIDE.md](docs/WINDOWS_INSTALLER_GUIDE.md).
 
 Key Windows package paths:
 

@@ -2,6 +2,32 @@
 
 All notable changes to the FT-710 Web Control project.
 
+## [v1.6.0] — 2026-07-21 — Windows Desktop Installer
+
+### Windows Package
+- **Desktop installer**: `MRRC-FT710-Setup.exe` (28.3 MB, x64) built with
+  PyInstaller 6.21 + Inno Setup 6.7.3 — embedded Python 3.12 runtime, no
+  manual Python install required
+- **Launcher app** (`MRRC-FT710.exe`): seeds `%LOCALAPPDATA%\MRRC-FT710\ft710.env`,
+  starts the server, waits for `/api/health`, opens the browser;
+  CTRL_BREAK-based graceful stop
+- **Frozen scope worker**: `scope_pipe.exe` bundled for FT4222 true
+  spectrum (requires `vendor\ftdi\windows\bin\x64` FTDI DLLs, otherwise
+  S-meter fallback)
+- Download: <https://www.vlsc.net/mrrc_ft710/downloads/MRRC-FT710-Setup.exe>
+  or GitHub Releases
+
+### Build Fixes
+- **PyInstaller specs**: `ROOT = Path(SPECPATH).parents[1]` — `SPECPATH`
+  is the spec directory in PyInstaller 6, `parents[2]` escaped the repo
+  root and broke the build entirely
+- **Frozen server start**: `uvicorn.run(app)` with the app object instead
+  of the `"server:app"` import string, which a frozen exe cannot import
+
+### Verified
+- End-to-end on a clean Windows 11 VM: silent install → launcher →
+  server start → web login → `/api/health` + 4 WebSocket channels OK
+
 ## [v1.1.0] — 2026-07-14 — iOS App Enhancement
 
 ### iOS App Features
